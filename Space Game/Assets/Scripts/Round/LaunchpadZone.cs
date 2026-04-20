@@ -5,7 +5,7 @@ using UnityEngine;
 namespace FriendSlop.Round
 {
     [RequireComponent(typeof(Collider))]
-    public class LaunchpadZone : NetworkBehaviour
+    public class LaunchpadZone : MonoBehaviour
     {
         private void Reset()
         {
@@ -24,7 +24,7 @@ namespace FriendSlop.Round
 
         private void TrySubmit(Collider other)
         {
-            if (!IsServer || RoundManager.Instance == null)
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer || RoundManager.Instance == null)
             {
                 return;
             }

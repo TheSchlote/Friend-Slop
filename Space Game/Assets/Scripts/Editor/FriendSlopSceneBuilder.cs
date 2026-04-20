@@ -22,6 +22,9 @@ namespace FriendSlop.Editor
     {
         private const string ScenePath = "Assets/Scenes/FriendSlopPrototype.unity";
         private const string PlayerPrefabPath = "Assets/Prefabs/FriendSlopPlayer.prefab";
+        private const string RoundManagerPrefabPath = "Assets/Prefabs/RoundManager.prefab";
+        private const string LootPrefabFolderPath = "Assets/Prefabs/Loot";
+        private const string NetworkPrefabsListPath = "Assets/DefaultNetworkPrefabs.asset";
         private const string AutoBuildMarkerPath = "Assets/FriendSlopBuildRequested.txt";
         private const float PlanetRadius = 18f;
 
@@ -37,6 +40,9 @@ namespace FriendSlop.Editor
 
             var materials = CreateMaterials();
             var playerPrefab = BuildPlayerPrefab(materials);
+            var roundManagerPrefab = BuildRoundManagerPrefab();
+            var lootPrefabs = BuildLootPrefabs(materials);
+            var networkPrefabsList = BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab.gameObject, lootPrefabs);
 
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             SceneManager.SetActiveScene(SceneManager.GetSceneAt(0));
@@ -48,11 +54,11 @@ namespace FriendSlop.Editor
 
             CreateLighting();
             CreateMenuCamera();
-            CreateNetworkManager(playerPrefab);
+            CreateNetworkManager(playerPrefab, networkPrefabsList);
             var spawns = CreateLevel(materials);
-            CreateLoot(materials);
+            var lootSpawnPoints = CreateLootSpawnPoints();
             CreateLaunchpad(materials);
-            CreateRoundManager(spawns);
+            CreateRuntimeBootstrapper(roundManagerPrefab, spawns, lootPrefabs, lootSpawnPoints);
             CreateRuntimeUi();
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
@@ -100,6 +106,7 @@ namespace FriendSlop.Editor
             CreateFolder("Assets/Scripts", "UI");
             CreateFolder("Assets/Scripts", "Editor");
             CreateFolder("Assets", "Prefabs");
+            CreateFolder("Assets/Prefabs", "Loot");
             CreateFolder("Assets", "Materials");
             CreateFolder("Assets", "Scenes");
         }
@@ -185,6 +192,106 @@ namespace FriendSlop.Editor
             return prefab;
         }
 
+        private static RoundManager BuildRoundManagerPrefab()
+        {
+            var root = new GameObject("Round Manager");
+            root.AddComponent<NetworkObject>();
+            var round = root.AddComponent<RoundManager>();
+            var serializedRound = new SerializedObject(round);
+            serializedRound.FindProperty("quota").intValue = 0;
+            serializedRound.FindProperty("roundLengthSeconds").floatValue = 0f;
+            serializedRound.ApplyModifiedPropertiesWithoutUndo();
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(root, RoundManagerPrefabPath);
+            Object.DestroyImmediate(root);
+            return prefab.GetComponent<RoundManager>();
+        }
+
+        private static NetworkLootItem[] BuildLootPrefabs(IReadOnlyDictionary<string, Material> materials)
+        {
+            var specs = GetLootSpecs();
+            var prefabs = new NetworkLootItem[specs.Length];
+
+            for (var i = 0; i < specs.Length; i++)
+            {
+                var spec = specs[i];
+                var lootObject = GameObject.CreatePrimitive(spec.Shape);
+                lootObject.name = spec.Name;
+                lootObject.transform.localScale = spec.Scale;
+                SetMaterial(lootObject, materials[spec.MaterialName]);
+
+                var body = lootObject.AddComponent<Rigidbody>();
+                body.mass = Mathf.Lerp(1.2f, 8f, 1f - spec.SpeedMultiplier);
+                body.angularDamping = 0.15f;
+                body.useGravity = false;
+
+                lootObject.AddComponent<SphericalRigidbodyGravity>();
+                lootObject.AddComponent<NetworkObject>();
+                lootObject.AddComponent<NetworkTransform>();
+                var loot = lootObject.AddComponent<NetworkLootItem>();
+                var serializedLoot = new SerializedObject(loot);
+                serializedLoot.FindProperty("itemName").stringValue = spec.Name;
+                serializedLoot.FindProperty("value").intValue = spec.Value;
+                serializedLoot.FindProperty("carrySpeedMultiplier").floatValue = spec.SpeedMultiplier;
+                serializedLoot.FindProperty("carryDistance").floatValue = Mathf.Lerp(2.35f, 1.7f, 1f - spec.SpeedMultiplier);
+                serializedLoot.FindProperty("shipPartType").enumValueIndex = (int)spec.PartType;
+                serializedLoot.ApplyModifiedPropertiesWithoutUndo();
+
+                var prefabPath = $"{LootPrefabFolderPath}/{SanitizeAssetName(spec.Name)}.prefab";
+                var prefab = PrefabUtility.SaveAsPrefabAsset(lootObject, prefabPath);
+                Object.DestroyImmediate(lootObject);
+                prefabs[i] = prefab.GetComponent<NetworkLootItem>();
+            }
+
+            return prefabs;
+        }
+
+        private static NetworkPrefabsList BuildNetworkPrefabsList(GameObject playerPrefab, GameObject roundManagerPrefab, IReadOnlyList<NetworkLootItem> lootPrefabs)
+        {
+            var prefabsList = AssetDatabase.LoadAssetAtPath<NetworkPrefabsList>(NetworkPrefabsListPath);
+            if (prefabsList == null)
+            {
+                prefabsList = ScriptableObject.CreateInstance<NetworkPrefabsList>();
+                AssetDatabase.CreateAsset(prefabsList, NetworkPrefabsListPath);
+            }
+
+            var serializedList = new SerializedObject(prefabsList);
+            serializedList.FindProperty("IsDefault").boolValue = true;
+            var listProperty = serializedList.FindProperty("List");
+            listProperty.arraySize = 0;
+
+            AddNetworkPrefab(listProperty, playerPrefab);
+            AddNetworkPrefab(listProperty, roundManagerPrefab);
+            foreach (var lootPrefab in lootPrefabs)
+            {
+                if (lootPrefab != null)
+                {
+                    AddNetworkPrefab(listProperty, lootPrefab.gameObject);
+                }
+            }
+
+            serializedList.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(prefabsList);
+            return prefabsList;
+        }
+
+        private static void AddNetworkPrefab(SerializedProperty listProperty, GameObject prefab)
+        {
+            if (prefab == null)
+            {
+                return;
+            }
+
+            var index = listProperty.arraySize;
+            listProperty.InsertArrayElementAtIndex(index);
+            var entry = listProperty.GetArrayElementAtIndex(index);
+            entry.FindPropertyRelative("Override").enumValueIndex = (int)NetworkPrefabOverride.None;
+            entry.FindPropertyRelative("Prefab").objectReferenceValue = prefab;
+            entry.FindPropertyRelative("SourcePrefabToOverride").objectReferenceValue = null;
+            entry.FindPropertyRelative("SourceHashToOverride").uintValue = 0;
+            entry.FindPropertyRelative("OverridingTargetPrefab").objectReferenceValue = null;
+        }
+
         private static void CreateLighting()
         {
             var sun = new GameObject("Tiny Planet Sun");
@@ -222,7 +329,7 @@ namespace FriendSlop.Editor
             camera.clearFlags = CameraClearFlags.Skybox;
         }
 
-        private static void CreateNetworkManager(GameObject playerPrefab)
+        private static void CreateNetworkManager(GameObject playerPrefab, NetworkPrefabsList networkPrefabsList)
         {
             var networkObject = new GameObject("Network Manager");
             var transport = networkObject.AddComponent<UnityTransport>();
@@ -231,6 +338,8 @@ namespace FriendSlop.Editor
             var networkManager = networkObject.AddComponent<NetworkManager>();
             networkManager.NetworkConfig.NetworkTransport = transport;
             networkManager.NetworkConfig.PlayerPrefab = playerPrefab;
+            networkManager.NetworkConfig.Prefabs.NetworkPrefabsLists.Clear();
+            networkManager.NetworkConfig.Prefabs.NetworkPrefabsLists.Add(networkPrefabsList);
             networkManager.NetworkConfig.ConnectionApproval = false;
             networkManager.NetworkConfig.EnableSceneManagement = false;
             networkObject.AddComponent<NetworkSessionManager>();
@@ -293,58 +402,29 @@ namespace FriendSlop.Editor
             return spawns;
         }
 
-        private static void CreateLoot(IReadOnlyDictionary<string, Material> materials)
+        private static Transform[] CreateLootSpawnPoints()
         {
             var world = Object.FindFirstObjectByType<SphereWorld>();
             if (world == null)
             {
-                Debug.LogError("Cannot create loot without a SphereWorld.");
-                return;
+                Debug.LogError("Cannot create loot spawn points without a SphereWorld.");
+                return System.Array.Empty<Transform>();
             }
 
-            var lootRoot = new GameObject("Networked Loot").transform;
-            var specs = new[]
+            var specs = GetLootSpecs();
+            var lootRoot = new GameObject("Loot Spawn Points").transform;
+            var spawnPoints = new Transform[specs.Length];
+
+            for (var i = 0; i < specs.Length; i++)
             {
-                new LootSpec("Cockpit Nosecone", 0, 0.72f, PrimitiveType.Capsule, new Vector3(-0.78f, 0.35f, 0.52f), new Vector3(0.95f, 1.25f, 0.95f), "ShipPart", ShipPartType.Cockpit),
-                new LootSpec("Bent Rocket Wings", 0, 0.68f, PrimitiveType.Cube, new Vector3(0.62f, -0.18f, 0.76f), new Vector3(2.3f, 0.28f, 0.85f), "ShipPart", ShipPartType.Wings),
-                new LootSpec("Coughing Engine", 0, 0.62f, PrimitiveType.Cylinder, new Vector3(-0.26f, -0.72f, -0.64f), new Vector3(0.75f, 1.25f, 0.75f), "ShipPart", ShipPartType.Engine),
-                new LootSpec("Ancient Monitor", 90, 0.78f, PrimitiveType.Cube, new Vector3(-0.58f, 0.62f, -0.54f), new Vector3(1.2f, 0.8f, 0.7f), "LootBlue"),
-                new LootSpec("Printer From Hell", 120, 0.68f, PrimitiveType.Cube, new Vector3(0.18f, 0.34f, -0.92f), new Vector3(1.4f, 0.7f, 1f), "LootMetal"),
-                new LootSpec("Questionable Barrel", 75, 0.82f, PrimitiveType.Cylinder, new Vector3(-0.9f, -0.08f, -0.42f), new Vector3(0.9f, 1.2f, 0.9f), "LootGreen"),
-                new LootSpec("Glowing Cube", 160, 0.72f, PrimitiveType.Cube, new Vector3(0.42f, 0.76f, 0.48f), new Vector3(0.9f, 0.9f, 0.9f), "GlowCube"),
-                new LootSpec("Tiny Statue", 70, 0.9f, PrimitiveType.Capsule, new Vector3(0.88f, 0.32f, -0.34f), new Vector3(0.65f, 0.95f, 0.65f), "LootPink"),
-                new LootSpec("Office Fan", 65, 0.88f, PrimitiveType.Cylinder, new Vector3(-0.18f, 0.88f, 0.44f), new Vector3(0.8f, 0.32f, 0.8f), "LootMetal"),
-                new LootSpec("Wet Floor Sign", 45, 0.95f, PrimitiveType.Cube, new Vector3(0.96f, -0.08f, 0.26f), new Vector3(0.35f, 1.1f, 0.9f), "SafetyYellow"),
-                new LootSpec("Suspicious Server", 130, 0.65f, PrimitiveType.Cube, new Vector3(-0.38f, -0.42f, 0.82f), new Vector3(1f, 1.4f, 0.9f), "LootBlue"),
-                new LootSpec("Mystery Orb", 110, 0.8f, PrimitiveType.Sphere, new Vector3(0.5f, -0.76f, 0.18f), new Vector3(1f, 1f, 1f), "LootPink")
-            };
-
-            foreach (var spec in specs)
-            {
-                var lootObject = GameObject.CreatePrimitive(spec.Shape);
-                lootObject.name = spec.Name;
-                lootObject.transform.SetParent(lootRoot, true);
-                PlaceOnSurface(world, lootObject, spec.SurfaceNormal, 0.95f, Vector3.forward);
-                lootObject.transform.localScale = spec.Scale;
-                SetMaterial(lootObject, materials[spec.MaterialName]);
-
-                var body = lootObject.AddComponent<Rigidbody>();
-                body.mass = Mathf.Lerp(1.2f, 8f, 1f - spec.SpeedMultiplier);
-                body.angularDamping = 0.15f;
-                body.useGravity = false;
-
-                lootObject.AddComponent<SphericalRigidbodyGravity>();
-                lootObject.AddComponent<NetworkObject>();
-                lootObject.AddComponent<NetworkTransform>();
-                var loot = lootObject.AddComponent<NetworkLootItem>();
-                var serializedLoot = new SerializedObject(loot);
-                serializedLoot.FindProperty("itemName").stringValue = spec.Name;
-                serializedLoot.FindProperty("value").intValue = spec.Value;
-                serializedLoot.FindProperty("carrySpeedMultiplier").floatValue = spec.SpeedMultiplier;
-                serializedLoot.FindProperty("carryDistance").floatValue = Mathf.Lerp(2.35f, 1.7f, 1f - spec.SpeedMultiplier);
-                serializedLoot.FindProperty("shipPartType").enumValueIndex = (int)spec.PartType;
-                serializedLoot.ApplyModifiedPropertiesWithoutUndo();
+                var spec = specs[i];
+                var spawnPoint = new GameObject($"{spec.Name} Spawn");
+                spawnPoint.transform.SetParent(lootRoot, true);
+                PlaceOnSurface(world, spawnPoint, spec.SurfaceNormal, 0.95f, Vector3.forward);
+                spawnPoints[i] = spawnPoint.transform;
             }
+
+            return spawnPoints;
         }
 
         private static void CreateLaunchpad(IReadOnlyDictionary<string, Material> materials)
@@ -366,7 +446,6 @@ namespace FriendSlop.Editor
             zone.transform.localScale = new Vector3(4.8f, 0.08f, 4.8f);
             SetMaterial(zone, materials["Launchpad"]);
             zone.GetComponent<Collider>().isTrigger = true;
-            zone.AddComponent<NetworkObject>();
             zone.AddComponent<LaunchpadZone>();
 
             var rocketBody = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -437,21 +516,31 @@ namespace FriendSlop.Editor
             light.intensity = 2.5f;
         }
 
-        private static void CreateRoundManager(Transform[] spawns)
+        private static void CreateRuntimeBootstrapper(RoundManager roundManagerPrefab, Transform[] playerSpawns, NetworkLootItem[] lootPrefabs, Transform[] lootSpawns)
         {
-            var roundObject = new GameObject("Round Manager");
-            roundObject.AddComponent<NetworkObject>();
-            var round = roundObject.AddComponent<RoundManager>();
-            var serializedRound = new SerializedObject(round);
-            serializedRound.FindProperty("quota").intValue = 0;
-            serializedRound.FindProperty("roundLengthSeconds").floatValue = 0f;
-            var spawnProperty = serializedRound.FindProperty("playerSpawnPoints");
-            spawnProperty.arraySize = spawns.Length;
-            for (var i = 0; i < spawns.Length; i++)
+            var bootstrapObject = new GameObject("Network Runtime Bootstrapper");
+            var bootstrapper = bootstrapObject.AddComponent<PrototypeNetworkBootstrapper>();
+            var serializedBootstrapper = new SerializedObject(bootstrapper);
+
+            serializedBootstrapper.FindProperty("roundManagerPrefab").objectReferenceValue = roundManagerPrefab;
+            AssignObjectArray(serializedBootstrapper.FindProperty("playerSpawnPoints"), playerSpawns);
+            AssignObjectArray(serializedBootstrapper.FindProperty("lootPrefabs"), lootPrefabs);
+            AssignObjectArray(serializedBootstrapper.FindProperty("lootSpawnPoints"), lootSpawns);
+            serializedBootstrapper.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void AssignObjectArray<T>(SerializedProperty property, IReadOnlyList<T> values) where T : Object
+        {
+            property.arraySize = values?.Count ?? 0;
+            if (values == null)
             {
-                spawnProperty.GetArrayElementAtIndex(i).objectReferenceValue = spawns[i];
+                return;
             }
-            serializedRound.ApplyModifiedPropertiesWithoutUndo();
+
+            for (var i = 0; i < values.Count; i++)
+            {
+                property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            }
         }
 
         private static void CreateRuntimeUi()
@@ -562,6 +651,35 @@ namespace FriendSlop.Editor
             {
                 AssetDatabase.CreateFolder(parent, folder);
             }
+        }
+
+        private static LootSpec[] GetLootSpecs()
+        {
+            return new[]
+            {
+                new LootSpec("Cockpit Nosecone", 0, 0.72f, PrimitiveType.Capsule, new Vector3(-0.78f, 0.35f, 0.52f), new Vector3(0.95f, 1.25f, 0.95f), "ShipPart", ShipPartType.Cockpit),
+                new LootSpec("Bent Rocket Wings", 0, 0.68f, PrimitiveType.Cube, new Vector3(0.62f, -0.18f, 0.76f), new Vector3(2.3f, 0.28f, 0.85f), "ShipPart", ShipPartType.Wings),
+                new LootSpec("Coughing Engine", 0, 0.62f, PrimitiveType.Cylinder, new Vector3(-0.26f, -0.72f, -0.64f), new Vector3(0.75f, 1.25f, 0.75f), "ShipPart", ShipPartType.Engine),
+                new LootSpec("Ancient Monitor", 90, 0.78f, PrimitiveType.Cube, new Vector3(-0.58f, 0.62f, -0.54f), new Vector3(1.2f, 0.8f, 0.7f), "LootBlue"),
+                new LootSpec("Printer From Hell", 120, 0.68f, PrimitiveType.Cube, new Vector3(0.18f, 0.34f, -0.92f), new Vector3(1.4f, 0.7f, 1f), "LootMetal"),
+                new LootSpec("Questionable Barrel", 75, 0.82f, PrimitiveType.Cylinder, new Vector3(-0.9f, -0.08f, -0.42f), new Vector3(0.9f, 1.2f, 0.9f), "LootGreen"),
+                new LootSpec("Glowing Cube", 160, 0.72f, PrimitiveType.Cube, new Vector3(0.42f, 0.76f, 0.48f), new Vector3(0.9f, 0.9f, 0.9f), "GlowCube"),
+                new LootSpec("Tiny Statue", 70, 0.9f, PrimitiveType.Capsule, new Vector3(0.88f, 0.32f, -0.34f), new Vector3(0.65f, 0.95f, 0.65f), "LootPink"),
+                new LootSpec("Office Fan", 65, 0.88f, PrimitiveType.Cylinder, new Vector3(-0.18f, 0.88f, 0.44f), new Vector3(0.8f, 0.32f, 0.8f), "LootMetal"),
+                new LootSpec("Wet Floor Sign", 45, 0.95f, PrimitiveType.Cube, new Vector3(0.96f, -0.08f, 0.26f), new Vector3(0.35f, 1.1f, 0.9f), "SafetyYellow"),
+                new LootSpec("Suspicious Server", 130, 0.65f, PrimitiveType.Cube, new Vector3(-0.38f, -0.42f, 0.82f), new Vector3(1f, 1.4f, 0.9f), "LootBlue"),
+                new LootSpec("Mystery Orb", 110, 0.8f, PrimitiveType.Sphere, new Vector3(0.5f, -0.76f, 0.18f), new Vector3(1f, 1f, 1f), "LootPink")
+            };
+        }
+
+        private static string SanitizeAssetName(string name)
+        {
+            foreach (var invalidCharacter in System.IO.Path.GetInvalidFileNameChars())
+            {
+                name = name.Replace(invalidCharacter, '_');
+            }
+
+            return name.Replace(' ', '_');
         }
 
         private readonly struct LootSpec

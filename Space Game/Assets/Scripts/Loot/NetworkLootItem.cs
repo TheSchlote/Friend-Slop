@@ -37,6 +37,22 @@ namespace FriendSlop.Loot
         public ShipPartType ShipPartType => shipPartType;
         public bool IsShipPart => shipPartType != ShipPartType.None;
 
+        public void ServerSetSpawnPose(Vector3 position, Quaternion rotation)
+        {
+            spawnPosition = position;
+            spawnRotation = rotation;
+            transform.SetPositionAndRotation(position, rotation);
+
+            if (body == null)
+            {
+                return;
+            }
+
+            body.position = position;
+            body.rotation = rotation;
+            ClearDynamicVelocity();
+        }
+
         private void Awake()
         {
             body = GetComponent<Rigidbody>();

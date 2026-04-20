@@ -26,6 +26,11 @@ namespace FriendSlop.Round
 
         private readonly List<NetworkLootItem> lootItems = new();
 
+        public void ConfigureSpawnPoints(Transform[] spawnPoints)
+        {
+            playerSpawnPoints = spawnPoints;
+        }
+
         private void Awake()
         {
             Instance = this;
