@@ -125,11 +125,11 @@ namespace FriendSlop.Loot
 
             if (IsHeldBy(player.OwnerClientId))
             {
-                RequestDropRpc(Vector3.zero);
+                RequestDropServerRpc(Vector3.zero);
             }
             else
             {
-                RequestPickupRpc();
+                RequestPickupServerRpc();
             }
         }
 
@@ -138,8 +138,8 @@ namespace FriendSlop.Loot
             return IsCarried.Value && CarrierClientId.Value == clientId;
         }
 
-        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        public void RequestPickupRpc(RpcParams rpcParams = default)
+        [ServerRpc(RequireOwnership = false)]
+        public void RequestPickupServerRpc(ServerRpcParams rpcParams = default)
         {
             if (IsDeposited.Value || IsCarried.Value)
             {
@@ -159,8 +159,8 @@ namespace FriendSlop.Loot
             player.SetHeldItem(this);
         }
 
-        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        public void MoveCarriedRpc(Vector3 targetPosition, Quaternion targetRotation, RpcParams rpcParams = default)
+        [ServerRpc(RequireOwnership = false)]
+        public void MoveCarriedServerRpc(Vector3 targetPosition, Quaternion targetRotation, ServerRpcParams rpcParams = default)
         {
             if (!IsHeldBy(rpcParams.Receive.SenderClientId) || IsDeposited.Value)
             {
@@ -179,8 +179,8 @@ namespace FriendSlop.Loot
             transform.SetPositionAndRotation(targetPosition, targetRotation);
         }
 
-        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        public void RequestDropRpc(Vector3 impulse, RpcParams rpcParams = default)
+        [ServerRpc(RequireOwnership = false)]
+        public void RequestDropServerRpc(Vector3 impulse, ServerRpcParams rpcParams = default)
         {
             if (!IsHeldBy(rpcParams.Receive.SenderClientId))
             {

@@ -17,26 +17,6 @@ namespace FriendSlop.Networking
         private NetworkManager subscribedManager;
         private bool spawnedForSession;
 
-        private static readonly HashSet<string> NonBlockingDecorationNames = new()
-        {
-            "Crash Dirt Patch",
-            "Launchpad Cable A",
-            "Launchpad Cable B",
-            "Broken Rocket Body",
-            "Missing Cockpit Socket",
-            "Left Empty Wing Mount",
-            "Right Empty Wing Mount",
-            "Empty Engine Mount",
-            "Installed Cockpit Visual",
-            "Installed Wings Visual",
-            "Installed Engine Visual"
-        };
-
-        private void Awake()
-        {
-            DisableNonBlockingDecorationColliders();
-        }
-
         private void OnEnable()
         {
             TrySubscribe();
@@ -138,23 +118,6 @@ namespace FriendSlop.Networking
         {
             spawnedForSession = false;
             spawnedObjects.Clear();
-        }
-
-        private static void DisableNonBlockingDecorationColliders()
-        {
-            var colliders = FindObjectsByType<Collider>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            foreach (var sceneCollider in colliders)
-            {
-                if (sceneCollider == null || sceneCollider.GetComponent<LaunchpadZone>() != null)
-                {
-                    continue;
-                }
-
-                if (NonBlockingDecorationNames.Contains(sceneCollider.gameObject.name))
-                {
-                    sceneCollider.enabled = false;
-                }
-            }
         }
     }
 }

@@ -1,10 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
+using Unity.Networking.Transport.Relay;
 using Unity.Services.Authentication;
 using Unity.Services.Core;
-using Unity.Services.Multiplayer;
+using Unity.Services.Lobbies;
+using Unity.Services.Lobbies.Models;
+using Unity.Services.Relay;
+using Unity.Services.Relay.Models;
 using UnityEngine;
 
 namespace FriendSlop.Networking
@@ -16,8 +21,8 @@ namespace FriendSlop.Networking
         [SerializeField] private int maxPlayers = 4;
         [SerializeField] private ushort localPort = 7777;
 
-        private ISession currentSession;
-        private bool sessionOperationInProgress;
+        private Lobby currentLobby;
+        private float nextLobbyHeartbeat;
 
         public string LastJoinCode { get; private set; } = string.Empty;
         public string Status { get; private set; } = "Not connected.";
@@ -33,98 +38,77 @@ namespace FriendSlop.Networking
             Instance = this;
         }
 
-        public async void HostOnline()
+        private async void Update()
         {
-            if (!CanStartSession())
+            if (currentLobby == null || Time.realtimeSinceStartup < nextLobbyHeartbeat)
             {
                 return;
             }
 
-            sessionOperationInProgress = true;
+            nextLobbyHeartbeat = Time.realtimeSinceStartup + 15f;
             try
             {
-                Status = "Signing in to Unity services...";
-                await EnsureSignedInAsync();
-
-                Status = "Creating online session...";
-                var options = new SessionOptions
-                {
-                    Name = "Friend Slop",
-                    MaxPlayers = maxPlayers,
-                    IsPrivate = false
-                }.WithRelayNetwork();
-
-                RegisterSession(await MultiplayerService.Instance.CreateSessionAsync(options));
-                LastJoinCode = currentSession.Code;
-                Status = $"Online host running. Share join code {LastJoinCode}.";
+                await LobbyService.Instance.SendHeartbeatPingAsync(currentLobby.Id);
             }
             catch (Exception exception)
             {
-                Debug.LogWarning($"Online host failed: {exception}");
-                LastJoinCode = string.Empty;
-                Status = $"Online host failed: {exception.Message}";
-            }
-            finally
-            {
-                sessionOperationInProgress = false;
+                Debug.LogWarning($"Lobby heartbeat failed: {exception.Message}");
             }
         }
 
-        public async void JoinOnline(string joinCode)
+        public async void HostOnline()
         {
-            if (!CanStartSession())
-            {
-                return;
-            }
-
-            if (string.IsNullOrWhiteSpace(joinCode))
-            {
-                Status = "Enter an online join code.";
-                return;
-            }
-
-            sessionOperationInProgress = true;
             try
             {
-                var trimmedJoinCode = joinCode.Trim();
-                Status = "Signing in to Unity services...";
-                await EnsureSignedInAsync();
-
-                Status = $"Joining online code {trimmedJoinCode}...";
-                RegisterSession(await MultiplayerService.Instance.JoinSessionByCodeAsync(trimmedJoinCode));
-                LastJoinCode = trimmedJoinCode;
-                Status = $"Joined online session {trimmedJoinCode}.";
+                await HostRelayAsync();
             }
             catch (Exception exception)
             {
-                Debug.LogWarning($"Online join failed: {exception}");
-                LastJoinCode = string.Empty;
-                Status = $"Online join failed: {exception.Message}";
+                Debug.LogWarning($"Relay host failed, falling back to local host: {exception.Message}");
+                StartLocalHost();
+                Status = $"Relay unavailable. Local host started on port {localPort}.";
             }
-            finally
+        }
+
+        public async void JoinOnline(string joinCodeOrAddress)
+        {
+            if (string.IsNullOrWhiteSpace(joinCodeOrAddress))
             {
-                sessionOperationInProgress = false;
+                StartLocalClient("127.0.0.1");
+                return;
+            }
+
+            try
+            {
+                await JoinRelayAsync(joinCodeOrAddress.Trim());
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"Relay join failed, trying LAN address: {exception.Message}");
+                StartLocalClient(joinCodeOrAddress.Trim());
+                Status = $"Relay join failed. Trying LAN address {joinCodeOrAddress.Trim()}:{localPort}.";
             }
         }
 
         public void StartLocalHost()
         {
-            if (!CanStartSession())
+            var networkManager = NetworkManager.Singleton;
+            if (networkManager == null || networkManager.IsListening)
             {
                 return;
             }
 
-            var networkManager = NetworkManager.Singleton;
             var transport = networkManager.GetComponent<UnityTransport>();
             transport.SetConnectionData("127.0.0.1", localPort, "0.0.0.0");
-            LastJoinCode = GetLocalAddressHint();
+            LastJoinCode = "LAN: " + GetLocalAddressHint();
             Status = $"Local host running. Join by LAN IP on port {localPort}.";
             networkManager.StartHost();
         }
 
         public void StartLocalClient(string address)
         {
-            if (!CanStartSession())
+            var networkManager = NetworkManager.Singleton;
+            if (networkManager == null || networkManager.IsListening)
             {
                 return;
             }
@@ -134,117 +118,87 @@ namespace FriendSlop.Networking
                 address = "127.0.0.1";
             }
 
-            var trimmedAddress = address.Trim();
-            var networkManager = NetworkManager.Singleton;
             var transport = networkManager.GetComponent<UnityTransport>();
-            transport.SetConnectionData(trimmedAddress, localPort);
+            transport.SetConnectionData(address, localPort);
             LastJoinCode = string.Empty;
-            Status = $"Joining {trimmedAddress}:{localPort}...";
+            Status = $"Joining {address}:{localPort}...";
             networkManager.StartClient();
         }
 
         public async void Shutdown()
         {
-            if (sessionOperationInProgress)
+            await LeaveLobbyAsync();
+
+            if (NetworkManager.Singleton != null)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+
+            LastJoinCode = string.Empty;
+            Status = "Not connected.";
+        }
+
+        private async Task HostRelayAsync()
+        {
+            var networkManager = NetworkManager.Singleton;
+            if (networkManager == null || networkManager.IsListening)
             {
                 return;
             }
 
-            sessionOperationInProgress = true;
+            Status = "Signing in to Unity services...";
+            await EnsureSignedInAsync();
+
+            Status = "Creating Relay allocation...";
+            var allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers - 1);
+            LastJoinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+
+            var transport = networkManager.GetComponent<UnityTransport>();
+            transport.SetRelayServerData(new RelayServerData(allocation, "dtls"));
+
             try
             {
-                if (currentSession != null)
-                {
-                    var leavingSession = currentSession;
-                    UnregisterSession();
-                    await leavingSession.LeaveAsync();
-                }
-                else if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
-                {
-                    NetworkManager.Singleton.Shutdown();
-                }
+                currentLobby = await LobbyService.Instance.CreateLobbyAsync(
+                    "Friend Slop",
+                    maxPlayers,
+                    new CreateLobbyOptions
+                    {
+                        IsPrivate = false,
+                        Data = new Dictionary<string, DataObject>
+                        {
+                            { "RelayCode", new DataObject(DataObject.VisibilityOptions.Public, LastJoinCode) }
+                        }
+                    });
             }
             catch (Exception exception)
             {
-                Debug.LogWarning($"Session shutdown failed: {exception}");
-                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
-                {
-                    NetworkManager.Singleton.Shutdown();
-                }
+                Debug.LogWarning($"Lobby creation failed; continuing with Relay code only: {exception.Message}");
             }
-            finally
-            {
-                LastJoinCode = string.Empty;
-                Status = "Not connected.";
-                sessionOperationInProgress = false;
-            }
+
+            Status = $"Relay host running. Code: {LastJoinCode}";
+            networkManager.StartHost();
         }
 
-        private bool CanStartSession()
+        private async Task JoinRelayAsync(string joinCode)
         {
-            if (sessionOperationInProgress)
-            {
-                return false;
-            }
-
             var networkManager = NetworkManager.Singleton;
-            if (networkManager == null)
-            {
-                Status = "No NetworkManager in scene.";
-                return false;
-            }
-
-            return !networkManager.IsListening;
-        }
-
-        private void RegisterSession(ISession session)
-        {
-            UnregisterSession();
-            currentSession = session;
-            currentSession.PlayerJoined += OnSessionRosterChanged;
-            currentSession.PlayerHasLeft += OnSessionRosterChanged;
-            currentSession.RemovedFromSession += OnRemovedFromSession;
-            currentSession.Deleted += OnSessionDeleted;
-        }
-
-        private void UnregisterSession()
-        {
-            if (currentSession == null)
+            if (networkManager == null || networkManager.IsListening)
             {
                 return;
             }
 
-            currentSession.PlayerJoined -= OnSessionRosterChanged;
-            currentSession.PlayerHasLeft -= OnSessionRosterChanged;
-            currentSession.RemovedFromSession -= OnRemovedFromSession;
-            currentSession.Deleted -= OnSessionDeleted;
-            currentSession = null;
-        }
+            Status = "Signing in to Unity services...";
+            await EnsureSignedInAsync();
 
-        private void OnSessionRosterChanged(string _)
-        {
-            if (currentSession == null)
-            {
-                return;
-            }
+            Status = $"Joining Relay code {joinCode}...";
+            var joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
 
-            Status = currentSession.IsHost
-                ? $"Online host running. Share join code {currentSession.Code}."
-                : $"Joined online session {currentSession.Code}.";
-        }
+            var transport = networkManager.GetComponent<UnityTransport>();
+            transport.SetRelayServerData(new RelayServerData(joinAllocation, "dtls"));
 
-        private void OnRemovedFromSession()
-        {
-            UnregisterSession();
-            LastJoinCode = string.Empty;
-            Status = "Removed from online session.";
-        }
-
-        private void OnSessionDeleted()
-        {
-            UnregisterSession();
-            LastJoinCode = string.Empty;
-            Status = "Online session closed.";
+            LastJoinCode = joinCode;
+            Status = $"Joining Relay code {joinCode}...";
+            networkManager.StartClient();
         }
 
         private static async Task EnsureSignedInAsync()
@@ -258,6 +212,35 @@ namespace FriendSlop.Networking
             {
                 await AuthenticationService.Instance.SignInAnonymouslyAsync();
             }
+        }
+
+        private async Task LeaveLobbyAsync()
+        {
+            if (currentLobby == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (AuthenticationService.Instance.IsSignedIn)
+                {
+                    await LobbyService.Instance.DeleteLobbyAsync(currentLobby.Id);
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"Lobby cleanup failed: {exception.Message}");
+            }
+            finally
+            {
+                currentLobby = null;
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            _ = LeaveLobbyAsync();
         }
 
         private static string GetLocalAddressHint()

@@ -9,11 +9,6 @@ namespace FriendSlop.Round
         [SerializeField] private GameObject engineVisual;
         [SerializeField] private GameObject readyBeacon;
 
-        private void Awake()
-        {
-            DisableDecorativeColliders();
-        }
-
         private void Update()
         {
             var round = RoundManager.Instance;
@@ -28,20 +23,6 @@ namespace FriendSlop.Round
             if (target != null && target.activeSelf != active)
             {
                 target.SetActive(active);
-            }
-        }
-
-        private void DisableDecorativeColliders()
-        {
-            var colliders = GetComponentsInChildren<Collider>(true);
-            foreach (var childCollider in colliders)
-            {
-                if (childCollider == null || childCollider.GetComponent<LaunchpadZone>() != null)
-                {
-                    continue;
-                }
-
-                childCollider.enabled = false;
             }
         }
     }

@@ -1,4 +1,3 @@
-using System.Text;
 using FriendSlop.Networking;
 using FriendSlop.Player;
 using FriendSlop.Round;
@@ -16,9 +15,10 @@ namespace FriendSlop.UI
         public static FriendSlopUI Instance { get; private set; }
         public static bool BlocksGameplayInput => Instance != null && Instance.IsBlockingGameplayInput();
 
+        private Canvas canvas;
         private GameObject menuRoot;
+        private Text titleText;
         private Text statusText;
-        private Text lobbyQueueText;
         private Text quotaText;
         private Text timerText;
         private Text promptText;
@@ -85,24 +85,20 @@ namespace FriendSlop.UI
 
             if (session != null)
             {
-                var code = string.IsNullOrWhiteSpace(session.LastJoinCode) ? string.Empty : $"\nJoin: {session.LastJoinCode}";
+                var code = string.IsNullOrWhiteSpace(session.LastJoinCode) ? string.Empty : $"\nCode: {session.LastJoinCode}";
                 statusText.text = session.Status + code + "\nTab toggles this menu. Esc unlocks mouse.";
             }
 
-            lobbyQueueText.text = BuildLobbyQueueText(networkManager);
             hostButton.gameObject.SetActive(!connected);
             joinButton.gameObject.SetActive(!connected);
             localHostButton.gameObject.SetActive(!connected);
             localJoinButton.gameObject.SetActive(!connected);
             joinInput.gameObject.SetActive(!connected);
+            shutdownButton.gameObject.SetActive(connected);
 
             var isHost = networkManager != null && networkManager.IsHost;
-            var showStart = connected && isHost && phase == RoundPhase.Lobby;
-            var showRestart = connected && isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed);
-            startButton.gameObject.SetActive(showStart);
-            restartButton.gameObject.SetActive(showRestart);
-            shutdownButton.gameObject.SetActive(connected);
-            ApplyMenuLayout(connected, showStart, showRestart);
+            startButton.gameObject.SetActive(connected && isHost && phase == RoundPhase.Lobby);
+            restartButton.gameObject.SetActive(connected && isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed));
 
             if (round != null)
             {
@@ -137,13 +133,9 @@ namespace FriendSlop.UI
         {
             var canvasObject = new GameObject("Friend Slop UI");
             canvasObject.transform.SetParent(transform, false);
-            var canvas = canvasObject.AddComponent<Canvas>();
+            canvas = canvasObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            var scaler = canvasObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            canvasObject.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             canvasObject.AddComponent<GraphicRaycaster>();
 
             var hudRoot = CreatePanel("HUD", canvasObject.transform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -18f), new Vector2(420f, 180f), new Color(0f, 0f, 0f, 0f));
@@ -155,67 +147,27 @@ namespace FriendSlop.UI
             promptText = CreateText("Prompt", canvasObject.transform, string.Empty, 24, TextAnchor.LowerCenter, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 72f), new Vector2(760f, 42f));
             CreateText("Reticle", canvasObject.transform, "+", 24, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(40f, 40f));
 
-            menuRoot = CreatePanel("Menu", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(430f, 640f), new Color(0.04f, 0.05f, 0.05f, 0.88f));
-            CreateText("Title", menuRoot.transform, "FRIEND SLOP RETRIEVAL", 27, TextAnchor.MiddleCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -34f), new Vector2(390f, 46f));
-            statusText = CreateText("Status", menuRoot.transform, "Not connected.", 17, TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -84f), new Vector2(380f, 70f));
-            lobbyQueueText = CreateText("Lobby Queue", menuRoot.transform, "Lobby Queue\nNo one connected.", 17, TextAnchor.UpperLeft, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -154f), new Vector2(310f, 90f));
+            menuRoot = CreatePanel("Menu", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(430f, 520f), new Color(0.04f, 0.05f, 0.05f, 0.88f));
+            titleText = CreateText("Title", menuRoot.transform, "FRIEND SLOP RETRIEVAL", 27, TextAnchor.MiddleCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -34f), new Vector2(390f, 46f));
+            statusText = CreateText("Status", menuRoot.transform, "Not connected.", 17, TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -86f), new Vector2(380f, 86f));
 
-            joinInput = CreateInput("JoinInput", menuRoot.transform, "Join code or LAN IP", new Vector2(0f, 8f));
-            hostButton = CreateButton("Host Online", menuRoot.transform, new Vector2(0f, -46f), () => NetworkSessionManager.Instance?.HostOnline());
-            joinButton = CreateButton("Join Code", menuRoot.transform, new Vector2(0f, -100f), () => NetworkSessionManager.Instance?.JoinOnline(joinInput.text));
-            localHostButton = CreateButton("Host LAN", menuRoot.transform, new Vector2(0f, -154f), () => NetworkSessionManager.Instance?.StartLocalHost());
-            localJoinButton = CreateButton("Join LAN", menuRoot.transform, new Vector2(0f, -208f), () => NetworkSessionManager.Instance?.StartLocalClient(string.IsNullOrWhiteSpace(joinInput.text) ? "127.0.0.1" : joinInput.text));
-            startButton = CreateButton("Start Round", menuRoot.transform, new Vector2(0f, -262f), () =>
+            joinInput = CreateInput("JoinInput", menuRoot.transform, "Relay code or LAN IP", new Vector2(0f, 54f));
+            hostButton = CreateButton("Host Online", menuRoot.transform, new Vector2(0f, 0f), () => NetworkSessionManager.Instance?.HostOnline());
+            joinButton = CreateButton("Join Code", menuRoot.transform, new Vector2(0f, -54f), () => NetworkSessionManager.Instance?.JoinOnline(joinInput.text));
+            localHostButton = CreateButton("Host LAN", menuRoot.transform, new Vector2(0f, -108f), () => NetworkSessionManager.Instance?.StartLocalHost());
+            localJoinButton = CreateButton("Join LAN", menuRoot.transform, new Vector2(0f, -162f), () => NetworkSessionManager.Instance?.StartLocalClient(string.IsNullOrWhiteSpace(joinInput.text) ? "127.0.0.1" : joinInput.text));
+            startButton = CreateButton("Start Round", menuRoot.transform, new Vector2(0f, -216f), () =>
             {
-                RoundManager.Instance?.RequestStartRoundRpc();
+                RoundManager.Instance?.RequestStartRoundServerRpc();
                 LockGameplayCursor();
             });
-            restartButton = CreateButton("Restart Round", menuRoot.transform, new Vector2(0f, -262f), () =>
+            restartButton = CreateButton("Restart Round", menuRoot.transform, new Vector2(0f, -216f), () =>
             {
-                RoundManager.Instance?.RequestRestartRoundRpc();
+                RoundManager.Instance?.RequestRestartRoundServerRpc();
                 LockGameplayCursor();
             });
-            shutdownButton = CreateButton("Leave Session", menuRoot.transform, new Vector2(0f, -316f), () => NetworkSessionManager.Instance?.Shutdown());
-            quitButton = CreateButton("Quit", menuRoot.transform, new Vector2(0f, -370f), QuitGame);
-        }
-
-        private void ApplyMenuLayout(bool connected, bool showStart, bool showRestart)
-        {
-            if (!connected)
-            {
-                SetAnchoredY(joinInput.gameObject, -10f);
-                SetAnchoredY(hostButton.gameObject, -64f);
-                SetAnchoredY(joinButton.gameObject, -118f);
-                SetAnchoredY(localHostButton.gameObject, -172f);
-                SetAnchoredY(localJoinButton.gameObject, -226f);
-                SetAnchoredY(quitButton.gameObject, -300f);
-                return;
-            }
-
-            var y = -24f;
-            if (showStart)
-            {
-                SetAnchoredY(startButton.gameObject, y);
-                y -= 54f;
-            }
-            else if (showRestart)
-            {
-                SetAnchoredY(restartButton.gameObject, y);
-                y -= 54f;
-            }
-
-            SetAnchoredY(shutdownButton.gameObject, y);
-            SetAnchoredY(quitButton.gameObject, y - 54f);
-        }
-
-        private static void SetAnchoredY(GameObject gameObject, float y)
-        {
-            if (gameObject == null || !gameObject.TryGetComponent<RectTransform>(out var rect))
-            {
-                return;
-            }
-
-            rect.anchoredPosition = new Vector2(rect.anchoredPosition.x, y);
+            shutdownButton = CreateButton("Leave Session", menuRoot.transform, new Vector2(0f, -270f), () => NetworkSessionManager.Instance?.Shutdown());
+            quitButton = CreateButton("Quit", menuRoot.transform, new Vector2(0f, -324f), Application.Quit);
         }
 
         private GameObject CreatePanel(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, Vector2 size, Color color)
@@ -275,26 +227,6 @@ namespace FriendSlop.UI
             return installed ? $"{label} OK" : $"{label} missing";
         }
 
-        private static string BuildLobbyQueueText(NetworkManager networkManager)
-        {
-            if (networkManager == null || !networkManager.IsListening)
-            {
-                return "Lobby Queue\nNo one connected.";
-            }
-
-            var builder = new StringBuilder("Lobby Queue");
-            var clients = networkManager.ConnectedClientsList;
-            for (var i = 0; i < clients.Count; i++)
-            {
-                var clientId = clients[i].ClientId;
-                var role = clientId == NetworkManager.ServerClientId ? "Host" : $"Player {i + 1}";
-                var localMarker = clientId == networkManager.LocalClientId ? " (you)" : string.Empty;
-                builder.Append('\n').Append(i + 1).Append(". ").Append(role).Append(localMarker);
-            }
-
-            return builder.ToString();
-        }
-
         private InputField CreateInput(string name, Transform parent, string placeholder, Vector2 anchoredPosition)
         {
             var inputObject = CreatePanel(name, parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), anchoredPosition, new Vector2(250f, 42f), new Color(0.02f, 0.02f, 0.02f, 0.95f));
@@ -312,15 +244,6 @@ namespace FriendSlop.UI
             menuPinned = false;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
-        }
-
-        private static void QuitGame()
-        {
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#else
-            Application.Quit();
-#endif
         }
 
         private static void EnsureEventSystem()
