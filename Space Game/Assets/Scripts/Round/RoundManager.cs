@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using FriendSlop.Hazards;
 using FriendSlop.Loot;
 using FriendSlop.Player;
 using Unity.Netcode;
@@ -60,8 +59,8 @@ namespace FriendSlop.Round
             }
         }
 
-        [ServerRpc(RequireOwnership = false)]
-        public void RequestStartRoundServerRpc(ServerRpcParams rpcParams = default)
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void RequestStartRoundRpc(RpcParams rpcParams = default)
         {
             if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
             {
@@ -71,8 +70,8 @@ namespace FriendSlop.Round
             ServerStartRound();
         }
 
-        [ServerRpc(RequireOwnership = false)]
-        public void RequestRestartRoundServerRpc(ServerRpcParams rpcParams = default)
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void RequestRestartRoundRpc(RpcParams rpcParams = default)
         {
             if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
             {
@@ -104,12 +103,6 @@ namespace FriendSlop.Round
                 {
                     loot.ServerReset();
                 }
-            }
-
-            var monsters = FindObjectsByType<RoamingMonster>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            foreach (var monster in monsters)
-            {
-                monster.ServerReset();
             }
 
             RespawnPlayers();

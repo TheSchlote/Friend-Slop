@@ -52,11 +52,11 @@ namespace FriendSlop.Player
 
                 if (keyboard.qKey.wasPressedThisFrame)
                 {
-                    heldItem.RequestDropServerRpc(Vector3.zero);
+                    heldItem.RequestDropRpc(Vector3.zero);
                 }
                 else if (mouse != null && mouse.rightButton.wasPressedThisFrame)
                 {
-                    heldItem.RequestDropServerRpc(controller.PlayerCamera.transform.forward * throwImpulse);
+                    heldItem.RequestDropRpc(controller.PlayerCamera.transform.forward * throwImpulse);
                 }
             }
 
@@ -125,7 +125,7 @@ namespace FriendSlop.Player
             }
 
             var targetRotation = Quaternion.LookRotation(carriedForward.normalized, up);
-            heldItem.MoveCarriedServerRpc(targetPosition, targetRotation);
+            heldItem.MoveCarriedRpc(targetPosition, targetRotation);
         }
     }
 }

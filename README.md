@@ -17,7 +17,7 @@ Unity prototype for a small co-op sphere-world salvage run.
 5. Friend enters the host machine LAN IP in the input field and clicks `Join LAN`.
 6. Host clicks `Start Round` once everyone is connected.
 
-`Host Online` and `Join Code` use Unity Relay/Lobby. If Unity Services is not linked or Relay is unavailable, the host path falls back to LAN hosting.
+For internet play, use `Host Online`, share the join code, and have your friend enter that code and click `Join Code`. This uses Unity's current Multiplayer Services package with Relay-backed sessions, so the Unity project must be linked to Unity Gaming Services.
 
 ## Controls
 

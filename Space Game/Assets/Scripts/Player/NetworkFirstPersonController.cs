@@ -24,13 +24,13 @@ namespace FriendSlop.Player
         [Header("Movement")]
         [SerializeField] private float walkSpeed = 5.2f;
         [SerializeField] private float sprintSpeed = 8f;
-        [SerializeField] private float jumpVelocity = 5.5f;
+        [SerializeField] private float jumpVelocity = 7f;
         [SerializeField] private float gravity = 28f;
         [SerializeField] private float mouseSensitivity = 0.08f;
         [SerializeField] private float knockbackDamping = 9f;
         [SerializeField] private float surfaceAlignSpeed = 18f;
-        [SerializeField] private float groundProbeDistance = 0.65f;
-        [SerializeField] private float groundStickSpeed = 4f;
+        [SerializeField] private float groundProbeDistance = 0.18f;
+        [SerializeField] private float groundStickSpeed = 2.5f;
         [SerializeField] private float terminalFallSpeed = 24f;
 
         private CharacterController characterController;
@@ -207,7 +207,8 @@ namespace FriendSlop.Player
             }
             else
             {
-                radialSpeed = Mathf.Max(radialSpeed - gravity * Time.deltaTime, -terminalFallSpeed);
+                var gravityAcceleration = world != null ? world.GravityAcceleration : gravity;
+                radialSpeed = Mathf.Max(radialSpeed - gravityAcceleration * Time.deltaTime, -terminalFallSpeed);
             }
 
             knockbackVelocity = Vector3.MoveTowards(knockbackVelocity, Vector3.zero, knockbackDamping * Time.deltaTime);
@@ -230,7 +231,7 @@ namespace FriendSlop.Player
                 return characterController.isGrounded;
             }
 
-            return world.GetSurfaceDistance(transform.position) <= groundProbeDistance && radialSpeed <= 0.25f;
+            return world.GetSurfaceDistance(transform.position) <= groundProbeDistance && radialSpeed <= 0f;
         }
 
         private void SnapToSphereSurface(SphereWorld world)

@@ -1,7 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using FriendSlop.Core;
-using FriendSlop.Hazards;
 using FriendSlop.Loot;
 using FriendSlop.Networking;
 using FriendSlop.Player;
@@ -102,7 +101,6 @@ namespace FriendSlop.Editor
             CreateFolder("Assets/Scripts", "Interaction");
             CreateFolder("Assets/Scripts", "Loot");
             CreateFolder("Assets/Scripts", "Round");
-            CreateFolder("Assets/Scripts", "Hazards");
             CreateFolder("Assets/Scripts", "UI");
             CreateFolder("Assets/Scripts", "Editor");
             CreateFolder("Assets", "Prefabs");
@@ -124,7 +122,6 @@ namespace FriendSlop.Editor
                 ["Launchpad"] = CreateMaterial("Launchpad", new Color(0.18f, 0.18f, 0.2f)),
                 ["ShipPart"] = CreateMaterial("ShipPart", new Color(0.92f, 0.92f, 0.88f)),
                 ["Player"] = CreateMaterial("Player", new Color(0.1f, 0.55f, 0.9f)),
-                ["Monster"] = CreateMaterial("Monster", new Color(0.85f, 0.08f, 0.06f)),
                 ["LootBlue"] = CreateMaterial("LootBlue", new Color(0.15f, 0.35f, 0.95f)),
                 ["LootGreen"] = CreateMaterial("LootGreen", new Color(0.15f, 0.75f, 0.45f)),
                 ["LootPink"] = CreateMaterial("LootPink", new Color(0.95f, 0.22f, 0.55f)),
@@ -175,6 +172,9 @@ namespace FriendSlop.Editor
             var interactor = root.AddComponent<PlayerInteractor>();
 
             var controllerSo = new SerializedObject(controller);
+            controllerSo.FindProperty("jumpVelocity").floatValue = 7f;
+            controllerSo.FindProperty("groundProbeDistance").floatValue = 0.18f;
+            controllerSo.FindProperty("groundStickSpeed").floatValue = 2.5f;
             controllerSo.FindProperty("playerCamera").objectReferenceValue = camera;
             controllerSo.FindProperty("cameraRoot").objectReferenceValue = cameraRoot.transform;
             controllerSo.FindProperty("carryAnchor").objectReferenceValue = carryAnchor.transform;
@@ -362,9 +362,9 @@ namespace FriendSlop.Editor
             worldSo.FindProperty("gravityAcceleration").floatValue = 28f;
             worldSo.ApplyModifiedPropertiesWithoutUndo();
 
-            CreateSurfaceProp("Crash Dirt Patch", levelRoot, world, PrimitiveType.Sphere, new Vector3(0f, 1f, 0f), Vector3.forward, 0.03f, new Vector3(5.4f, 0.16f, 4.3f), materials["PlanetDirt"]);
-            CreateSurfaceProp("Launchpad Cable A", levelRoot, world, PrimitiveType.Cube, new Vector3(0.18f, 0.98f, -0.08f), Vector3.forward, 0.08f, new Vector3(0.2f, 0.12f, 5.5f), materials["DarkWall"]);
-            CreateSurfaceProp("Launchpad Cable B", levelRoot, world, PrimitiveType.Cube, new Vector3(-0.2f, 0.97f, 0.02f), Vector3.right, 0.08f, new Vector3(0.2f, 0.12f, 4.8f), materials["DarkWall"]);
+            DisableCollider(CreateSurfaceProp("Crash Dirt Patch", levelRoot, world, PrimitiveType.Sphere, new Vector3(0f, 1f, 0f), Vector3.forward, 0.03f, new Vector3(5.4f, 0.16f, 4.3f), materials["PlanetDirt"]));
+            DisableCollider(CreateSurfaceProp("Launchpad Cable A", levelRoot, world, PrimitiveType.Cube, new Vector3(0.18f, 0.98f, -0.08f), Vector3.forward, 0.08f, new Vector3(0.2f, 0.12f, 5.5f), materials["DarkWall"]));
+            DisableCollider(CreateSurfaceProp("Launchpad Cable B", levelRoot, world, PrimitiveType.Cube, new Vector3(-0.2f, 0.97f, 0.02f), Vector3.right, 0.08f, new Vector3(0.2f, 0.12f, 4.8f), materials["DarkWall"]));
 
             var rockNormals = new[]
             {
@@ -454,6 +454,7 @@ namespace FriendSlop.Editor
             PlaceOnSurface(world, rocketBody, padNormal, 1.25f, Vector3.forward);
             rocketBody.transform.localScale = new Vector3(0.75f, 1.35f, 0.75f);
             SetMaterial(rocketBody, materials["ShipPart"]);
+            DisableCollider(rocketBody);
 
             var nose = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             nose.name = "Missing Cockpit Socket";
@@ -461,14 +462,18 @@ namespace FriendSlop.Editor
             PlaceOnSurface(world, nose, new Vector3(0.04f, 1f, 0.04f), 2.75f, Vector3.forward);
             nose.transform.localScale = new Vector3(0.75f, 0.35f, 0.75f);
             SetMaterial(nose, materials["SafetyYellow"]);
+            DisableCollider(nose);
 
-            CreateSurfaceProp("Left Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(-0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
-            CreateSurfaceProp("Right Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
-            CreateSurfaceProp("Empty Engine Mount", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.08f), Vector3.forward, 0.7f, new Vector3(0.55f, 0.35f, 0.55f), materials["SafetyYellow"]);
+            DisableCollider(CreateSurfaceProp("Left Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(-0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]));
+            DisableCollider(CreateSurfaceProp("Right Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]));
+            DisableCollider(CreateSurfaceProp("Empty Engine Mount", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.08f), Vector3.forward, 0.7f, new Vector3(0.55f, 0.35f, 0.55f), materials["SafetyYellow"]));
 
             var installedCockpit = CreateSurfaceProp("Installed Cockpit Visual", launchpadRoot, world, PrimitiveType.Sphere, new Vector3(0.04f, 1f, 0.08f), Vector3.forward, 2.9f, new Vector3(0.9f, 0.45f, 0.9f), materials["ShipPart"]);
             var installedWings = CreateSurfaceProp("Installed Wings Visual", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0f, 1f, 0.02f), Vector3.right, 1.38f, new Vector3(3.6f, 0.12f, 0.55f), materials["ShipPart"]);
             var installedEngine = CreateSurfaceProp("Installed Engine Visual", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.1f), Vector3.forward, 0.58f, new Vector3(0.62f, 0.45f, 0.62f), materials["ShipPart"]);
+            DisableCollider(installedCockpit);
+            DisableCollider(installedWings);
+            DisableCollider(installedEngine);
 
             var readyBeacon = new GameObject("Rocket Ready Beacon");
             readyBeacon.transform.SetParent(launchpadRoot, true);
@@ -493,27 +498,6 @@ namespace FriendSlop.Editor
             displaySo.ApplyModifiedPropertiesWithoutUndo();
 
             CreateFloatingText("Launchpad Sign", "LAUNCHPAD\nNeeds cockpit, wings, engine", world, new Vector3(0.08f, 1f, -0.02f), 4.1f, Color.green);
-        }
-
-        private static void CreateMonster(IReadOnlyDictionary<string, Material> materials)
-        {
-            var monster = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            monster.name = "Roaming OSHA Violation";
-            monster.transform.position = new Vector3(0f, 1.1f, 9f);
-            monster.transform.localScale = new Vector3(1.1f, 1.35f, 1.1f);
-            SetMaterial(monster, materials["Monster"]);
-            monster.AddComponent<NetworkObject>();
-            monster.AddComponent<NetworkTransform>();
-            monster.AddComponent<RoamingMonster>();
-
-            var lightObject = new GameObject("Panic Light");
-            lightObject.transform.SetParent(monster.transform, false);
-            lightObject.transform.localPosition = new Vector3(0f, 0.8f, 0f);
-            var light = lightObject.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = Color.red;
-            light.range = 7f;
-            light.intensity = 2.5f;
         }
 
         private static void CreateRuntimeBootstrapper(RoundManager roundManagerPrefab, Transform[] playerSpawns, NetworkLootItem[] lootPrefabs, Transform[] lootSpawns)
@@ -589,17 +573,6 @@ namespace FriendSlop.Editor
             text.color = color;
         }
 
-        private static GameObject CreateCube(string name, Transform parent, Vector3 position, Vector3 scale, Material material)
-        {
-            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            cube.name = name;
-            cube.transform.SetParent(parent, true);
-            cube.transform.position = position;
-            cube.transform.localScale = scale;
-            SetMaterial(cube, material);
-            return cube;
-        }
-
         private static Material CreateMaterial(string name, Color color)
         {
             var path = $"Assets/Materials/{name}.mat";
@@ -633,6 +606,15 @@ namespace FriendSlop.Editor
             if (renderer != null)
             {
                 renderer.sharedMaterial = material;
+            }
+        }
+
+        private static void DisableCollider(GameObject gameObject)
+        {
+            var collider = gameObject.GetComponent<Collider>();
+            if (collider != null)
+            {
+                collider.enabled = false;
             }
         }
 
