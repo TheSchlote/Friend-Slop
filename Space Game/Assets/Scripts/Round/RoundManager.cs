@@ -23,8 +23,10 @@ namespace FriendSlop.Round
         public NetworkVariable<bool> HasWings = new(false);
         public NetworkVariable<bool> HasEngine = new(false);
         public NetworkVariable<bool> RocketAssembled = new(false);
+        public NetworkVariable<int> PlayersBoarded = new(0);  // NEW
 
         private readonly List<NetworkLootItem> lootItems = new();
+        private readonly HashSet<ulong> boardedPlayerIds = new();  // NEW
 
         public void ConfigureSpawnPoints(Transform[] spawnPoints)
         {
@@ -49,9 +51,7 @@ namespace FriendSlop.Round
         private void Update()
         {
             if (!IsServer || Phase.Value != RoundPhase.Active || roundLengthSeconds <= 0f)
-            {
                 return;
-            }
 
             TimeRemaining.Value = Mathf.Max(0f, TimeRemaining.Value - Time.deltaTime);
             if (TimeRemaining.Value <= 0f && CollectedValue.Value < Quota.Value)
@@ -64,9 +64,7 @@ namespace FriendSlop.Round
         public void RequestStartRoundServerRpc(ServerRpcParams rpcParams = default)
         {
             if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
-            {
                 return;
-            }
 
             ServerStartRound();
         }
@@ -75,9 +73,7 @@ namespace FriendSlop.Round
         public void RequestRestartRoundServerRpc(ServerRpcParams rpcParams = default)
         {
             if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
-            {
                 return;
-            }
 
             ServerStartRound();
         }
@@ -85,9 +81,7 @@ namespace FriendSlop.Round
         public void ServerStartRound()
         {
             if (!IsServer)
-            {
                 return;
-            }
 
             RefreshLootCache();
             CollectedValue.Value = 0;
@@ -97,20 +91,18 @@ namespace FriendSlop.Round
             HasWings.Value = false;
             HasEngine.Value = false;
             RocketAssembled.Value = false;
+            boardedPlayerIds.Clear();       // NEW
+            PlayersBoarded.Value = 0;       // NEW
 
             foreach (var loot in lootItems)
             {
                 if (loot != null)
-                {
                     loot.ServerReset();
-                }
             }
 
             var monsters = FindObjectsByType<RoamingMonster>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
             foreach (var monster in monsters)
-            {
                 monster.ServerReset();
-            }
 
             RespawnPlayers();
             Phase.Value = RoundPhase.Active;
@@ -119,9 +111,7 @@ namespace FriendSlop.Round
         public void ServerDepositLoot(NetworkLootItem loot)
         {
             if (!IsServer || loot == null || loot.IsShipPart || Phase.Value != RoundPhase.Active || loot.IsDeposited.Value)
-            {
                 return;
-            }
 
             CollectedValue.Value += loot.Value;
             loot.ServerDeposit();
@@ -130,9 +120,7 @@ namespace FriendSlop.Round
         public void ServerSubmitToLaunchpad(NetworkLootItem loot)
         {
             if (!IsServer || loot == null || Phase.Value != RoundPhase.Active || loot.IsDeposited.Value)
-            {
                 return;
-            }
 
             if (!loot.IsShipPart)
             {
@@ -143,27 +131,15 @@ namespace FriendSlop.Round
             switch (loot.ShipPartType)
             {
                 case ShipPartType.Cockpit:
-                    if (HasCockpit.Value)
-                    {
-                        return;
-                    }
-
+                    if (HasCockpit.Value) return;
                     HasCockpit.Value = true;
                     break;
                 case ShipPartType.Wings:
-                    if (HasWings.Value)
-                    {
-                        return;
-                    }
-
+                    if (HasWings.Value) return;
                     HasWings.Value = true;
                     break;
                 case ShipPartType.Engine:
-                    if (HasEngine.Value)
-                    {
-                        return;
-                    }
-
+                    if (HasEngine.Value) return;
                     HasEngine.Value = true;
                     break;
             }
@@ -173,6 +149,45 @@ namespace FriendSlop.Round
             if (HasCockpit.Value && HasWings.Value && HasEngine.Value)
             {
                 RocketAssembled.Value = true;
+                // Don't launch yet — wait for all players to board
+                CheckLaunchCondition();
+            }
+        }
+
+        // NEW: called when a player steps into the launchpad zone
+        public void ServerPlayerBoarded(NetworkFirstPersonController player)
+        {
+            if (!IsServer || player == null || Phase.Value != RoundPhase.Active)
+                return;
+
+            if (boardedPlayerIds.Add(player.OwnerClientId))
+            {
+                PlayersBoarded.Value = boardedPlayerIds.Count;
+                CheckLaunchCondition();
+            }
+        }
+
+        // NEW: called when a player steps out of the launchpad zone
+        public void ServerPlayerUnboarded(NetworkFirstPersonController player)
+        {
+            if (!IsServer || player == null)
+                return;
+
+            if (boardedPlayerIds.Remove(player.OwnerClientId))
+            {
+                PlayersBoarded.Value = boardedPlayerIds.Count;
+            }
+        }
+
+        // NEW: launch only when rocket is ready AND all players are on the pad
+        private void CheckLaunchCondition()
+        {
+            if (!RocketAssembled.Value)
+                return;
+
+            var totalPlayers = NetworkFirstPersonController.ActivePlayers.Count;
+            if (totalPlayers > 0 && boardedPlayerIds.Count >= totalPlayers)
+            {
                 Phase.Value = RoundPhase.Success;
             }
         }
@@ -194,17 +209,13 @@ namespace FriendSlop.Round
         private void RespawnPlayers()
         {
             if (playerSpawnPoints == null || playerSpawnPoints.Length == 0)
-            {
                 return;
-            }
 
             for (var index = 0; index < NetworkFirstPersonController.ActivePlayers.Count; index++)
             {
                 var player = NetworkFirstPersonController.ActivePlayers[index];
                 if (player == null || !player.IsSpawned)
-                {
                     continue;
-                }
 
                 var spawn = playerSpawnPoints[index % playerSpawnPoints.Length];
                 player.ServerTeleport(spawn.position, spawn.rotation);
