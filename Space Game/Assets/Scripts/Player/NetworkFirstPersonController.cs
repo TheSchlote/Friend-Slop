@@ -110,8 +110,10 @@ namespace FriendSlop.Player
             {
                 if (bodyRenderer != null)
                 {
-                    bodyRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
-                    bodyRenderer.enabled = !isLocal;
+                    bodyRenderer.enabled = true;
+                    bodyRenderer.shadowCastingMode = isLocal
+                        ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly
+                        : UnityEngine.Rendering.ShadowCastingMode.On;
                 }
             }
 
