@@ -60,8 +60,8 @@ namespace FriendSlop.Round
             }
         }
 
-        [ServerRpc(RequireOwnership = false)]
-        public void RequestStartRoundServerRpc(ServerRpcParams rpcParams = default)
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void RequestStartRoundServerRpc(RpcParams rpcParams = default)
         {
             if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
                 return;
@@ -69,8 +69,8 @@ namespace FriendSlop.Round
             ServerStartRound();
         }
 
-        [ServerRpc(RequireOwnership = false)]
-        public void RequestRestartRoundServerRpc(ServerRpcParams rpcParams = default)
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void RequestRestartRoundServerRpc(RpcParams rpcParams = default)
         {
             if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
                 return;

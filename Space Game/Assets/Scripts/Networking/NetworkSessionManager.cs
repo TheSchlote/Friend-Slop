@@ -27,6 +27,8 @@ namespace FriendSlop.Networking
         public string LastJoinCode { get; private set; } = string.Empty;
         public string Status { get; private set; } = "Not connected.";
 
+        private static readonly char[] CodeSeparators = { '.', ':', '\\', '/' };
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -72,21 +74,27 @@ namespace FriendSlop.Networking
 
         public async void JoinOnline(string joinCodeOrAddress)
         {
-            if (string.IsNullOrWhiteSpace(joinCodeOrAddress))
+            var target = NormalizeJoinTarget(joinCodeOrAddress);
+            if (string.IsNullOrWhiteSpace(target))
             {
                 StartLocalClient("127.0.0.1");
                 return;
             }
 
+            if (LooksLikeLanAddress(target))
+            {
+                StartLocalClient(target);
+                return;
+            }
+
             try
             {
-                await JoinRelayAsync(joinCodeOrAddress.Trim());
+                await JoinRelayAsync(target);
             }
             catch (Exception exception)
             {
-                Debug.LogWarning($"Relay join failed, trying LAN address: {exception.Message}");
-                StartLocalClient(joinCodeOrAddress.Trim());
-                Status = $"Relay join failed. Trying LAN address {joinCodeOrAddress.Trim()}:{localPort}.";
+                Debug.LogWarning($"Relay join failed: {exception.Message}");
+                Status = $"Join code failed: {exception.Message}";
             }
         }
 
@@ -187,6 +195,7 @@ namespace FriendSlop.Networking
                 return;
             }
 
+            joinCode = NormalizeJoinCode(joinCode);
             Status = "Signing in to Unity services...";
             await EnsureSignedInAsync();
 
@@ -262,6 +271,53 @@ namespace FriendSlop.Networking
             }
 
             return "127.0.0.1";
+        }
+
+        private static bool LooksLikeLanAddress(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var trimmed = value.Trim();
+            if (trimmed.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return trimmed.IndexOfAny(CodeSeparators) >= 0;
+        }
+
+        private static string NormalizeJoinTarget(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = value.Trim();
+            if (trimmed.StartsWith("join code:", StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = trimmed.Substring("join code:".Length).Trim();
+            }
+            else if (trimmed.StartsWith("code:", StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = trimmed.Substring("code:".Length).Trim();
+            }
+            else if (trimmed.StartsWith("lan:", StringComparison.OrdinalIgnoreCase))
+            {
+                trimmed = trimmed.Substring("lan:".Length).Trim();
+            }
+
+            return LooksLikeLanAddress(trimmed) ? trimmed : NormalizeJoinCode(trimmed);
+        }
+
+        private static string NormalizeJoinCode(string joinCode)
+        {
+            return string.IsNullOrWhiteSpace(joinCode)
+                ? string.Empty
+                : joinCode.Trim().ToUpperInvariant();
         }
     }
 }
