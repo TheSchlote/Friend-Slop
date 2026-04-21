@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FriendSlop.Hazards;
 using FriendSlop.Loot;
 using FriendSlop.Round;
 using Unity.Netcode;
@@ -12,10 +13,23 @@ namespace FriendSlop.Networking
         [SerializeField] private Transform[] playerSpawnPoints;
         [SerializeField] private NetworkLootItem[] lootPrefabs;
         [SerializeField] private Transform[] lootSpawnPoints;
+        [SerializeField] private RoamingMonster monsterPrefab;
+        [SerializeField] private Transform[] monsterSpawnPoints;
 
         private readonly List<NetworkObject> spawnedObjects = new();
         private NetworkManager subscribedManager;
         private bool spawnedForSession;
+        private static readonly string[] DecorativeLaunchpadColliderNames =
+        {
+            "Crash Dirt Patch",
+            "Launchpad Cable A",
+            "Launchpad Cable B"
+        };
+
+        private void Awake()
+        {
+            DisableLaunchpadInterference();
+        }
 
         private void OnEnable()
         {
@@ -25,6 +39,7 @@ namespace FriendSlop.Networking
         private void Start()
         {
             TrySubscribe();
+            DisableLaunchpadInterference();
             if (subscribedManager != null && subscribedManager.IsServer)
             {
                 SpawnSessionObjects();
@@ -65,6 +80,7 @@ namespace FriendSlop.Networking
             spawnedForSession = true;
             SpawnRoundManager();
             SpawnLoot();
+            SpawnMonsters();
         }
 
         private void SpawnRoundManager()
@@ -103,6 +119,25 @@ namespace FriendSlop.Networking
             }
         }
 
+        private void SpawnMonsters()
+        {
+            if (monsterPrefab == null || monsterSpawnPoints == null)
+            {
+                return;
+            }
+
+            foreach (var spawnPoint in monsterSpawnPoints)
+            {
+                if (spawnPoint == null)
+                {
+                    continue;
+                }
+
+                var monster = Instantiate(monsterPrefab, spawnPoint.position, spawnPoint.rotation);
+                SpawnNetworkObject(monster.NetworkObject);
+            }
+        }
+
         private void SpawnNetworkObject(NetworkObject networkObject)
         {
             if (networkObject == null)
@@ -118,6 +153,40 @@ namespace FriendSlop.Networking
         {
             spawnedForSession = false;
             spawnedObjects.Clear();
+        }
+
+        private static void DisableLaunchpadInterference()
+        {
+            var launchpadRoot = GameObject.Find("Launchpad Assembly Site");
+            if (launchpadRoot != null)
+            {
+                foreach (var collider in launchpadRoot.GetComponentsInChildren<Collider>(true))
+                {
+                    if (collider == null || collider.isTrigger || collider.GetComponent<LaunchpadZone>() != null)
+                    {
+                        continue;
+                    }
+
+                    collider.enabled = false;
+                }
+            }
+
+            foreach (var objectName in DecorativeLaunchpadColliderNames)
+            {
+                var target = GameObject.Find(objectName);
+                if (target == null)
+                {
+                    continue;
+                }
+
+                foreach (var collider in target.GetComponentsInChildren<Collider>(true))
+                {
+                    if (collider != null && !collider.isTrigger)
+                    {
+                        collider.enabled = false;
+                    }
+                }
+            }
         }
     }
 }

@@ -23,6 +23,7 @@ namespace FriendSlop.Editor
         private const string ScenePath = "Assets/Scenes/FriendSlopPrototype.unity";
         private const string PlayerPrefabPath = "Assets/Prefabs/FriendSlopPlayer.prefab";
         private const string RoundManagerPrefabPath = "Assets/Prefabs/RoundManager.prefab";
+        private const string MonsterPrefabPath = "Assets/Prefabs/RoamingMonster.prefab";
         private const string LootPrefabFolderPath = "Assets/Prefabs/Loot";
         private const string NetworkPrefabsListPath = "Assets/DefaultNetworkPrefabs.asset";
         private const string AutoBuildMarkerPath = "Assets/FriendSlopBuildRequested.txt";
@@ -31,6 +32,7 @@ namespace FriendSlop.Editor
         static FriendSlopSceneBuilder()
         {
             EditorApplication.delayCall += TryAutoBuild;
+            EditorApplication.delayCall += TryRepairOpenPrototypeScene;
         }
 
         [MenuItem("Tools/Friend Slop/Rebuild Prototype Scene")]
@@ -42,7 +44,8 @@ namespace FriendSlop.Editor
             var playerPrefab = BuildPlayerPrefab(materials);
             var roundManagerPrefab = BuildRoundManagerPrefab();
             var lootPrefabs = BuildLootPrefabs(materials);
-            var networkPrefabsList = BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab.gameObject, lootPrefabs);
+            var monsterPrefab = BuildMonsterPrefab(materials);
+            var networkPrefabsList = BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab.gameObject, monsterPrefab.gameObject, lootPrefabs);
 
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             SceneManager.SetActiveScene(SceneManager.GetSceneAt(0));
@@ -57,8 +60,9 @@ namespace FriendSlop.Editor
             CreateNetworkManager(playerPrefab, networkPrefabsList);
             var spawns = CreateLevel(materials);
             var lootSpawnPoints = CreateLootSpawnPoints();
+            var monsterSpawnPoints = CreateMonsterSpawnPoints();
             CreateLaunchpad(materials);
-            CreateRuntimeBootstrapper(roundManagerPrefab, spawns, lootPrefabs, lootSpawnPoints);
+            CreateRuntimeBootstrapper(roundManagerPrefab, spawns, lootPrefabs, lootSpawnPoints, monsterPrefab, monsterSpawnPoints);
             CreateRuntimeUi();
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
@@ -77,6 +81,17 @@ namespace FriendSlop.Editor
             }
         }
 
+        [MenuItem("Tools/Friend Slop/Repair Prototype Scene")]
+        public static void RepairPrototypeScene()
+        {
+            RepairPrototypeSceneInternal(showDialog: !Application.isBatchMode);
+        }
+
+        public static void RepairPrototypeSceneBatch()
+        {
+            RepairPrototypeSceneInternal(showDialog: false);
+        }
+
         private static void TryAutoBuild()
         {
             if (EditorApplication.isCompiling || EditorApplication.isUpdating)
@@ -91,6 +106,64 @@ namespace FriendSlop.Editor
             }
 
             BuildPrototypeScene();
+        }
+
+        private static void TryRepairOpenPrototypeScene()
+        {
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating || Application.isPlaying)
+            {
+                EditorApplication.delayCall += TryRepairOpenPrototypeScene;
+                return;
+            }
+
+            var scene = SceneManager.GetActiveScene();
+            if (!scene.IsValid() || scene.path != ScenePath)
+            {
+                return;
+            }
+
+            EnsureFolders();
+            var materials = CreateMaterials();
+            var monsterPrefab = BuildMonsterPrefab(materials);
+            var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+            var roundManagerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RoundManagerPrefabPath);
+            var lootPrefabs = LoadLootPrefabs();
+            BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
+            EnsureBootstrapperMonsterReferences(monsterPrefab);
+
+            if (scene.isDirty)
+            {
+                EditorSceneManager.SaveScene(scene);
+            }
+        }
+
+        private static void RepairPrototypeSceneInternal(bool showDialog)
+        {
+            EnsureFolders();
+
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            SceneManager.SetActiveScene(scene);
+
+            var materials = CreateMaterials();
+            var monsterPrefab = BuildMonsterPrefab(materials);
+            var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+            var roundManagerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RoundManagerPrefabPath);
+            var lootPrefabs = LoadLootPrefabs();
+            BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
+            EnsureBootstrapperMonsterReferences(monsterPrefab);
+
+            EditorSceneManager.SaveScene(scene);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+
+            if (showDialog)
+            {
+                EditorUtility.DisplayDialog("Friend Slop", "Prototype scene repaired.", "OK");
+            }
+            else
+            {
+                Debug.Log("Friend Slop prototype scene repaired.");
+            }
         }
 
         private static void EnsureFolders()
@@ -246,7 +319,60 @@ namespace FriendSlop.Editor
             return prefabs;
         }
 
-        private static NetworkPrefabsList BuildNetworkPrefabsList(GameObject playerPrefab, GameObject roundManagerPrefab, IReadOnlyList<NetworkLootItem> lootPrefabs)
+        private static RoamingMonster BuildMonsterPrefab(IReadOnlyDictionary<string, Material> materials)
+        {
+            var root = new GameObject("RoamingMonster");
+            root.AddComponent<NetworkObject>();
+            root.AddComponent<NetworkTransform>();
+            var monster = root.AddComponent<RoamingMonster>();
+
+            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            body.name = "Body";
+            body.transform.SetParent(root.transform, false);
+            body.transform.localPosition = new Vector3(0f, 1f, 0f);
+            body.transform.localScale = new Vector3(1f, 1.2f, 1f);
+            Object.DestroyImmediate(body.GetComponent<Collider>());
+            SetMaterial(body, materials["Monster"]);
+
+            var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            head.name = "Head";
+            head.transform.SetParent(root.transform, false);
+            head.transform.localPosition = new Vector3(0f, 1.85f, 0.2f);
+            head.transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
+            Object.DestroyImmediate(head.GetComponent<Collider>());
+            SetMaterial(head, materials["Monster"]);
+
+            var eyeLeft = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            eyeLeft.name = "Eye Left";
+            eyeLeft.transform.SetParent(root.transform, false);
+            eyeLeft.transform.localPosition = new Vector3(-0.18f, 1.92f, 0.48f);
+            eyeLeft.transform.localScale = new Vector3(0.12f, 0.12f, 0.12f);
+            Object.DestroyImmediate(eyeLeft.GetComponent<Collider>());
+            SetMaterial(eyeLeft, materials["ShipPart"]);
+
+            var eyeRight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            eyeRight.name = "Eye Right";
+            eyeRight.transform.SetParent(root.transform, false);
+            eyeRight.transform.localPosition = new Vector3(0.18f, 1.92f, 0.48f);
+            eyeRight.transform.localScale = new Vector3(0.12f, 0.12f, 0.12f);
+            Object.DestroyImmediate(eyeRight.GetComponent<Collider>());
+            SetMaterial(eyeRight, materials["ShipPart"]);
+
+            var lightObject = new GameObject("Panic Light");
+            lightObject.transform.SetParent(root.transform, false);
+            lightObject.transform.localPosition = new Vector3(0f, 1.6f, 0f);
+            var light = lightObject.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = new Color(1f, 0.18f, 0.12f);
+            light.range = 8f;
+            light.intensity = 3f;
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(root, MonsterPrefabPath);
+            Object.DestroyImmediate(root);
+            return prefab.GetComponent<RoamingMonster>();
+        }
+
+        private static NetworkPrefabsList BuildNetworkPrefabsList(GameObject playerPrefab, GameObject roundManagerPrefab, GameObject monsterPrefab, IReadOnlyList<NetworkLootItem> lootPrefabs)
         {
             var prefabsList = AssetDatabase.LoadAssetAtPath<NetworkPrefabsList>(NetworkPrefabsListPath);
             if (prefabsList == null)
@@ -262,6 +388,7 @@ namespace FriendSlop.Editor
 
             AddNetworkPrefab(listProperty, playerPrefab);
             AddNetworkPrefab(listProperty, roundManagerPrefab);
+            AddNetworkPrefab(listProperty, monsterPrefab);
             foreach (var lootPrefab in lootPrefabs)
             {
                 if (lootPrefab != null)
@@ -362,9 +489,12 @@ namespace FriendSlop.Editor
             worldSo.FindProperty("gravityAcceleration").floatValue = 28f;
             worldSo.ApplyModifiedPropertiesWithoutUndo();
 
-            CreateSurfaceProp("Crash Dirt Patch", levelRoot, world, PrimitiveType.Sphere, new Vector3(0f, 1f, 0f), Vector3.forward, 0.03f, new Vector3(5.4f, 0.16f, 4.3f), materials["PlanetDirt"]);
-            CreateSurfaceProp("Launchpad Cable A", levelRoot, world, PrimitiveType.Cube, new Vector3(0.18f, 0.98f, -0.08f), Vector3.forward, 0.08f, new Vector3(0.2f, 0.12f, 5.5f), materials["DarkWall"]);
-            CreateSurfaceProp("Launchpad Cable B", levelRoot, world, PrimitiveType.Cube, new Vector3(-0.2f, 0.97f, 0.02f), Vector3.right, 0.08f, new Vector3(0.2f, 0.12f, 4.8f), materials["DarkWall"]);
+            var dirtPatch = CreateSurfaceProp("Crash Dirt Patch", levelRoot, world, PrimitiveType.Sphere, new Vector3(0f, 1f, 0f), Vector3.forward, 0.03f, new Vector3(5.4f, 0.16f, 4.3f), materials["PlanetDirt"]);
+            var cableA = CreateSurfaceProp("Launchpad Cable A", levelRoot, world, PrimitiveType.Cube, new Vector3(0.18f, 0.98f, -0.08f), Vector3.forward, 0.08f, new Vector3(0.2f, 0.12f, 5.5f), materials["DarkWall"]);
+            var cableB = CreateSurfaceProp("Launchpad Cable B", levelRoot, world, PrimitiveType.Cube, new Vector3(-0.2f, 0.97f, 0.02f), Vector3.right, 0.08f, new Vector3(0.2f, 0.12f, 4.8f), materials["DarkWall"]);
+            DisableCollider(dirtPatch);
+            DisableCollider(cableA);
+            DisableCollider(cableB);
 
             var rockNormals = new[]
             {
@@ -427,6 +557,24 @@ namespace FriendSlop.Editor
             return spawnPoints;
         }
 
+        private static Transform[] CreateMonsterSpawnPoints()
+        {
+            var world = Object.FindFirstObjectByType<SphereWorld>();
+            if (world == null)
+            {
+                Debug.LogError("Cannot create monster spawn points without a SphereWorld.");
+                return System.Array.Empty<Transform>();
+            }
+
+            var spawnRoot = new GameObject("Enemy Spawn Points").transform;
+            var spawnPoints = new Transform[1];
+            var spawn = new GameObject("Monster Spawn 1");
+            spawn.transform.SetParent(spawnRoot, true);
+            PlaceOnSurface(world, spawn, new Vector3(0.08f, -1f, 0.04f), 0.7f, Vector3.forward);
+            spawnPoints[0] = spawn.transform;
+            return spawnPoints;
+        }
+
         private static void CreateLaunchpad(IReadOnlyDictionary<string, Material> materials)
         {
             var world = Object.FindFirstObjectByType<SphereWorld>();
@@ -454,6 +602,7 @@ namespace FriendSlop.Editor
             PlaceOnSurface(world, rocketBody, padNormal, 1.25f, Vector3.forward);
             rocketBody.transform.localScale = new Vector3(0.75f, 1.35f, 0.75f);
             SetMaterial(rocketBody, materials["ShipPart"]);
+            DisableCollider(rocketBody);
 
             var nose = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             nose.name = "Missing Cockpit Socket";
@@ -461,14 +610,21 @@ namespace FriendSlop.Editor
             PlaceOnSurface(world, nose, new Vector3(0.04f, 1f, 0.04f), 2.75f, Vector3.forward);
             nose.transform.localScale = new Vector3(0.75f, 0.35f, 0.75f);
             SetMaterial(nose, materials["SafetyYellow"]);
+            DisableCollider(nose);
 
-            CreateSurfaceProp("Left Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(-0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
-            CreateSurfaceProp("Right Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
-            CreateSurfaceProp("Empty Engine Mount", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.08f), Vector3.forward, 0.7f, new Vector3(0.55f, 0.35f, 0.55f), materials["SafetyYellow"]);
+            var leftMount = CreateSurfaceProp("Left Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(-0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
+            var rightMount = CreateSurfaceProp("Right Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
+            var engineMount = CreateSurfaceProp("Empty Engine Mount", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.08f), Vector3.forward, 0.7f, new Vector3(0.55f, 0.35f, 0.55f), materials["SafetyYellow"]);
+            DisableCollider(leftMount);
+            DisableCollider(rightMount);
+            DisableCollider(engineMount);
 
             var installedCockpit = CreateSurfaceProp("Installed Cockpit Visual", launchpadRoot, world, PrimitiveType.Sphere, new Vector3(0.04f, 1f, 0.08f), Vector3.forward, 2.9f, new Vector3(0.9f, 0.45f, 0.9f), materials["ShipPart"]);
             var installedWings = CreateSurfaceProp("Installed Wings Visual", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0f, 1f, 0.02f), Vector3.right, 1.38f, new Vector3(3.6f, 0.12f, 0.55f), materials["ShipPart"]);
             var installedEngine = CreateSurfaceProp("Installed Engine Visual", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.1f), Vector3.forward, 0.58f, new Vector3(0.62f, 0.45f, 0.62f), materials["ShipPart"]);
+            DisableCollider(installedCockpit);
+            DisableCollider(installedWings);
+            DisableCollider(installedEngine);
 
             var readyBeacon = new GameObject("Rocket Ready Beacon");
             readyBeacon.transform.SetParent(launchpadRoot, true);
@@ -516,7 +672,7 @@ namespace FriendSlop.Editor
             light.intensity = 2.5f;
         }
 
-        private static void CreateRuntimeBootstrapper(RoundManager roundManagerPrefab, Transform[] playerSpawns, NetworkLootItem[] lootPrefabs, Transform[] lootSpawns)
+        private static void CreateRuntimeBootstrapper(RoundManager roundManagerPrefab, Transform[] playerSpawns, NetworkLootItem[] lootPrefabs, Transform[] lootSpawns, RoamingMonster monsterPrefab, Transform[] monsterSpawns)
         {
             var bootstrapObject = new GameObject("Network Runtime Bootstrapper");
             var bootstrapper = bootstrapObject.AddComponent<PrototypeNetworkBootstrapper>();
@@ -526,6 +682,8 @@ namespace FriendSlop.Editor
             AssignObjectArray(serializedBootstrapper.FindProperty("playerSpawnPoints"), playerSpawns);
             AssignObjectArray(serializedBootstrapper.FindProperty("lootPrefabs"), lootPrefabs);
             AssignObjectArray(serializedBootstrapper.FindProperty("lootSpawnPoints"), lootSpawns);
+            serializedBootstrapper.FindProperty("monsterPrefab").objectReferenceValue = monsterPrefab;
+            AssignObjectArray(serializedBootstrapper.FindProperty("monsterSpawnPoints"), monsterSpawns);
             serializedBootstrapper.ApplyModifiedPropertiesWithoutUndo();
         }
 
@@ -600,6 +758,66 @@ namespace FriendSlop.Editor
             return cube;
         }
 
+        private static void EnsureBootstrapperMonsterReferences(RoamingMonster monsterPrefab)
+        {
+            var bootstrapper = Object.FindFirstObjectByType<PrototypeNetworkBootstrapper>();
+            if (bootstrapper == null || monsterPrefab == null)
+            {
+                return;
+            }
+
+            var spawnPoints = EnsureMonsterSpawnPointsInOpenScene();
+            var serializedBootstrapper = new SerializedObject(bootstrapper);
+            serializedBootstrapper.FindProperty("monsterPrefab").objectReferenceValue = monsterPrefab;
+            AssignObjectArray(serializedBootstrapper.FindProperty("monsterSpawnPoints"), spawnPoints);
+            serializedBootstrapper.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(bootstrapper);
+        }
+
+        private static Transform[] EnsureMonsterSpawnPointsInOpenScene()
+        {
+            var world = Object.FindFirstObjectByType<SphereWorld>();
+            if (world == null)
+            {
+                return System.Array.Empty<Transform>();
+            }
+
+            var root = GameObject.Find("Enemy Spawn Points");
+            if (root == null)
+            {
+                root = new GameObject("Enemy Spawn Points");
+            }
+
+            var spawn = GameObject.Find("Monster Spawn 1");
+            if (spawn == null)
+            {
+                spawn = new GameObject("Monster Spawn 1");
+                spawn.transform.SetParent(root.transform, true);
+            }
+
+            PlaceOnSurface(world, spawn, new Vector3(0.08f, -1f, 0.04f), 0.7f, Vector3.forward);
+            EditorUtility.SetDirty(spawn);
+            EditorUtility.SetDirty(root);
+            return new[] { spawn.transform };
+        }
+
+        private static NetworkLootItem[] LoadLootPrefabs()
+        {
+            var guids = AssetDatabase.FindAssets("t:Prefab", new[] { LootPrefabFolderPath });
+            var prefabs = new List<NetworkLootItem>();
+            foreach (var guid in guids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var lootPrefab = AssetDatabase.LoadAssetAtPath<NetworkLootItem>(path);
+                if (lootPrefab != null)
+                {
+                    prefabs.Add(lootPrefab);
+                }
+            }
+
+            return prefabs.ToArray();
+        }
+
         private static Material CreateMaterial(string name, Color color)
         {
             var path = $"Assets/Materials/{name}.mat";
@@ -633,6 +851,20 @@ namespace FriendSlop.Editor
             if (renderer != null)
             {
                 renderer.sharedMaterial = material;
+            }
+        }
+
+        private static void DisableCollider(GameObject gameObject)
+        {
+            if (gameObject == null)
+            {
+                return;
+            }
+
+            var collider = gameObject.GetComponent<Collider>();
+            if (collider != null)
+            {
+                collider.enabled = false;
             }
         }
 

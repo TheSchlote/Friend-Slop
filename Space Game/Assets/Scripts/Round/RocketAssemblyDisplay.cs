@@ -9,6 +9,19 @@ namespace FriendSlop.Round
         [SerializeField] private GameObject engineVisual;
         [SerializeField] private GameObject readyBeacon;
 
+        private void Awake()
+        {
+            foreach (var collider in GetComponentsInChildren<Collider>(true))
+            {
+                if (collider == null || collider.isTrigger || collider.GetComponent<LaunchpadZone>() != null)
+                {
+                    continue;
+                }
+
+                collider.enabled = false;
+            }
+        }
+
         private void Update()
         {
             var round = RoundManager.Instance;

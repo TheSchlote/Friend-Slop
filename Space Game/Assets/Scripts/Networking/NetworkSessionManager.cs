@@ -162,7 +162,7 @@ namespace FriendSlop.Networking
             LastJoinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
 
             var transport = networkManager.GetComponent<UnityTransport>();
-            transport.SetRelayServerData(new RelayServerData(allocation, "dtls"));
+            transport.SetRelayServerData(allocation.ToRelayServerData("dtls"));
 
             try
             {
@@ -203,7 +203,7 @@ namespace FriendSlop.Networking
             var joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
 
             var transport = networkManager.GetComponent<UnityTransport>();
-            transport.SetRelayServerData(new RelayServerData(joinAllocation, "dtls"));
+            transport.SetRelayServerData(joinAllocation.ToRelayServerData("dtls"));
 
             LastJoinCode = joinCode;
             Status = $"Joining Relay code {joinCode}...";
