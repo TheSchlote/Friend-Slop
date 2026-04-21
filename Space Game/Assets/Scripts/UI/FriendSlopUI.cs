@@ -13,22 +13,27 @@ namespace FriendSlop.UI
 {
     public class FriendSlopUI : MonoBehaviour
     {
-        private const float MenuWidth = 500f;
-        private const float DisconnectedMenuHeight = 520f;
-        private const float ConnectedMenuHeight = 440f;
-        private const float HostButtonY = 10f;
-        private const float JoinButtonY = -48f;
-        private const float LocalHostButtonY = -106f;
-        private const float LocalJoinButtonY = -164f;
-        private const float StartButtonY = -48f;
-        private const float SecondaryButtonY = -106f;
-        private const float TertiaryButtonY = -164f;
+        private const float ReferenceWidth = 1920f;
+        private const float ReferenceHeight = 1080f;
+        private const float MinMenuWidth = 460f;
+        private const float MaxMenuWidth = 620f;
+        private const float MinDisconnectedMenuHeight = 540f;
+        private const float MaxDisconnectedMenuHeight = 640f;
+        private const float MinConnectedMenuHeight = 400f;
+        private const float MaxConnectedMenuHeight = 500f;
+        private const float MinButtonWidth = 300f;
+        private const float MaxButtonWidth = 380f;
+        private const float MinButtonHeight = 42f;
+        private const float MaxButtonHeight = 52f;
 
         public static FriendSlopUI Instance { get; private set; }
         public static bool BlocksGameplayInput => Instance != null && Instance.IsBlockingGameplayInput();
 
         private Canvas canvas;
+        private RectTransform canvasRect;
         private RectTransform menuRect;
+        private RectTransform hudRect;
+        private RectTransform moneyPanelRect;
         private GameObject menuRoot;
         private Text titleText;
         private Text statusText;
@@ -97,16 +102,17 @@ namespace FriendSlop.UI
             var showMenu = !activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked;
 
             menuRoot.SetActive(showMenu);
+            LayoutHud();
 
             titleText.text = "FRIEND SLOP RETRIEVAL";
             if (session != null)
             {
                 var code = string.IsNullOrWhiteSpace(session.LastJoinCode) ? string.Empty : $"\nCode: {session.LastJoinCode}";
-                statusText.text = session.Status + code + "\nTab toggles this menu. Esc unlocks mouse.";
+                statusText.text = session.Status + code + $"\nTeam Money: ${GetTeamMoney(round)}\nTab toggles this menu. Esc unlocks mouse.";
             }
             else
             {
-                statusText.text = "Not connected.\nTab toggles this menu. Esc unlocks mouse.";
+                statusText.text = "Not connected.\nTeam Money: $0\nTab toggles this menu. Esc unlocks mouse.";
             }
 
             lobbyQueueText.text = BuildLobbyQueue(networkManager);
@@ -160,37 +166,77 @@ namespace FriendSlop.UI
 
         private void LayoutMenu(bool connected, bool isHost, RoundPhase phase)
         {
-            menuRect.sizeDelta = new Vector2(MenuWidth, connected ? ConnectedMenuHeight : DisconnectedMenuHeight);
+            var canvasSize = GetCanvasSize();
+            var menuWidth = Mathf.Clamp(canvasSize.x * 0.34f, MinMenuWidth, MaxMenuWidth);
+            var menuHeight = connected
+                ? Mathf.Clamp(canvasSize.y * 0.44f, MinConnectedMenuHeight, MaxConnectedMenuHeight)
+                : Mathf.Clamp(canvasSize.y * 0.58f, MinDisconnectedMenuHeight, MaxDisconnectedMenuHeight);
+            var contentWidth = menuWidth - 64f;
+            var buttonWidth = Mathf.Clamp(menuWidth * 0.64f, MinButtonWidth, MaxButtonWidth);
+            var buttonHeight = Mathf.Clamp(canvasSize.y * 0.045f, MinButtonHeight, MaxButtonHeight);
+            var buttonGap = Mathf.Clamp(canvasSize.y * 0.014f, 12f, 18f);
+
+            menuRect.sizeDelta = new Vector2(menuWidth, menuHeight);
+            SetSize(titleText.rectTransform, new Vector2(contentWidth, 38f));
+            SetSize(statusText.rectTransform, new Vector2(contentWidth, 88f));
+            SetSize(lobbyQueueText.rectTransform, new Vector2(contentWidth, 96f));
+            SetButtonSize(hostButton, buttonWidth, buttonHeight);
+            SetButtonSize(joinButton, buttonWidth, buttonHeight);
+            SetButtonSize(localHostButton, buttonWidth, buttonHeight);
+            SetButtonSize(localJoinButton, buttonWidth, buttonHeight);
+            SetButtonSize(startButton, buttonWidth, buttonHeight);
+            SetButtonSize(restartButton, buttonWidth, buttonHeight);
+            SetButtonSize(shutdownButton, buttonWidth, buttonHeight);
+            SetButtonSize(quitButton, buttonWidth, buttonHeight);
+            SetSize(joinInput.GetComponent<RectTransform>(), new Vector2(buttonWidth, buttonHeight));
 
             if (!connected)
             {
-                SetPosition(joinInput.GetComponent<RectTransform>(), new Vector2(0f, 68f));
-                SetPosition(hostButton.GetComponent<RectTransform>(), new Vector2(0f, HostButtonY));
-                SetPosition(joinButton.GetComponent<RectTransform>(), new Vector2(0f, JoinButtonY));
-                SetPosition(localHostButton.GetComponent<RectTransform>(), new Vector2(0f, LocalHostButtonY));
-                SetPosition(localJoinButton.GetComponent<RectTransform>(), new Vector2(0f, LocalJoinButtonY));
-                SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, -232f));
+                var inputY = 84f;
+                var firstButtonY = inputY - buttonHeight - buttonGap;
+                SetPosition(joinInput.GetComponent<RectTransform>(), new Vector2(0f, inputY));
+                SetPosition(hostButton.GetComponent<RectTransform>(), new Vector2(0f, firstButtonY));
+                SetPosition(joinButton.GetComponent<RectTransform>(), new Vector2(0f, firstButtonY - (buttonHeight + buttonGap)));
+                SetPosition(localHostButton.GetComponent<RectTransform>(), new Vector2(0f, firstButtonY - (buttonHeight + buttonGap) * 2f));
+                SetPosition(localJoinButton.GetComponent<RectTransform>(), new Vector2(0f, firstButtonY - (buttonHeight + buttonGap) * 3f));
+                SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, -menuHeight * 0.5f + buttonHeight * 0.7f));
                 return;
             }
 
+            var primaryButtonY = -48f;
+            var secondaryButtonY = primaryButtonY - buttonHeight - buttonGap;
+            var tertiaryButtonY = secondaryButtonY - buttonHeight - buttonGap;
             if (isHost && phase == RoundPhase.Lobby)
             {
-                SetPosition(startButton.GetComponent<RectTransform>(), new Vector2(0f, StartButtonY));
-                SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, SecondaryButtonY));
-                SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, TertiaryButtonY));
+                SetPosition(startButton.GetComponent<RectTransform>(), new Vector2(0f, primaryButtonY));
+                SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, secondaryButtonY));
+                SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, tertiaryButtonY));
                 return;
             }
 
             if (isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed))
             {
-                SetPosition(restartButton.GetComponent<RectTransform>(), new Vector2(0f, StartButtonY));
-                SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, SecondaryButtonY));
-                SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, TertiaryButtonY));
+                SetPosition(restartButton.GetComponent<RectTransform>(), new Vector2(0f, primaryButtonY));
+                SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, secondaryButtonY));
+                SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, tertiaryButtonY));
                 return;
             }
 
-            SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, StartButtonY));
-            SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, SecondaryButtonY));
+            SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, primaryButtonY));
+            SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, secondaryButtonY));
+        }
+
+        private void LayoutHud()
+        {
+            var canvasSize = GetCanvasSize();
+            var hudWidth = Mathf.Clamp(canvasSize.x * 0.48f, 680f, 920f);
+            var moneyWidth = Mathf.Clamp(canvasSize.x * 0.22f, 300f, 440f);
+
+            SetSize(hudRect, new Vector2(hudWidth, 180f));
+            SetSize(timerText.rectTransform, new Vector2(hudWidth, 32f));
+            SetSize(carriedText.rectTransform, new Vector2(Mathf.Min(hudWidth, 700f), 30f));
+            SetSize(resultText.rectTransform, new Vector2(Mathf.Min(hudWidth, 820f), 42f));
+            SetSize(moneyPanelRect, new Vector2(moneyWidth, 44f));
         }
 
         private void BuildUi()
@@ -199,16 +245,24 @@ namespace FriendSlop.UI
             canvasObject.transform.SetParent(transform, false);
             canvas = canvasObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvasRect = canvasObject.GetComponent<RectTransform>();
 
             var scaler = canvasObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
-            scaler.scaleFactor = 1f;
-            scaler.referencePixelsPerUnit = 100f;
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(ReferenceWidth, ReferenceHeight);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
 
             canvasObject.AddComponent<GraphicRaycaster>();
 
             var hudRoot = CreatePanel("HUD", canvasObject.transform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -18f), new Vector2(760f, 180f), new Color(0f, 0f, 0f, 0f));
-            quotaText = CreateText("TeamMoney", canvasObject.transform, "Team Money: $0", 22, TextAnchor.UpperRight, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18f, -18f), new Vector2(380f, 36f));
+            var moneyPanel = CreatePanel("TeamMoneyPanel", canvasObject.transform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18f, -18f), new Vector2(380f, 42f), new Color(0.02f, 0.03f, 0.03f, 0.72f));
+            hudRect = hudRoot.GetComponent<RectTransform>();
+            moneyPanelRect = moneyPanel.GetComponent<RectTransform>();
+            quotaText = CreateText("TeamMoney", moneyPanel.transform, "Team Money: $0", 22, TextAnchor.MiddleRight, Vector2.zero, Vector2.one, new Vector2(-12f, 0f), new Vector2(-24f, 0f));
+            var moneyOutline = quotaText.gameObject.AddComponent<Outline>();
+            moneyOutline.effectColor = Color.black;
+            moneyOutline.effectDistance = new Vector2(2f, -2f);
             timerText = CreateText("Timer", hudRoot.transform, "Parts: Cockpit missing | Wings missing | Engine missing", 20, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(760f, 32f));
             carriedText = CreateText("Carried", hudRoot.transform, string.Empty, 19, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, -38f), new Vector2(620f, 30f));
             resultText = CreateText("Result", hudRoot.transform, string.Empty, 22, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, -78f), new Vector2(720f, 42f));
@@ -216,29 +270,29 @@ namespace FriendSlop.UI
             promptText = CreateText("Prompt", canvasObject.transform, string.Empty, 24, TextAnchor.LowerCenter, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 72f), new Vector2(760f, 42f));
             CreateText("Reticle", canvasObject.transform, "+", 24, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(40f, 40f));
 
-            menuRoot = CreatePanel("Menu", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(MenuWidth, DisconnectedMenuHeight), new Color(0.04f, 0.05f, 0.05f, 0.96f));
+            menuRoot = CreatePanel("Menu", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(MaxMenuWidth, MinDisconnectedMenuHeight), new Color(0.04f, 0.05f, 0.05f, 0.96f));
             menuRect = menuRoot.GetComponent<RectTransform>();
             titleText = CreateText("Title", menuRoot.transform, "FRIEND SLOP RETRIEVAL", 24, TextAnchor.MiddleCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -28f), new Vector2(460f, 34f));
             statusText = CreateText("Status", menuRoot.transform, "Not connected.", 14, TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -88f), new Vector2(440f, 72f));
             lobbyQueueText = CreateText("LobbyQueue", menuRoot.transform, string.Empty, 15, TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -176f), new Vector2(440f, 82f));
 
             joinInput = CreateInput("JoinInput", menuRoot.transform, "Relay code or LAN IP", new Vector2(0f, 68f));
-            hostButton = CreateButton("Host Online", menuRoot.transform, new Vector2(0f, HostButtonY), () => NetworkSessionManager.Instance?.HostOnline());
-            joinButton = CreateButton("Join Code", menuRoot.transform, new Vector2(0f, JoinButtonY), () => NetworkSessionManager.Instance?.JoinOnline(joinInput.text));
-            localHostButton = CreateButton("Host LAN", menuRoot.transform, new Vector2(0f, LocalHostButtonY), () => NetworkSessionManager.Instance?.StartLocalHost());
-            localJoinButton = CreateButton("Join LAN", menuRoot.transform, new Vector2(0f, LocalJoinButtonY), () => NetworkSessionManager.Instance?.StartLocalClient(string.IsNullOrWhiteSpace(joinInput.text) ? "127.0.0.1" : joinInput.text));
-            startButton = CreateButton("Start Round", menuRoot.transform, new Vector2(0f, StartButtonY), () =>
+            hostButton = CreateButton("Host Online", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.HostOnline());
+            joinButton = CreateButton("Join Code", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.JoinOnline(joinInput.text));
+            localHostButton = CreateButton("Host LAN", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.StartLocalHost());
+            localJoinButton = CreateButton("Join LAN", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.StartLocalClient(string.IsNullOrWhiteSpace(joinInput.text) ? "127.0.0.1" : joinInput.text));
+            startButton = CreateButton("Start Round", menuRoot.transform, Vector2.zero, () =>
             {
                 RoundManager.Instance?.RequestStartRoundServerRpc();
                 LockGameplayCursor();
             });
-            restartButton = CreateButton("Restart Round", menuRoot.transform, new Vector2(0f, StartButtonY), () =>
+            restartButton = CreateButton("Restart Round", menuRoot.transform, Vector2.zero, () =>
             {
                 RoundManager.Instance?.RequestRestartRoundServerRpc();
                 LockGameplayCursor();
             });
-            shutdownButton = CreateButton("Leave Session", menuRoot.transform, new Vector2(0f, SecondaryButtonY), () => NetworkSessionManager.Instance?.Shutdown());
-            quitButton = CreateButton("Quit", menuRoot.transform, new Vector2(0f, TertiaryButtonY), QuitGame);
+            shutdownButton = CreateButton("Leave Session", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.Shutdown());
+            quitButton = CreateButton("Quit", menuRoot.transform, Vector2.zero, QuitGame);
         }
 
         private GameObject CreatePanel(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, Vector2 size, Color color)
@@ -248,7 +302,7 @@ namespace FriendSlop.UI
             var rect = panel.AddComponent<RectTransform>();
             rect.anchorMin = anchorMin;
             rect.anchorMax = anchorMax;
-            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.pivot = GetPivotForAnchors(anchorMin, anchorMax);
             rect.anchoredPosition = anchoredPosition;
             rect.sizeDelta = size;
 
@@ -268,7 +322,7 @@ namespace FriendSlop.UI
             var rect = textObject.AddComponent<RectTransform>();
             rect.anchorMin = anchorMin;
             rect.anchorMax = anchorMax;
-            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.pivot = GetPivotForAnchors(anchorMin, anchorMax);
             rect.anchoredPosition = anchoredPosition;
             rect.sizeDelta = rectSize;
 
@@ -318,11 +372,60 @@ namespace FriendSlop.UI
             return installed ? $"{label} OK" : $"{label} missing";
         }
 
+        private static int GetTeamMoney(RoundManager round)
+        {
+            return round != null ? round.CollectedValue.Value : 0;
+        }
+
+        private static Vector2 GetPivotForAnchors(Vector2 anchorMin, Vector2 anchorMax)
+        {
+            if (anchorMin == anchorMax)
+            {
+                return anchorMin;
+            }
+
+            return new Vector2(0.5f, 0.5f);
+        }
+
         private static void SetPosition(RectTransform rectTransform, Vector2 anchoredPosition)
         {
             if (rectTransform != null)
             {
                 rectTransform.anchoredPosition = anchoredPosition;
+            }
+        }
+
+        private Vector2 GetCanvasSize()
+        {
+            if (canvasRect == null)
+            {
+                return new Vector2(ReferenceWidth, ReferenceHeight);
+            }
+
+            var size = canvasRect.rect.size;
+            if (size.x <= 0f || size.y <= 0f)
+            {
+                return new Vector2(ReferenceWidth, ReferenceHeight);
+            }
+
+            return size;
+        }
+
+        private static void SetButtonSize(Button button, float width, float height)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            SetSize(button.GetComponent<RectTransform>(), new Vector2(width, height));
+        }
+
+        private static void SetSize(RectTransform rectTransform, Vector2 size)
+        {
+            if (rectTransform != null)
+            {
+                rectTransform.sizeDelta = size;
             }
         }
 

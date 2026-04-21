@@ -185,11 +185,7 @@ namespace FriendSlop.Round
             if (!RocketAssembled.Value)
                 return;
 
-            var totalPlayers = NetworkFirstPersonController.ActivePlayers.Count;
-            if (totalPlayers > 0 && boardedPlayerIds.Count >= totalPlayers)
-            {
-                Phase.Value = RoundPhase.Success;
-            }
+            Phase.Value = RoundPhase.Success;
         }
 
         public static string FormatTime(float seconds)

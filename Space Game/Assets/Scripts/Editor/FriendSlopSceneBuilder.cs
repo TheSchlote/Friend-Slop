@@ -548,9 +548,9 @@ namespace FriendSlop.Editor
             var dirtPatch = CreateSurfaceProp("Crash Dirt Patch", levelRoot, world, PrimitiveType.Sphere, new Vector3(0f, 1f, 0f), Vector3.forward, 0.03f, new Vector3(5.4f, 0.16f, 4.3f), materials["PlanetDirt"]);
             var cableA = CreateSurfaceProp("Launchpad Cable A", levelRoot, world, PrimitiveType.Cube, new Vector3(0.18f, 0.98f, -0.08f), Vector3.forward, 0.08f, new Vector3(0.2f, 0.12f, 5.5f), materials["DarkWall"]);
             var cableB = CreateSurfaceProp("Launchpad Cable B", levelRoot, world, PrimitiveType.Cube, new Vector3(-0.2f, 0.97f, 0.02f), Vector3.right, 0.08f, new Vector3(0.2f, 0.12f, 4.8f), materials["DarkWall"]);
-            DisableCollider(dirtPatch);
-            DisableCollider(cableA);
-            DisableCollider(cableB);
+            RemoveCollider(dirtPatch);
+            RemoveCollider(cableA);
+            RemoveCollider(cableB);
 
             var rockNormals = new[]
             {
@@ -658,7 +658,7 @@ namespace FriendSlop.Editor
             PlaceOnSurface(world, rocketBody, padNormal, 1.25f, Vector3.forward);
             rocketBody.transform.localScale = new Vector3(0.75f, 1.35f, 0.75f);
             SetMaterial(rocketBody, materials["ShipPart"]);
-            DisableCollider(rocketBody);
+            RemoveCollider(rocketBody);
 
             var nose = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             nose.name = "Missing Cockpit Socket";
@@ -666,21 +666,21 @@ namespace FriendSlop.Editor
             PlaceOnSurface(world, nose, new Vector3(0.04f, 1f, 0.04f), 2.75f, Vector3.forward);
             nose.transform.localScale = new Vector3(0.75f, 0.35f, 0.75f);
             SetMaterial(nose, materials["SafetyYellow"]);
-            DisableCollider(nose);
+            RemoveCollider(nose);
 
             var leftMount = CreateSurfaceProp("Left Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(-0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
             var rightMount = CreateSurfaceProp("Right Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
             var engineMount = CreateSurfaceProp("Empty Engine Mount", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.08f), Vector3.forward, 0.7f, new Vector3(0.55f, 0.35f, 0.55f), materials["SafetyYellow"]);
-            DisableCollider(leftMount);
-            DisableCollider(rightMount);
-            DisableCollider(engineMount);
+            RemoveCollider(leftMount);
+            RemoveCollider(rightMount);
+            RemoveCollider(engineMount);
 
             var installedCockpit = CreateSurfaceProp("Installed Cockpit Visual", launchpadRoot, world, PrimitiveType.Sphere, new Vector3(0.04f, 1f, 0.08f), Vector3.forward, 2.9f, new Vector3(0.9f, 0.45f, 0.9f), materials["ShipPart"]);
             var installedWings = CreateSurfaceProp("Installed Wings Visual", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0f, 1f, 0.02f), Vector3.right, 1.38f, new Vector3(3.6f, 0.12f, 0.55f), materials["ShipPart"]);
             var installedEngine = CreateSurfaceProp("Installed Engine Visual", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.1f), Vector3.forward, 0.58f, new Vector3(0.62f, 0.45f, 0.62f), materials["ShipPart"]);
-            DisableCollider(installedCockpit);
-            DisableCollider(installedWings);
-            DisableCollider(installedEngine);
+            RemoveCollider(installedCockpit);
+            RemoveCollider(installedWings);
+            RemoveCollider(installedEngine);
 
             var readyBeacon = new GameObject("Rocket Ready Beacon");
             readyBeacon.transform.SetParent(launchpadRoot, true);
@@ -869,15 +869,16 @@ namespace FriendSlop.Editor
                 EditorUtility.SetDirty(world);
             }
 
-            DisableLaunchpadCollisionInOpenScene();
+            RemoveLaunchpadCollisionInOpenScene();
         }
 
-        private static void DisableLaunchpadCollisionInOpenScene()
+        private static void RemoveLaunchpadCollisionInOpenScene()
         {
             var launchpadRoot = GameObject.Find("Launchpad Assembly Site");
             if (launchpadRoot != null)
             {
-                foreach (var collider in launchpadRoot.GetComponentsInChildren<Collider>(true))
+                var colliders = launchpadRoot.GetComponentsInChildren<Collider>(true);
+                foreach (var collider in colliders)
                 {
                     if (collider == null)
                     {
@@ -894,8 +895,7 @@ namespace FriendSlop.Editor
 
                     if (!collider.isTrigger)
                     {
-                        collider.enabled = false;
-                        EditorUtility.SetDirty(collider);
+                        Object.DestroyImmediate(collider);
                     }
                 }
             }
@@ -915,15 +915,15 @@ namespace FriendSlop.Editor
                     continue;
                 }
 
-                foreach (var collider in target.GetComponentsInChildren<Collider>(true))
+                var colliders = target.GetComponentsInChildren<Collider>(true);
+                foreach (var collider in colliders)
                 {
                     if (collider == null || collider.isTrigger)
                     {
                         continue;
                     }
 
-                    collider.enabled = false;
-                    EditorUtility.SetDirty(collider);
+                    Object.DestroyImmediate(collider);
                 }
             }
         }
@@ -992,6 +992,20 @@ namespace FriendSlop.Editor
             if (collider != null)
             {
                 collider.enabled = false;
+            }
+        }
+
+        private static void RemoveCollider(GameObject gameObject)
+        {
+            if (gameObject == null)
+            {
+                return;
+            }
+
+            var collider = gameObject.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Object.DestroyImmediate(collider);
             }
         }
 

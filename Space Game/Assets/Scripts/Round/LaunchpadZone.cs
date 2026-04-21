@@ -16,17 +16,11 @@ namespace FriendSlop.Round
         private void OnTriggerEnter(Collider other)
         {
             TrySubmit(other);
-            TryBoardPlayer(other);
         }
 
         private void OnTriggerStay(Collider other)
         {
             TrySubmit(other);
-        }
-
-        private void OnTriggerExit(Collider other)
-        {
-            TryUnboardPlayer(other);
         }
 
         private void TrySubmit(Collider other)
@@ -38,30 +32,13 @@ namespace FriendSlop.Round
             if (loot != null)
             {
                 RoundManager.Instance.ServerSubmitToLaunchpad(loot);
-            }
-        }
-
-        private void TryBoardPlayer(Collider other)
-        {
-            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer || RoundManager.Instance == null)
                 return;
+            }
 
             var player = other.GetComponentInParent<NetworkFirstPersonController>();
-            if (player != null)
+            if (player != null && player.HeldItem != null)
             {
-                RoundManager.Instance.ServerPlayerBoarded(player);
-            }
-        }
-
-        private void TryUnboardPlayer(Collider other)
-        {
-            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer || RoundManager.Instance == null)
-                return;
-
-            var player = other.GetComponentInParent<NetworkFirstPersonController>();
-            if (player != null)
-            {
-                RoundManager.Instance.ServerPlayerUnboarded(player);
+                RoundManager.Instance.ServerSubmitToLaunchpad(player.HeldItem);
             }
         }
     }

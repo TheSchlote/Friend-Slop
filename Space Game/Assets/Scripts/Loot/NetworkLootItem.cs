@@ -73,17 +73,20 @@ namespace FriendSlop.Loot
         public override void OnNetworkSpawn()
         {
             CarrierClientId.OnValueChanged += OnCarrierChanged;
-            IsCarried.OnValueChanged += (_, _) => ApplyPhysicsState();
-            IsDeposited.OnValueChanged += (_, _) => ApplyVisibilityState();
+            IsCarried.OnValueChanged += OnCarriedChanged;
+            IsDeposited.OnValueChanged += OnDepositedChanged;
 
             ApplyPhysicsState();
             ApplyVisibilityState();
+            ApplyColliderState();
             OnCarrierChanged(NoCarrier, CarrierClientId.Value);
         }
 
         public override void OnNetworkDespawn()
         {
             CarrierClientId.OnValueChanged -= OnCarrierChanged;
+            IsCarried.OnValueChanged -= OnCarriedChanged;
+            IsDeposited.OnValueChanged -= OnDepositedChanged;
         }
 
         public bool CanInteract(NetworkFirstPersonController player)
@@ -256,6 +259,19 @@ namespace FriendSlop.Loot
             currentPlayer?.SetHeldItem(this);
         }
 
+        private void OnCarriedChanged(bool previousValue, bool currentValue)
+        {
+            ApplyPhysicsState();
+            ApplyColliderState();
+        }
+
+        private void OnDepositedChanged(bool previousValue, bool currentValue)
+        {
+            ApplyPhysicsState();
+            ApplyVisibilityState();
+            ApplyColliderState();
+        }
+
         private void ApplyPhysicsState()
         {
             if (body == null)
@@ -304,12 +320,16 @@ namespace FriendSlop.Loot
                     itemRenderer.enabled = !IsDeposited.Value;
                 }
             }
+        }
 
+        private void ApplyColliderState()
+        {
+            var shouldEnable = !IsCarried.Value && !IsDeposited.Value;
             foreach (var itemCollider in colliders)
             {
                 if (itemCollider != null)
                 {
-                    itemCollider.enabled = !IsDeposited.Value;
+                    itemCollider.enabled = shouldEnable;
                 }
             }
         }
