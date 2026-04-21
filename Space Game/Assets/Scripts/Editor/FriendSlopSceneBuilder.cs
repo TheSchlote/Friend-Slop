@@ -28,6 +28,13 @@ namespace FriendSlop.Editor
         private const string NetworkPrefabsListPath = "Assets/DefaultNetworkPrefabs.asset";
         private const string AutoBuildMarkerPath = "Assets/FriendSlopBuildRequested.txt";
         private const float PlanetRadius = 18f;
+        private const float PlanetGravityAcceleration = 18f;
+        private const float PlayerJumpVelocity = 7.2f;
+        private const float PlayerGravity = 14f;
+        private const float PlayerSurfaceAlignSpeed = 14f;
+        private const float PlayerGroundProbeDistance = 0.22f;
+        private const float PlayerGroundStickSpeed = 0.35f;
+        private const float PlayerTerminalFallSpeed = 18f;
 
         static FriendSlopSceneBuilder()
         {
@@ -124,12 +131,13 @@ namespace FriendSlop.Editor
 
             EnsureFolders();
             var materials = CreateMaterials();
-            var monsterPrefab = BuildMonsterPrefab(materials);
-            var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+            var monsterPrefab = AssetDatabase.LoadAssetAtPath<RoamingMonster>(MonsterPrefabPath) ?? BuildMonsterPrefab(materials);
+            var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath) ?? BuildPlayerPrefab(materials);
             var roundManagerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RoundManagerPrefabPath);
             var lootPrefabs = LoadLootPrefabs();
             BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
             EnsureBootstrapperMonsterReferences(monsterPrefab);
+            EnsureOpenSceneGameplayTuning();
 
             if (scene.isDirty)
             {
@@ -146,11 +154,12 @@ namespace FriendSlop.Editor
 
             var materials = CreateMaterials();
             var monsterPrefab = BuildMonsterPrefab(materials);
-            var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+            var playerPrefab = BuildPlayerPrefab(materials);
             var roundManagerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RoundManagerPrefabPath);
             var lootPrefabs = LoadLootPrefabs();
             BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
             EnsureBootstrapperMonsterReferences(monsterPrefab);
+            EnsureOpenSceneGameplayTuning();
 
             EditorSceneManager.SaveScene(scene);
             AssetDatabase.SaveAssets();
@@ -228,6 +237,43 @@ namespace FriendSlop.Editor
             body.transform.localScale = new Vector3(0.7f, 0.85f, 0.7f);
             Object.DestroyImmediate(body.GetComponent<Collider>());
             SetMaterial(body, materials["Player"]);
+            var bodyRenderer = body.GetComponent<Renderer>();
+
+            var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            head.name = "Remote Face Head";
+            head.transform.SetParent(root.transform, false);
+            head.transform.localPosition = new Vector3(0f, 1.55f, 0.16f);
+            head.transform.localScale = new Vector3(0.58f, 0.48f, 0.58f);
+            Object.DestroyImmediate(head.GetComponent<Collider>());
+            SetMaterial(head, materials["Player"]);
+            var headRenderer = head.GetComponent<Renderer>();
+
+            var eyeLeft = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            eyeLeft.name = "Remote Face Eye Left";
+            eyeLeft.transform.SetParent(root.transform, false);
+            eyeLeft.transform.localPosition = new Vector3(-0.16f, 1.64f, 0.44f);
+            eyeLeft.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
+            Object.DestroyImmediate(eyeLeft.GetComponent<Collider>());
+            SetMaterial(eyeLeft, materials["ShipPart"]);
+            var eyeLeftRenderer = eyeLeft.GetComponent<Renderer>();
+
+            var eyeRight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            eyeRight.name = "Remote Face Eye Right";
+            eyeRight.transform.SetParent(root.transform, false);
+            eyeRight.transform.localPosition = new Vector3(0.16f, 1.64f, 0.44f);
+            eyeRight.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
+            Object.DestroyImmediate(eyeRight.GetComponent<Collider>());
+            SetMaterial(eyeRight, materials["ShipPart"]);
+            var eyeRightRenderer = eyeRight.GetComponent<Renderer>();
+
+            var mouth = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            mouth.name = "Remote Face Mouth";
+            mouth.transform.SetParent(root.transform, false);
+            mouth.transform.localPosition = new Vector3(0f, 1.43f, 0.48f);
+            mouth.transform.localScale = new Vector3(0.28f, 0.06f, 0.04f);
+            Object.DestroyImmediate(mouth.GetComponent<Collider>());
+            SetMaterial(mouth, materials["DarkWall"]);
+            var mouthRenderer = mouth.GetComponent<Renderer>();
 
             var cameraRoot = new GameObject("Camera Root");
             cameraRoot.transform.SetParent(root.transform, false);
@@ -251,9 +297,19 @@ namespace FriendSlop.Editor
             controllerSo.FindProperty("playerCamera").objectReferenceValue = camera;
             controllerSo.FindProperty("cameraRoot").objectReferenceValue = cameraRoot.transform;
             controllerSo.FindProperty("carryAnchor").objectReferenceValue = carryAnchor.transform;
+            controllerSo.FindProperty("jumpVelocity").floatValue = PlayerJumpVelocity;
+            controllerSo.FindProperty("gravity").floatValue = PlayerGravity;
+            controllerSo.FindProperty("surfaceAlignSpeed").floatValue = PlayerSurfaceAlignSpeed;
+            controllerSo.FindProperty("groundProbeDistance").floatValue = PlayerGroundProbeDistance;
+            controllerSo.FindProperty("groundStickSpeed").floatValue = PlayerGroundStickSpeed;
+            controllerSo.FindProperty("terminalFallSpeed").floatValue = PlayerTerminalFallSpeed;
             var hideArray = controllerSo.FindProperty("hideForOwner");
-            hideArray.arraySize = 1;
-            hideArray.GetArrayElementAtIndex(0).objectReferenceValue = body.GetComponent<Renderer>();
+            hideArray.arraySize = 5;
+            hideArray.GetArrayElementAtIndex(0).objectReferenceValue = bodyRenderer;
+            hideArray.GetArrayElementAtIndex(1).objectReferenceValue = headRenderer;
+            hideArray.GetArrayElementAtIndex(2).objectReferenceValue = eyeLeftRenderer;
+            hideArray.GetArrayElementAtIndex(3).objectReferenceValue = eyeRightRenderer;
+            hideArray.GetArrayElementAtIndex(4).objectReferenceValue = mouthRenderer;
             controllerSo.ApplyModifiedPropertiesWithoutUndo();
 
             var interactorSo = new SerializedObject(interactor);
@@ -486,7 +542,7 @@ namespace FriendSlop.Editor
             var world = planetObject.AddComponent<SphereWorld>();
             var worldSo = new SerializedObject(world);
             worldSo.FindProperty("radius").floatValue = PlanetRadius;
-            worldSo.FindProperty("gravityAcceleration").floatValue = 28f;
+            worldSo.FindProperty("gravityAcceleration").floatValue = PlanetGravityAcceleration;
             worldSo.ApplyModifiedPropertiesWithoutUndo();
 
             var dirtPatch = CreateSurfaceProp("Crash Dirt Patch", levelRoot, world, PrimitiveType.Sphere, new Vector3(0f, 1f, 0f), Vector3.forward, 0.03f, new Vector3(5.4f, 0.16f, 4.3f), materials["PlanetDirt"]);
@@ -799,6 +855,77 @@ namespace FriendSlop.Editor
             EditorUtility.SetDirty(spawn);
             EditorUtility.SetDirty(root);
             return new[] { spawn.transform };
+        }
+
+        private static void EnsureOpenSceneGameplayTuning()
+        {
+            var world = Object.FindFirstObjectByType<SphereWorld>();
+            if (world != null)
+            {
+                var worldSo = new SerializedObject(world);
+                worldSo.FindProperty("radius").floatValue = PlanetRadius;
+                worldSo.FindProperty("gravityAcceleration").floatValue = PlanetGravityAcceleration;
+                worldSo.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(world);
+            }
+
+            DisableLaunchpadCollisionInOpenScene();
+        }
+
+        private static void DisableLaunchpadCollisionInOpenScene()
+        {
+            var launchpadRoot = GameObject.Find("Launchpad Assembly Site");
+            if (launchpadRoot != null)
+            {
+                foreach (var collider in launchpadRoot.GetComponentsInChildren<Collider>(true))
+                {
+                    if (collider == null)
+                    {
+                        continue;
+                    }
+
+                    if (collider.GetComponent<LaunchpadZone>() != null)
+                    {
+                        collider.enabled = true;
+                        collider.isTrigger = true;
+                        EditorUtility.SetDirty(collider);
+                        continue;
+                    }
+
+                    if (!collider.isTrigger)
+                    {
+                        collider.enabled = false;
+                        EditorUtility.SetDirty(collider);
+                    }
+                }
+            }
+
+            var decorativeNames = new[]
+            {
+                "Crash Dirt Patch",
+                "Launchpad Cable A",
+                "Launchpad Cable B"
+            };
+
+            foreach (var objectName in decorativeNames)
+            {
+                var target = GameObject.Find(objectName);
+                if (target == null)
+                {
+                    continue;
+                }
+
+                foreach (var collider in target.GetComponentsInChildren<Collider>(true))
+                {
+                    if (collider == null || collider.isTrigger)
+                    {
+                        continue;
+                    }
+
+                    collider.enabled = false;
+                    EditorUtility.SetDirty(collider);
+                }
+            }
         }
 
         private static NetworkLootItem[] LoadLootPrefabs()

@@ -24,14 +24,14 @@ namespace FriendSlop.Player
         [Header("Movement")]
         [SerializeField] private float walkSpeed = 5.2f;
         [SerializeField] private float sprintSpeed = 8f;
-        [SerializeField] private float jumpVelocity = 5.5f;
-        [SerializeField] private float gravity = 28f;
+        [SerializeField] private float jumpVelocity = 7.2f;
+        [SerializeField] private float gravity = 14f;
         [SerializeField] private float mouseSensitivity = 0.08f;
         [SerializeField] private float knockbackDamping = 9f;
-        [SerializeField] private float surfaceAlignSpeed = 18f;
-        [SerializeField] private float groundProbeDistance = 0.65f;
-        [SerializeField] private float groundStickSpeed = 4f;
-        [SerializeField] private float terminalFallSpeed = 24f;
+        [SerializeField] private float surfaceAlignSpeed = 14f;
+        [SerializeField] private float groundProbeDistance = 0.22f;
+        [SerializeField] private float groundStickSpeed = 0.35f;
+        [SerializeField] private float terminalFallSpeed = 18f;
 
         private CharacterController characterController;
         private PlayerInteractor interactor;

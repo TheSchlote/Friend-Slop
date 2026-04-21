@@ -8,7 +8,7 @@ namespace FriendSlop.Core
         private static readonly List<SphereWorld> Worlds = new();
 
         [SerializeField] private float radius = 18f;
-        [SerializeField] private float gravityAcceleration = 28f;
+        [SerializeField] private float gravityAcceleration = 18f;
 
         public float Radius => radius;
         public float GravityAcceleration => gravityAcceleration;
