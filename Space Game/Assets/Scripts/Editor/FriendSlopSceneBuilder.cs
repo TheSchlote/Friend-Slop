@@ -33,7 +33,6 @@ namespace FriendSlop.Editor
         private const float PlayerGravity = 14f;
         private const float PlayerSurfaceAlignSpeed = 14f;
         private const float PlayerGroundProbeDistance = 0.22f;
-        private const float PlayerGroundStickSpeed = 0.35f;
         private const float PlayerTerminalFallSpeed = 18f;
 
         static FriendSlopSceneBuilder()
@@ -301,7 +300,6 @@ namespace FriendSlop.Editor
             controllerSo.FindProperty("gravity").floatValue = PlayerGravity;
             controllerSo.FindProperty("surfaceAlignSpeed").floatValue = PlayerSurfaceAlignSpeed;
             controllerSo.FindProperty("groundProbeDistance").floatValue = PlayerGroundProbeDistance;
-            controllerSo.FindProperty("groundStickSpeed").floatValue = PlayerGroundStickSpeed;
             controllerSo.FindProperty("terminalFallSpeed").floatValue = PlayerTerminalFallSpeed;
             var hideArray = controllerSo.FindProperty("hideForOwner");
             hideArray.arraySize = 5;
@@ -649,7 +647,7 @@ namespace FriendSlop.Editor
             PlaceOnSurface(world, zone, padNormal, 0.12f, Vector3.forward);
             zone.transform.localScale = new Vector3(4.8f, 0.08f, 4.8f);
             SetMaterial(zone, materials["Launchpad"]);
-            zone.GetComponent<Collider>().isTrigger = true;
+            RemoveCollider(zone);
             zone.AddComponent<LaunchpadZone>();
 
             var rocketBody = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -874,6 +872,21 @@ namespace FriendSlop.Editor
 
         private static void RemoveLaunchpadCollisionInOpenScene()
         {
+            var partLaunchpad = GameObject.Find("Part Launchpad");
+            if (partLaunchpad != null)
+            {
+                foreach (var collider in partLaunchpad.GetComponents<Collider>())
+                {
+                    if (collider != null)
+                    {
+                        Object.DestroyImmediate(collider);
+                    }
+                }
+
+                EditorUtility.SetDirty(partLaunchpad);
+                EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            }
+
             var launchpadRoot = GameObject.Find("Launchpad Assembly Site");
             if (launchpadRoot != null)
             {
@@ -887,9 +900,8 @@ namespace FriendSlop.Editor
 
                     if (collider.GetComponent<LaunchpadZone>() != null)
                     {
-                        collider.enabled = true;
-                        collider.isTrigger = true;
-                        EditorUtility.SetDirty(collider);
+                        Object.DestroyImmediate(collider);
+                        EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
                         continue;
                     }
 

@@ -355,7 +355,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1927232313
+  GlobalObjectIdHash: 324063030
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -469,8 +469,14 @@ MonoBehaviour:
   knockbackDamping: 9
   surfaceAlignSpeed: 14
   groundProbeDistance: 0.22
-  groundStickSpeed: 0.35
   terminalFallSpeed: 18
+  enablePhysicsDiagnostics: 1
+  diagnosticSampleInterval: 0.2
+  diagnosticTouchPadding: 0.08
+  diagnosticNearbyRadius: 4.5
+  diagnosticColliderMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
 --- !u!114 &7178644401830304316
 MonoBehaviour:
   m_ObjectHideFlags: 0

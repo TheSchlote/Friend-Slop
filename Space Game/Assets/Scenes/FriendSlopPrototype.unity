@@ -1242,6 +1242,7 @@ GameObject:
   m_Component:
   - component: {fileID: 725070640}
   - component: {fileID: 725070639}
+  - component: {fileID: 725070641}
   m_Layer: 0
   m_Name: Rocket Ready Beacon
   m_TagString: Untagged
@@ -1329,6 +1330,35 @@ Transform:
   m_Children: []
   m_Father: {fileID: 489057205}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &725070641
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 725070638}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalLightData
+  m_UsePipelineSettings: 1
+  m_AdditionalLightsShadowResolutionTier: 2
+  m_CustomShadowLayers: 0
+  m_LightCookieSize: {x: 1, y: 1}
+  m_LightCookieOffset: {x: 0, y: 0}
+  m_SoftShadowQuality: 0
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_ShadowRenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
+  m_Version: 4
+  m_LightLayerMask: 1
+  m_ShadowLayerMask: 1
+  m_RenderingLayers: 1
+  m_ShadowRenderingLayers: 1
 --- !u!1 &725380001
 GameObject:
   m_ObjectHideFlags: 0
@@ -2408,7 +2438,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1478748630}
   - component: {fileID: 1478748634}
-  - component: {fileID: 1478748633}
   - component: {fileID: 1478748632}
   - component: {fileID: 1478748631}
   m_Layer: 0
@@ -2445,6 +2474,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4398568f61dfec743ab8ee008e0921a8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Round.LaunchpadZone
+  submitRadius: 3
+  submitHeight: 4
 --- !u!23 &1478748632
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -2494,29 +2525,6 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!136 &1478748633
-CapsuleCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1478748629}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.5
-  m_Height: 2
-  m_Direction: 1
-  m_Center: {x: 0, y: 0, z: 0}
 --- !u!33 &1478748634
 MeshFilter:
   m_ObjectHideFlags: 0
