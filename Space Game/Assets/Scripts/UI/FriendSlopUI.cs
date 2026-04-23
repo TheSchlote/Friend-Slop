@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace FriendSlop.UI
@@ -43,6 +44,8 @@ namespace FriendSlop.UI
         private Text promptText;
         private Text carriedText;
         private Text resultText;
+        private Text versionText;
+        private Text debugText;
         private InputField joinInput;
         private Button hostButton;
         private Button joinButton;
@@ -53,6 +56,7 @@ namespace FriendSlop.UI
         private Button shutdownButton;
         private Button quitButton;
         private bool menuPinned;
+        private bool debugPanelVisible;
         private Font font;
 
         private void Awake()
@@ -73,6 +77,11 @@ namespace FriendSlop.UI
             if (Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame)
             {
                 menuPinned = !menuPinned;
+            }
+
+            if (Keyboard.current != null && Keyboard.current.f3Key.wasPressedThisFrame)
+            {
+                debugPanelVisible = !debugPanelVisible;
             }
 
             RefreshUi();
@@ -132,7 +141,7 @@ namespace FriendSlop.UI
             if (round != null)
             {
                 quotaText.text = $"Team Money: ${round.CollectedValue.Value}";
-                timerText.text = $"Parts: {FormatPart(round.HasCockpit.Value, "Cockpit")} | {FormatPart(round.HasWings.Value, "Wings")} | {FormatPart(round.HasEngine.Value, "Engine")}";
+                timerText.text = $"Parts: {RoundStateUtility.FormatPartStatus(round.HasCockpit.Value, "Cockpit")} | {RoundStateUtility.FormatPartStatus(round.HasWings.Value, "Wings")} | {RoundStateUtility.FormatPartStatus(round.HasEngine.Value, "Engine")}";
                 resultText.text = phase switch
                 {
                     RoundPhase.Lobby => connected ? "Lobby: host starts the planet run when everyone is in." : "Host or join to begin.",
@@ -147,6 +156,13 @@ namespace FriendSlop.UI
                 quotaText.text = "Team Money: $0";
                 timerText.text = "Parts: Cockpit missing | Wings missing | Engine missing";
                 resultText.text = connected ? string.Empty : "Host or join to begin.";
+            }
+
+            versionText.text = $"v{Application.version}";
+            debugText.gameObject.SetActive(debugPanelVisible);
+            if (debugPanelVisible)
+            {
+                debugText.text = BuildDebugInfo(networkManager, session, round, phase);
             }
 
             var localPlayer = NetworkFirstPersonController.LocalPlayer;
@@ -237,6 +253,7 @@ namespace FriendSlop.UI
             SetSize(carriedText.rectTransform, new Vector2(Mathf.Min(hudWidth, 700f), 30f));
             SetSize(resultText.rectTransform, new Vector2(Mathf.Min(hudWidth, 820f), 42f));
             SetSize(moneyPanelRect, new Vector2(moneyWidth, 44f));
+            SetSize(debugText.rectTransform, new Vector2(Mathf.Clamp(canvasSize.x * 0.36f, 420f, 640f), 132f));
         }
 
         private void BuildUi()
@@ -268,6 +285,11 @@ namespace FriendSlop.UI
             resultText = CreateText("Result", hudRoot.transform, string.Empty, 22, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, -78f), new Vector2(720f, 42f));
 
             promptText = CreateText("Prompt", canvasObject.transform, string.Empty, 24, TextAnchor.LowerCenter, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 72f), new Vector2(760f, 42f));
+            versionText = CreateText("Version", canvasObject.transform, "v0.1.0", 14, TextAnchor.LowerRight, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-18f, 14f), new Vector2(220f, 24f));
+            versionText.color = new Color(1f, 1f, 1f, 0.72f);
+            debugText = CreateText("DebugInfo", canvasObject.transform, string.Empty, 14, TextAnchor.LowerLeft, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(18f, 18f), new Vector2(520f, 132f));
+            debugText.color = new Color(1f, 1f, 1f, 0.82f);
+            debugText.gameObject.SetActive(false);
             CreateText("Reticle", canvasObject.transform, "+", 24, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(40f, 40f));
 
             menuRoot = CreatePanel("Menu", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(MaxMenuWidth, MinDisconnectedMenuHeight), new Color(0.04f, 0.05f, 0.05f, 0.96f));
@@ -367,14 +389,59 @@ namespace FriendSlop.UI
             Cursor.visible = false;
         }
 
-        private static string FormatPart(bool installed, string label)
-        {
-            return installed ? $"{label} OK" : $"{label} missing";
-        }
-
         private static int GetTeamMoney(RoundManager round)
         {
             return round != null ? round.CollectedValue.Value : 0;
+        }
+
+        private static string BuildDebugInfo(NetworkManager networkManager, NetworkSessionManager session, RoundManager round, RoundPhase phase)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine($"Version: v{Application.version}");
+            builder.AppendLine($"Scene: {SceneManager.GetActiveScene().name}");
+            builder.AppendLine($"Session: {GetSessionRole(networkManager)}");
+            builder.AppendLine($"Client ID: {GetClientId(networkManager)}");
+            builder.AppendLine($"Relay/LAN: {GetSessionCode(session)}");
+            builder.AppendLine($"Region: {GetRelayRegion(session)}");
+            builder.AppendLine($"Round: {phase} | Money: ${GetTeamMoney(round)}");
+            builder.Append("F3 hides this panel");
+            return builder.ToString();
+        }
+
+        private static string GetSessionRole(NetworkManager networkManager)
+        {
+            if (networkManager == null || !networkManager.IsListening)
+            {
+                return "Not connected";
+            }
+
+            if (networkManager.IsHost)
+            {
+                return "Host";
+            }
+
+            return networkManager.IsClient ? "Client" : "Listening";
+        }
+
+        private static string GetClientId(NetworkManager networkManager)
+        {
+            return networkManager != null && networkManager.IsListening
+                ? networkManager.LocalClientId.ToString()
+                : "N/A";
+        }
+
+        private static string GetSessionCode(NetworkSessionManager session)
+        {
+            return session != null && !string.IsNullOrWhiteSpace(session.LastJoinCode)
+                ? session.LastJoinCode
+                : "N/A";
+        }
+
+        private static string GetRelayRegion(NetworkSessionManager session)
+        {
+            return session != null && !string.IsNullOrWhiteSpace(session.LastRelayRegion)
+                ? session.LastRelayRegion
+                : "N/A";
         }
 
         private static Vector2 GetPivotForAnchors(Vector2 anchorMin, Vector2 anchorMax)

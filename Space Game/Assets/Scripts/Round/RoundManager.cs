@@ -23,10 +23,10 @@ namespace FriendSlop.Round
         public NetworkVariable<bool> HasWings = new(false);
         public NetworkVariable<bool> HasEngine = new(false);
         public NetworkVariable<bool> RocketAssembled = new(false);
-        public NetworkVariable<int> PlayersBoarded = new(0);  // NEW
+        public NetworkVariable<int> PlayersBoarded = new(0);
 
         private readonly List<NetworkLootItem> lootItems = new();
-        private readonly HashSet<ulong> boardedPlayerIds = new();  // NEW
+        private readonly HashSet<ulong> boardedPlayerIds = new();
 
         public void ConfigureSpawnPoints(Transform[] spawnPoints)
         {
@@ -40,11 +40,24 @@ namespace FriendSlop.Round
 
         public override void OnNetworkSpawn()
         {
+            if (NetworkManager != null)
+            {
+                NetworkManager.OnClientDisconnectCallback += HandleClientDisconnect;
+            }
+
             if (IsServer)
             {
                 Phase.Value = RoundPhase.Lobby;
                 TimeRemaining.Value = roundLengthSeconds;
                 Quota.Value = quota;
+            }
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            if (NetworkManager != null)
+            {
+                NetworkManager.OnClientDisconnectCallback -= HandleClientDisconnect;
             }
         }
 
@@ -91,8 +104,8 @@ namespace FriendSlop.Round
             HasWings.Value = false;
             HasEngine.Value = false;
             RocketAssembled.Value = false;
-            boardedPlayerIds.Clear();       // NEW
-            PlayersBoarded.Value = 0;       // NEW
+            boardedPlayerIds.Clear();
+            PlayersBoarded.Value = 0;
 
             foreach (var loot in lootItems)
             {
@@ -146,46 +159,74 @@ namespace FriendSlop.Round
 
             loot.ServerDeposit();
 
-            if (HasCockpit.Value && HasWings.Value && HasEngine.Value)
+            if (RoundStateUtility.AreAllShipPartsInstalled(HasCockpit.Value, HasWings.Value, HasEngine.Value))
             {
                 RocketAssembled.Value = true;
-                // Don't launch yet — wait for all players to board
                 CheckLaunchCondition();
             }
         }
 
-        // NEW: called when a player steps into the launchpad zone
-        public void ServerPlayerBoarded(NetworkFirstPersonController player)
+        public void ServerPlayerBoarded(ulong clientId)
         {
-            if (!IsServer || player == null || Phase.Value != RoundPhase.Active)
+            if (!IsServer || Phase.Value != RoundPhase.Active)
                 return;
 
-            if (boardedPlayerIds.Add(player.OwnerClientId))
+            if (boardedPlayerIds.Add(clientId))
             {
-                PlayersBoarded.Value = boardedPlayerIds.Count;
+                UpdateBoardedPlayerCount();
                 CheckLaunchCondition();
             }
         }
 
-        // NEW: called when a player steps out of the launchpad zone
-        public void ServerPlayerUnboarded(NetworkFirstPersonController player)
+        public void ServerPlayerUnboarded(ulong clientId)
         {
-            if (!IsServer || player == null)
+            if (!IsServer)
                 return;
 
-            if (boardedPlayerIds.Remove(player.OwnerClientId))
+            if (boardedPlayerIds.Remove(clientId))
             {
-                PlayersBoarded.Value = boardedPlayerIds.Count;
+                UpdateBoardedPlayerCount();
             }
         }
 
-        // NEW: launch only when rocket is ready AND all players are on the pad
         private void CheckLaunchCondition()
         {
-            if (!RocketAssembled.Value)
+            var connectedPlayerCount = NetworkManager != null ? NetworkManager.ConnectedClientsIds.Count : 0;
+            if (!RoundStateUtility.IsLaunchReady(RocketAssembled.Value, PlayersBoarded.Value, connectedPlayerCount))
                 return;
 
             Phase.Value = RoundPhase.Success;
+        }
+
+        private void HandleClientDisconnect(ulong clientId)
+        {
+            if (!IsServer || !boardedPlayerIds.Remove(clientId))
+            {
+                return;
+            }
+
+            UpdateBoardedPlayerCount();
+            CheckLaunchCondition();
+        }
+
+        private void UpdateBoardedPlayerCount()
+        {
+            if (NetworkManager == null)
+            {
+                PlayersBoarded.Value = boardedPlayerIds.Count;
+                return;
+            }
+
+            var connectedBoardedPlayers = 0;
+            foreach (var clientId in NetworkManager.ConnectedClientsIds)
+            {
+                if (boardedPlayerIds.Contains(clientId))
+                {
+                    connectedBoardedPlayers++;
+                }
+            }
+
+            PlayersBoarded.Value = connectedBoardedPlayers;
         }
 
         public static string FormatTime(float seconds)

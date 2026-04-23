@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FriendSlop.Loot;
 using FriendSlop.Player;
 using Unity.Netcode;
@@ -10,6 +11,8 @@ namespace FriendSlop.Round
         [SerializeField] private float submitRadius = 3f;
         [SerializeField] private float submitHeight = 4f;
 
+        private readonly HashSet<ulong> playersInsideSubmitArea = new();
+        private readonly List<ulong> stalePlayerIds = new();
         private NetworkLootItem[] cachedLootItems;
         private float nextLootCacheTime;
 
@@ -68,8 +71,51 @@ namespace FriendSlop.Round
                 return;
             }
 
+            SyncBoardedPlayers();
             TrySubmitLooseItems();
             TrySubmitHeldItems();
+        }
+
+        private void SyncBoardedPlayers()
+        {
+            stalePlayerIds.Clear();
+            foreach (var clientId in playersInsideSubmitArea)
+            {
+                stalePlayerIds.Add(clientId);
+            }
+
+            foreach (var player in NetworkFirstPersonController.ActivePlayers)
+            {
+                if (player == null)
+                {
+                    continue;
+                }
+
+                var clientId = player.OwnerClientId;
+                stalePlayerIds.Remove(clientId);
+                var isInsideSubmitArea = IsPointInsideSubmitArea(player.transform.position);
+                if (isInsideSubmitArea)
+                {
+                    if (playersInsideSubmitArea.Add(clientId))
+                    {
+                        RoundManager.Instance.ServerPlayerBoarded(clientId);
+                    }
+                }
+                else if (playersInsideSubmitArea.Remove(clientId))
+                {
+                    RoundManager.Instance.ServerPlayerUnboarded(clientId);
+                }
+            }
+
+            foreach (var staleClientId in stalePlayerIds)
+            {
+                if (!playersInsideSubmitArea.Remove(staleClientId))
+                {
+                    continue;
+                }
+
+                RoundManager.Instance.ServerPlayerUnboarded(staleClientId);
+            }
         }
 
         private void TrySubmitLooseItems()
