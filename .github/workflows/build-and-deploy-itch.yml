@@ -1,0 +1,125 @@
+name: Build Windows and Deploy to itch.io
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  UNITY_PROJECT_PATH: Space Game
+  UNITY_VERSION: 6000.3.4f1
+  BUILD_TARGET: StandaloneWindows64
+  BUILD_NAME: FriendSlop
+  ITCH_USER: theschlote
+  ITCH_GAME: ${{ vars.ITCH_GAME != '' && vars.ITCH_GAME || 'friend-slop' }}
+
+jobs:
+  build-windows:
+    name: Build Windows player
+    runs-on: ubuntu-latest
+    outputs:
+      build-version: ${{ steps.unity-build.outputs.buildVersion }}
+
+    steps:
+      - name: Check Unity license secrets
+        shell: bash
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [[ -z "$UNITY_EMAIL" || -z "$UNITY_PASSWORD" ]]; then
+            echo "::error::Set UNITY_EMAIL and UNITY_PASSWORD in GitHub Actions secrets."
+            exit 1
+          fi
+
+          if [[ -z "$UNITY_LICENSE" && -z "$UNITY_SERIAL" ]]; then
+            echo "::error::Set UNITY_LICENSE for a Personal license, or UNITY_SERIAL for a Pro/Plus license."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UNITY_PROJECT_PATH }}/Library
+          key: Library-FriendSlop-${{ runner.os }}-${{ env.BUILD_TARGET }}-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
+          restore-keys: |
+            Library-FriendSlop-${{ runner.os }}-${{ env.BUILD_TARGET }}-
+            Library-FriendSlop-${{ runner.os }}-
+
+      - name: Build Windows player
+        id: unity-build
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          projectPath: ${{ env.UNITY_PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: ${{ env.BUILD_TARGET }}
+          buildName: ${{ env.BUILD_NAME }}
+          buildsPath: build
+          versioning: Semantic
+
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FriendSlop-Windows-${{ github.run_number }}
+          path: build/${{ env.BUILD_TARGET }}
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy-itch:
+    name: Deploy Windows build to itch.io
+    runs-on: ubuntu-latest
+    needs: build-windows
+    env:
+      BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+      BUTLER_API_KEY_PRESENT: ${{ secrets.BUTLER_API_KEY != '' }}
+
+    steps:
+      - name: Skip deploy when butler is not configured
+        if: env.BUTLER_API_KEY_PRESENT != 'true'
+        run: |
+          echo "BUTLER_API_KEY is not set, so the itch.io deploy step was skipped."
+          echo "The Windows build artifact is still available on this workflow run."
+
+      - name: Download Windows build artifact
+        if: env.BUTLER_API_KEY_PRESENT == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: FriendSlop-Windows-${{ github.run_number }}
+          path: build/${{ env.BUILD_TARGET }}
+
+      - name: Install butler
+        if: env.BUTLER_API_KEY_PRESENT == 'true'
+        shell: bash
+        run: |
+          curl -L -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip -d butler
+          chmod +x butler/butler
+          ./butler/butler version
+
+      - name: Push build to itch.io
+        if: env.BUTLER_API_KEY_PRESENT == 'true'
+        shell: bash
+        run: |
+          user_version="${{ needs.build-windows.outputs.build-version }}"
+          if [[ -z "$user_version" ]]; then
+            user_version="${GITHUB_SHA::7}"
+          fi
+
+          ./butler/butler push "build/${BUILD_TARGET}" "${ITCH_USER}/${ITCH_GAME}:windows" --userversion "$user_version"

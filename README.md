@@ -7,6 +7,7 @@ Unity prototype for a small co-op sphere-world salvage run.
 - Unity version: `6000.3.4f1`
 - Unity project folder: `Space Game`
 - Main scene: `Assets/Scenes/FriendSlopPrototype.unity`
+- CI/CD setup: `docs/itch-cicd.md`
 
 ## Test Loop
 
@@ -40,3 +41,7 @@ Run around the tiny planet, collect money junk, and bring the three ship parts t
 - Coughing Engine
 
 When all three parts are installed, the rocket is assembled. Flying to the next sphere world is intentionally left for the next prototype step.
+
+## Playtest Builds
+
+GitHub Actions can build the Windows player and deploy it to itch.io with butler. See `docs/itch-cicd.md` for the one-time GitHub secret and itch.io page setup.
