@@ -35,6 +35,13 @@ namespace FriendSlop.Player
         [SerializeField] private float groundProbeDistance = 0.22f;
         [SerializeField] private float terminalFallSpeed = 18f;
 
+        [Header("Stamina")]
+        [SerializeField] private float maxStamina = 100f;
+        [SerializeField] private float sprintStaminaDrainPerSecond = 25f;
+        [SerializeField] private float staminaRegenPerSecond = 18f;
+        [SerializeField] private float staminaRegenDelay = 0.6f;
+        [SerializeField] private float minStaminaToStartSprint = 20f;
+
         [Header("Diagnostics")]
         [SerializeField] private bool enablePhysicsDiagnostics = true;
         [SerializeField] private float diagnosticSampleInterval = 0.2f;
@@ -45,6 +52,9 @@ namespace FriendSlop.Player
         private CharacterController characterController;
         private PlayerInteractor interactor;
         private float radialSpeed;
+        private float currentStamina;
+        private float staminaRegenCooldown;
+        private bool staminaExhausted;
         private Vector3 knockbackVelocity;
         private float cameraPitch;
         private bool diagnosticRecording;
@@ -65,7 +75,8 @@ namespace FriendSlop.Player
         public PlayerInteractor Interactor => interactor;
         public NetworkLootItem HeldItem { get; private set; }
         public bool HasHeldItem => HeldItem != null && HeldItem.IsCarried.Value;
-
+        public float StaminaPercent => maxStamina > 0f ? Mathf.Clamp01(currentStamina / maxStamina) : 0f;
+        public bool IsSprinting { get; private set; }
         private void Awake()
         {
             characterController = GetComponent<CharacterController>();
@@ -80,6 +91,7 @@ namespace FriendSlop.Player
             {
                 cameraRoot = playerCamera.transform;
             }
+            currentStamina = maxStamina;
         }
 
         public override void OnNetworkSpawn()
@@ -216,12 +228,16 @@ namespace FriendSlop.Player
             var wantsJump = Keyboard.current.spaceKey.wasPressedThisFrame;
 
             var carryingMultiplier = HeldItem != null ? HeldItem.CarrySpeedMultiplier : 1f;
-            var wantsSprint = Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed;
-            var speed = (wantsSprint ? sprintSpeed : walkSpeed) * carryingMultiplier;
+            var wantsSprintInput = Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed;
+            var isMoving = input.sqrMagnitude > 0.01f;
+            var isSprinting = wantsSprintInput && isMoving && !staminaExhausted && currentStamina > 0f;
+            UpdateStamina(isSprinting);
+            IsSprinting = isSprinting;
+            var speed = (isSprinting ? sprintSpeed : walkSpeed) * carryingMultiplier;
             lastMoveInput = input;
             lastSphereGrounded = isGrounded;
             lastWantsJump = wantsJump;
-            lastWantsSprint = wantsSprint;
+            lastWantsSprint = isSprinting;
 
             var moveDirection = transform.right * input.x + transform.forward * input.y;
             moveDirection = Vector3.ProjectOnPlane(moveDirection, up);
@@ -244,6 +260,31 @@ namespace FriendSlop.Player
 
             characterController.Move((move + up * radialSpeed + knockbackVelocity) * Time.deltaTime);
             SnapToSphereSurface(world);
+        }
+        private void UpdateStamina(bool isSprinting)
+        {
+            if (isSprinting)
+            {
+                currentStamina = Mathf.Max(0f, currentStamina - sprintStaminaDrainPerSecond * Time.deltaTime);
+                staminaRegenCooldown = staminaRegenDelay;
+                if (currentStamina <= 0f)
+                {
+                    staminaExhausted = true;
+                }
+                return;
+            }
+
+            if (staminaRegenCooldown > 0f)
+            {
+                staminaRegenCooldown -= Time.deltaTime;
+                return;
+            }
+
+            currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRegenPerSecond * Time.deltaTime);
+            if (staminaExhausted && currentStamina >= minStaminaToStartSprint)
+            {
+                staminaExhausted = false;
+            }
         }
 
         private void AlignToSphereSurface()

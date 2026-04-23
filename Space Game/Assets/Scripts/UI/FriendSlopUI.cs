@@ -35,6 +35,9 @@ namespace FriendSlop.UI
         private RectTransform menuRect;
         private RectTransform hudRect;
         private RectTransform moneyPanelRect;
+        private RectTransform staminaPanelRect;
+        private RectTransform staminaFillRect;
+        private Image staminaFillImage;
         private GameObject menuRoot;
         private Text titleText;
         private Text statusText;
@@ -172,12 +175,15 @@ namespace FriendSlop.UI
                 carriedText.text = localPlayer.HeldItem != null
                     ? $"Carrying: {localPlayer.HeldItem.ItemName} (${localPlayer.HeldItem.Value})"
                     : string.Empty;
+                
             }
+            
             else
             {
                 promptText.text = string.Empty;
                 carriedText.text = string.Empty;
             }
+            UpdateStaminaBar(localPlayer, activeRound);
         }
 
         private void LayoutMenu(bool connected, bool isHost, RoundPhase phase)
@@ -291,6 +297,29 @@ namespace FriendSlop.UI
             debugText.color = new Color(1f, 1f, 1f, 0.82f);
             debugText.gameObject.SetActive(false);
             CreateText("Reticle", canvasObject.transform, "+", 24, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(40f, 40f));
+
+            var staminaPanel = CreatePanel("StaminaPanel", canvasObject.transform,
+    new Vector2(0f, 0f), new Vector2(0f, 0f),
+    new Vector2(12f, 12f), new Vector2(320f, 22f),
+    new Color(0.02f, 0.02f, 0.02f, 0.8f));
+            staminaPanelRect = staminaPanel.GetComponent<RectTransform>();
+
+            var staminaFillObject = new GameObject("StaminaFill");
+            staminaFillObject.transform.SetParent(staminaPanel.transform, false);
+            staminaFillRect = staminaFillObject.AddComponent<RectTransform>();
+            staminaFillRect.anchorMin = new Vector2(0f, 0.5f);
+            staminaFillRect.anchorMax = new Vector2(0f, 0.5f);
+            staminaFillRect.pivot = new Vector2(0f, 0.5f);
+            staminaFillRect.anchoredPosition = new Vector2(2f, 0f);
+            staminaFillRect.sizeDelta = new Vector2(316f, 18f);
+            staminaFillImage = staminaFillObject.AddComponent<Image>();
+            staminaFillImage.color = new Color(0.25f, 0.82f, 0.35f, 0.92f);
+
+            var staminaLabel = CreateText("StaminaLabel", staminaPanel.transform, "STAMINA", 13,
+                TextAnchor.MiddleCenter, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var staminaOutline = staminaLabel.gameObject.AddComponent<Outline>();
+            staminaOutline.effectColor = Color.black;
+            staminaOutline.effectDistance = new Vector2(1f, -1f);
 
             menuRoot = CreatePanel("Menu", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(MaxMenuWidth, MinDisconnectedMenuHeight), new Color(0.04f, 0.05f, 0.05f, 0.96f));
             menuRect = menuRoot.GetComponent<RectTransform>();
@@ -544,5 +573,42 @@ namespace FriendSlop.UI
             eventSystem.AddComponent<EventSystem>();
             eventSystem.AddComponent<InputSystemUIInputModule>();
         }
+    
+        private void UpdateStaminaBar(NetworkFirstPersonController localPlayer, bool activeRound)
+        {
+            if (staminaPanelRect == null)
+            {
+                return;
+            }
+
+            var show = activeRound && localPlayer != null;
+            if (staminaPanelRect.gameObject.activeSelf != show)
+            {
+                staminaPanelRect.gameObject.SetActive(show);
+            }
+
+            if (!show)
+            {
+                return;
+            }
+
+            var percent = Mathf.Clamp01(localPlayer.StaminaPercent);
+            var innerWidth = Mathf.Max(0f, staminaPanelRect.rect.width - 4f);
+            staminaFillRect.sizeDelta = new Vector2(innerWidth * percent, 18f);
+
+            if (percent > 0.6f)
+            {
+                staminaFillImage.color = new Color(0.25f, 0.82f, 0.35f, 0.92f);   // green
+            }
+            else if (percent > 0.25f)
+            {
+                staminaFillImage.color = new Color(0.92f, 0.78f, 0.18f, 0.92f);   // yellow
+            }
+            else
+            {
+                staminaFillImage.color = new Color(0.92f, 0.24f, 0.18f, 0.92f);   // red
+            }
+        }
+    
     }
 }
