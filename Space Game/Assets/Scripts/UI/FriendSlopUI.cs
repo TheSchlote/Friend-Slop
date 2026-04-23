@@ -277,7 +277,7 @@ namespace FriendSlop.UI
             CreateText("Reticle", canvasObject.transform, "+", 24, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(40f, 40f));
 
             var staminaPanel = CreatePanel("StaminaPanel", canvasObject.transform,
-    new Vector2(0.035f, 0f), new Vector2(0.05f, 0f),
+    new Vector2(0.042f, 0f), new Vector2(0.05f, 0f),
     new Vector2(18f, 24f), new Vector2(320f, 22f),
     new Color(0.02f, 0.02f, 0.02f, 0.8f));
             staminaPanelRect = staminaPanel.GetComponent<RectTransform>();
