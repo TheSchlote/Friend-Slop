@@ -161,12 +161,13 @@ namespace FriendSlop.UI
                     : string.Empty;
                 
             }
-            UpdateStaminaBar(localPlayer, activeRound);
+            
             else
             {
                 promptText.text = string.Empty;
                 carriedText.text = string.Empty;
             }
+            UpdateStaminaBar(localPlayer, activeRound);
         }
 
         private void LayoutMenu(bool connected, bool isHost, RoundPhase phase)
