@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using FriendSlop.Core;
+using FriendSlop.Effects;
 using FriendSlop.Loot;
 using FriendSlop.Round;
 using FriendSlop.UI;
@@ -42,6 +43,16 @@ namespace FriendSlop.Player
         [SerializeField] private float staminaRegenDelay = 0.6f;
         [SerializeField] private float minStaminaToStartSprint = 20f;
 
+        [Header("Stun")]
+        [SerializeField] private float stunTiltAngle = 42f;
+        [SerializeField] private float stunTiltRecoverSpeed = 80f;
+
+        [Header("Health")]
+        [SerializeField] private int maxHealth = 100;
+
+        [Header("Player Carrying")]
+        [SerializeField] private float carryPlayerSpeedMultiplier = 0.7f;
+
         [Header("Diagnostics")]
         [SerializeField] private bool enablePhysicsDiagnostics = true;
         [SerializeField] private float diagnosticSampleInterval = 0.2f;
@@ -57,6 +68,9 @@ namespace FriendSlop.Player
         private bool staminaExhausted;
         private Vector3 knockbackVelocity;
         private float cameraPitch;
+        private float _stunTimer;
+        private float _currentTiltAngle;
+        private Vector3 _tiltAxis;
         private bool diagnosticRecording;
         private float nextDiagnosticSampleTime;
         private string diagnosticLogPath;
@@ -70,6 +84,17 @@ namespace FriendSlop.Player
         private readonly Collider[] diagnosticNearbyColliders = new Collider[96];
         private readonly StringBuilder diagnosticBuilder = new();
 
+        private readonly NetworkVariable<int> _health = new(100);
+        private bool _isDead;
+        private float _deathOverheadTimer;
+        private bool _spectating;
+        private int _spectatorIndex;
+
+        public NetworkVariable<bool> IsBeingCarried = new(false);
+        public NetworkVariable<ulong> CarriedByClientId = new(ulong.MaxValue);
+        private NetworkFirstPersonController _heldPlayer;
+        private string _displayName = string.Empty;
+
         public Camera PlayerCamera => playerCamera;
         public Transform CarryAnchor => carryAnchor;
         public PlayerInteractor Interactor => interactor;
@@ -77,21 +102,56 @@ namespace FriendSlop.Player
         public bool HasHeldItem => HeldItem != null && HeldItem.IsCarried.Value;
         public float StaminaPercent => maxStamina > 0f ? Mathf.Clamp01(currentStamina / maxStamina) : 0f;
         public bool IsSprinting { get; private set; }
+        public bool IsDead => _health.Value <= 0;
+        public float HealthPercent => maxHealth > 0 ? Mathf.Clamp01((float)_health.Value / maxHealth) : 0f;
+        public int CurrentHealth => _health.Value;
+        public int MaxHealth => maxHealth;
+        public NetworkFirstPersonController HeldPlayer => _heldPlayer;
+        public bool HasHeldPlayer => _heldPlayer != null && _heldPlayer.IsBeingCarried.Value;
+        public float CarryPlayerSpeedMultiplier => carryPlayerSpeedMultiplier;
+        public string DisplayName
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(_displayName)) return _displayName;
+                var serverId = NetworkManager.Singleton != null ? NetworkManager.ServerClientId : 0UL;
+                return OwnerClientId == serverId ? "Host" : $"Player {OwnerClientId}";
+            }
+        }
+        public bool IsDeadLocally => IsOwner && _isDead;
+        public bool IsSpectatingLocally => IsOwner && _isDead && _spectating;
+        public string SpectatorTargetLabel
+        {
+            get
+            {
+                if (!_spectating) return string.Empty;
+                var alive = new List<NetworkFirstPersonController>();
+                foreach (var p in ActivePlayers)
+                {
+                    if (p != null && p != this && p.IsSpawned && !p.IsDead)
+                        alive.Add(p);
+                }
+                if (alive.Count == 0) return "nobody";
+                var idx = ((_spectatorIndex % alive.Count) + alive.Count) % alive.Count;
+                var target = alive[idx];
+                var serverId = NetworkManager.Singleton != null ? NetworkManager.ServerClientId : 0UL;
+                return target.OwnerClientId == serverId ? "Host" : $"Player {target.OwnerClientId}";
+            }
+        }
         private void Awake()
         {
             characterController = GetComponent<CharacterController>();
             interactor = GetComponent<PlayerInteractor>();
 
             if (playerCamera == null)
-            {
                 playerCamera = GetComponentInChildren<Camera>(true);
-            }
-
             if (cameraRoot == null && playerCamera != null)
-            {
                 cameraRoot = playerCamera.transform;
-            }
+
             currentStamina = maxStamina;
+
+            if (GetComponent<PlayerNameplate>() == null)
+                gameObject.AddComponent<PlayerNameplate>();
         }
 
         public override void OnNetworkSpawn()
@@ -101,10 +161,30 @@ namespace FriendSlop.Player
                 ActivePlayers.Add(this);
             }
 
+            if (IsServer)
+            {
+                _health.Value = maxHealth;
+
+                // Send all existing players' names to this newly connected client.
+                var newClientId = OwnerClientId;
+                var sendParams = new ClientRpcParams
+                {
+                    Send = new ClientRpcSendParams { TargetClientIds = new[] { newClientId } }
+                };
+                foreach (var other in ActivePlayers)
+                {
+                    if (other != null && other != this && other.IsSpawned && !string.IsNullOrEmpty(other._displayName))
+                        other.SyncNameToClientRpc(other._displayName, sendParams);
+                }
+            }
+
             if (IsOwner)
             {
                 LocalPlayer = this;
                 ConfigureLocalPlayer(true);
+                _health.OnValueChanged += OnHealthChanged;
+                var savedName = UnityEngine.PlayerPrefs.GetString("PlayerName", "Player");
+                SetNameServerRpc(savedName);
             }
             else
             {
@@ -114,6 +194,19 @@ namespace FriendSlop.Player
 
         public override void OnNetworkDespawn()
         {
+            if (IsServer)
+            {
+                if (_heldPlayer != null) ServerDropHeldPlayer(Vector3.zero);
+                if (IsBeingCarried.Value)
+                {
+                    var carrier = FindByClientId(CarriedByClientId.Value);
+                    carrier?.ServerDropHeldPlayer(Vector3.zero);
+                }
+            }
+
+            if (IsOwner)
+                _health.OnValueChanged -= OnHealthChanged;
+
             ActivePlayers.Remove(this);
 
             if (LocalPlayer == this)
@@ -179,6 +272,22 @@ namespace FriendSlop.Player
                 Cursor.visible = false;
             }
 
+            if (_isDead)
+            {
+                HandleDeathCamera();
+                return;
+            }
+
+            if (IsBeingCarried.Value)
+            {
+                AlignToSphereSurface();
+                if (_stunTimer <= 0f) HandleLook();
+                return;
+            }
+
+            if (_stunTimer > 0f) _stunTimer -= Time.deltaTime;
+            if (_currentTiltAngle > 0.01f) _currentTiltAngle = Mathf.MoveTowards(_currentTiltAngle, 0f, stunTiltRecoverSpeed * Time.deltaTime);
+
             lastBlockedGameplayInput = FriendSlopUI.BlocksGameplayInput;
             if (lastBlockedGameplayInput)
             {
@@ -188,7 +297,10 @@ namespace FriendSlop.Player
             }
 
             AlignToSphereSurface();
-            HandleLook();
+            if (_stunTimer <= 0f)
+            {
+                HandleLook();
+            }
             HandleMovement();
             AlignToSphereSurface();
             SamplePhysicsDiagnostics("moving");
@@ -210,6 +322,22 @@ namespace FriendSlop.Player
 
         private void HandleMovement()
         {
+            if (characterController == null || !characterController.enabled) return;
+
+            var world = SphereWorld.GetClosest(transform.position);
+            var up = world != null ? world.GetUp(transform.position) : Vector3.up;
+            var isGrounded = IsGroundedOnSphere(world);
+
+            knockbackVelocity = Vector3.MoveTowards(knockbackVelocity, Vector3.zero, knockbackDamping * Time.deltaTime);
+
+            if (_stunTimer > 0f)
+            {
+                radialSpeed = isGrounded ? 0f : Mathf.Max(radialSpeed - gravity * Time.deltaTime, -terminalFallSpeed);
+                characterController.Move((up * radialSpeed + knockbackVelocity) * Time.deltaTime);
+                SnapToSphereSurface(world);
+                return;
+            }
+
             if (Keyboard.current == null)
             {
                 return;
@@ -222,12 +350,9 @@ namespace FriendSlop.Player
             input.y -= Keyboard.current.sKey.isPressed ? 1f : 0f;
             input = Vector2.ClampMagnitude(input, 1f);
 
-            var world = SphereWorld.GetClosest(transform.position);
-            var up = world != null ? world.GetUp(transform.position) : Vector3.up;
-            var isGrounded = IsGroundedOnSphere(world);
             var wantsJump = Keyboard.current.spaceKey.wasPressedThisFrame;
-
-            var carryingMultiplier = HeldItem != null ? HeldItem.CarrySpeedMultiplier : 1f;
+            var carryingMultiplier = HeldItem != null ? HeldItem.CarrySpeedMultiplier
+                : (HasHeldPlayer ? carryPlayerSpeedMultiplier : 1f);
             var wantsSprintInput = Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed;
             var isMoving = input.sqrMagnitude > 0.01f;
             var isSprinting = wantsSprintInput && isMoving && !staminaExhausted && currentStamina > 0f;
@@ -255,8 +380,6 @@ namespace FriendSlop.Player
             {
                 radialSpeed = Mathf.Max(radialSpeed - gravity * Time.deltaTime, -terminalFallSpeed);
             }
-
-            knockbackVelocity = Vector3.MoveTowards(knockbackVelocity, Vector3.zero, knockbackDamping * Time.deltaTime);
 
             characterController.Move((move + up * radialSpeed + knockbackVelocity) * Time.deltaTime);
             SnapToSphereSurface(world);
@@ -291,6 +414,8 @@ namespace FriendSlop.Player
         {
             var up = SphereWorld.GetGravityUp(transform.position);
             var targetRotation = Quaternion.FromToRotation(transform.up, up) * transform.rotation;
+            if (_currentTiltAngle > 0.01f)
+                targetRotation = Quaternion.AngleAxis(_currentTiltAngle, _tiltAxis) * targetRotation;
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, surfaceAlignSpeed * Time.deltaTime);
         }
 
@@ -398,6 +523,25 @@ namespace FriendSlop.Player
             }
 
             knockbackVelocity += impulse;
+        }
+
+        [ClientRpc]
+        public void StunClientRpc(float duration, Vector3 impulse)
+        {
+            if (!IsOwner)
+            {
+                return;
+            }
+
+            knockbackVelocity += impulse;
+            _stunTimer = duration;
+
+            var up = SphereWorld.GetGravityUp(transform.position);
+            var knockDir = Vector3.ProjectOnPlane(impulse, up);
+            _tiltAxis = knockDir.sqrMagnitude > 0.001f
+                ? Vector3.Cross(up, knockDir.normalized)
+                : transform.right;
+            _currentTiltAngle = stunTiltAngle;
         }
 
         private void HandleDiagnosticHotkeys()
@@ -704,6 +848,282 @@ namespace FriendSlop.Player
                 keyboard.qKey.isPressed ? "Q" : "-",
                 mouse != null && mouse.leftButton.isPressed ? "MouseLeft" : "-",
                 mouse != null && mouse.rightButton.isPressed ? "MouseRight" : "-");
+        }
+
+        private void OnHealthChanged(int previous, int current)
+        {
+            if (current < previous && current > 0)
+                FriendSlopUI.Instance?.ShowDamageFlash();
+        }
+
+        public void ServerTakeDamage(int damage)
+        {
+            if (!IsServer || _health.Value <= 0) return;
+            _health.Value = Mathf.Max(0, _health.Value - damage);
+            var isDeath = _health.Value <= 0;
+            if (isDeath)
+            {
+                if (_heldPlayer != null) ServerDropHeldPlayer(Vector3.zero);
+                if (IsBeingCarried.Value)
+                    FindByClientId(CarriedByClientId.Value)?.ServerDropHeldPlayer(Vector3.zero);
+                DieClientRpc();
+            }
+            if (damage > 10)
+                SpawnBloodSplatterClientRpc(damage, isDeath);
+        }
+
+        [ClientRpc]
+        private void SpawnBloodSplatterClientRpc(int damage, bool isDeath)
+        {
+            var count = Mathf.RoundToInt(Mathf.Lerp(1f, 6f, (damage - 10f) / 90f));
+            if (isDeath) count += 4;
+            var up = transform.up;
+            var world = SphereWorld.GetClosest(transform.position);
+            var groundPos = world != null ? world.GetSurfacePoint(up, 0.06f) : transform.position + up * 0.06f;
+            BloodSplatter.Spawn(groundPos, up, count);
+        }
+
+        public void ServerRevive()
+        {
+            if (!IsServer) return;
+            if (_heldPlayer != null) ServerDropHeldPlayer(Vector3.zero);
+            if (IsBeingCarried.Value)
+            {
+                var carrier = FindByClientId(CarriedByClientId.Value);
+                carrier?.ServerDropHeldPlayer(Vector3.zero);
+            }
+            _health.Value = maxHealth;
+            ReviveClientRpc();
+        }
+
+        [ClientRpc]
+        private void DieClientRpc()
+        {
+            if (!IsOwner) return;
+            _isDead = true;
+            _spectating = false;
+            _deathOverheadTimer = 5f;
+            _spectatorIndex = 0;
+            if (characterController != null) characterController.enabled = false;
+            if (playerCamera != null) playerCamera.transform.SetParent(null);
+        }
+
+        [ClientRpc]
+        private void ReviveClientRpc()
+        {
+            if (!IsOwner) return;
+            _isDead = false;
+            _spectating = false;
+            _deathOverheadTimer = 0f;
+            if (playerCamera != null && cameraRoot != null)
+            {
+                playerCamera.transform.SetParent(cameraRoot);
+                playerCamera.transform.localPosition = Vector3.zero;
+                playerCamera.transform.localRotation = Quaternion.identity;
+            }
+            if (characterController != null) characterController.enabled = true;
+            knockbackVelocity = Vector3.zero;
+            radialSpeed = 0f;
+            _stunTimer = 0f;
+            _currentTiltAngle = 0f;
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void SetNameServerRpc(string name, RpcParams rpcParams = default)
+        {
+            if (rpcParams.Receive.SenderClientId != OwnerClientId) return;
+            name = name.Trim();
+            if (name.Length < 2) name = "Player";
+            if (name.Length > 24) name = name[..24];
+            _displayName = name;
+            SyncNameClientRpc(name);
+        }
+
+        [ClientRpc]
+        private void SyncNameClientRpc(string name)
+        {
+            _displayName = name;
+        }
+
+        [ClientRpc]
+        private void SyncNameToClientRpc(string name, ClientRpcParams rpcParams = default)
+        {
+            _displayName = name;
+        }
+
+        // Called on the TARGET player's NetworkObject by the picker's owner.
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void RequestPickupByPlayerServerRpc(RpcParams rpcParams = default)
+        {
+            var carrierId = rpcParams.Receive.SenderClientId;
+            var carrier = FindByClientId(carrierId);
+            if (carrier == null || carrier.HeldItem != null || carrier.HasHeldPlayer) return;
+            if (IsBeingCarried.Value || carrier.IsDead) return;
+            if (IsAncestorInCarrierChain(carrier)) return;
+
+            IsBeingCarried.Value = true;
+            CarriedByClientId.Value = carrierId;
+            carrier.SetHeldPlayer(this);
+            BeginCarriedClientRpc();
+        }
+
+        // Returns true if 'this' is somewhere above 'picker' in the carrier chain,
+        // which would create a circular stack.
+        public bool IsAncestorInCarrierChain(NetworkFirstPersonController picker)
+        {
+            var current = picker;
+            while (current != null && current.IsBeingCarried.Value)
+            {
+                var above = FindByClientId(current.CarriedByClientId.Value);
+                if (above == this) return true;
+                if (above == current) break;
+                current = above;
+            }
+            return false;
+        }
+
+        // Called on the CARRIER's NetworkObject by the carrier's owner.
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void MoveHeldPlayerServerRpc(Vector3 position, Quaternion rotation, RpcParams rpcParams = default)
+        {
+            if (rpcParams.Receive.SenderClientId != OwnerClientId || _heldPlayer == null) return;
+            var carrier = FindByClientId(rpcParams.Receive.SenderClientId);
+            if (carrier != null && Vector3.SqrMagnitude(position - carrier.transform.position) > 36f) return;
+            _heldPlayer.ServerMoveAsCarried(position, rotation);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void RequestDropHeldPlayerServerRpc(Vector3 impulse, RpcParams rpcParams = default)
+        {
+            if (rpcParams.Receive.SenderClientId != OwnerClientId || _heldPlayer == null) return;
+            ServerDropHeldPlayer(impulse);
+        }
+
+        public void ServerDropHeldPlayer(Vector3 impulse)
+        {
+            if (!IsServer || _heldPlayer == null) return;
+            var dropped = _heldPlayer;
+            ClearHeldPlayer(_heldPlayer);
+            dropped.ServerReleaseFromCarry(impulse);
+        }
+
+        public void ServerMoveAsCarried(Vector3 position, Quaternion rotation)
+        {
+            if (!IsServer || !IsBeingCarried.Value) return;
+            transform.SetPositionAndRotation(position, rotation);
+            if (!IsOwner) MoveAsCarriedClientRpc(position, rotation);
+        }
+
+        [ClientRpc]
+        private void MoveAsCarriedClientRpc(Vector3 position, Quaternion rotation)
+        {
+            if (!IsOwner) return;
+            if (characterController != null) characterController.enabled = false;
+            transform.SetPositionAndRotation(position, rotation);
+            if (characterController != null) characterController.enabled = true;
+        }
+
+        [ClientRpc]
+        private void BeginCarriedClientRpc()
+        {
+            if (!IsOwner) return;
+            if (characterController != null) characterController.enabled = false;
+        }
+
+        public void ServerReleaseFromCarry(Vector3 impulse)
+        {
+            if (!IsServer) return;
+            IsBeingCarried.Value = false;
+            CarriedByClientId.Value = ulong.MaxValue;
+            ReleaseFromCarryClientRpc(impulse);
+        }
+
+        [ClientRpc]
+        private void ReleaseFromCarryClientRpc(Vector3 impulse)
+        {
+            if (!IsOwner) return;
+            if (!_isDead && characterController != null) characterController.enabled = true;
+            if (!_isDead)
+            {
+                knockbackVelocity += impulse;
+                radialSpeed = 0f;
+            }
+        }
+
+        public void SetHeldPlayer(NetworkFirstPersonController player) => _heldPlayer = player;
+
+        public void ClearHeldPlayer(NetworkFirstPersonController player)
+        {
+            if (_heldPlayer == player) _heldPlayer = null;
+        }
+
+        private void HandleDeathCamera()
+        {
+            if (playerCamera == null) return;
+
+            var world = SphereWorld.GetClosest(transform.position);
+            var up = world != null ? world.GetUp(transform.position) : Vector3.up;
+
+            if (!_spectating)
+            {
+                _deathOverheadTimer -= Time.deltaTime;
+
+                var overheadPos = transform.position + up * 8f;
+                playerCamera.transform.position = overheadPos;
+                var surfaceForward = Vector3.ProjectOnPlane(transform.forward, up);
+                if (surfaceForward.sqrMagnitude < 0.001f) surfaceForward = transform.right;
+                else surfaceForward.Normalize();
+                playerCamera.transform.rotation = Quaternion.LookRotation(-up, surfaceForward);
+
+                if (_deathOverheadTimer <= 0f)
+                    _spectating = true;
+                return;
+            }
+
+            if (Keyboard.current != null && !FriendSlopUI.BlocksGameplayInput)
+            {
+                if (Keyboard.current.eKey.wasPressedThisFrame) CycleSpectateTarget(1);
+                if (Keyboard.current.qKey.wasPressedThisFrame) CycleSpectateTarget(-1);
+            }
+
+            var alive = new List<NetworkFirstPersonController>();
+            foreach (var p in ActivePlayers)
+            {
+                if (p != null && p != this && p.IsSpawned && !p.IsDead)
+                    alive.Add(p);
+            }
+
+            if (alive.Count > 0)
+            {
+                _spectatorIndex = ((_spectatorIndex % alive.Count) + alive.Count) % alive.Count;
+                var target = alive[_spectatorIndex];
+                if (target.PlayerCamera != null)
+                {
+                    playerCamera.transform.position = target.PlayerCamera.transform.position;
+                    playerCamera.transform.rotation = target.PlayerCamera.transform.rotation;
+                }
+            }
+            else
+            {
+                var overheadPos = transform.position + up * 8f;
+                playerCamera.transform.position = overheadPos;
+                var surfaceForward = Vector3.ProjectOnPlane(transform.forward, up);
+                if (surfaceForward.sqrMagnitude < 0.001f) surfaceForward = transform.right;
+                else surfaceForward.Normalize();
+                playerCamera.transform.rotation = Quaternion.LookRotation(-up, surfaceForward);
+            }
+        }
+
+        private void CycleSpectateTarget(int direction)
+        {
+            var aliveCount = 0;
+            foreach (var p in ActivePlayers)
+            {
+                if (p != null && p != this && p.IsSpawned && !p.IsDead)
+                    aliveCount++;
+            }
+            if (aliveCount == 0) return;
+            _spectatorIndex = ((_spectatorIndex + direction) % aliveCount + aliveCount) % aliveCount;
         }
     }
 }

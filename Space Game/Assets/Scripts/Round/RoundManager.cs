@@ -63,14 +63,32 @@ namespace FriendSlop.Round
 
         private void Update()
         {
-            if (!IsServer || Phase.Value != RoundPhase.Active || roundLengthSeconds <= 0f)
+            if (!IsServer || Phase.Value != RoundPhase.Active)
                 return;
 
-            TimeRemaining.Value = Mathf.Max(0f, TimeRemaining.Value - Time.deltaTime);
-            if (TimeRemaining.Value <= 0f && CollectedValue.Value < Quota.Value)
+            if (roundLengthSeconds > 0f)
             {
-                Phase.Value = RoundPhase.Failed;
+                TimeRemaining.Value = Mathf.Max(0f, TimeRemaining.Value - Time.deltaTime);
+                if (TimeRemaining.Value <= 0f && CollectedValue.Value < Quota.Value)
+                {
+                    Phase.Value = RoundPhase.Failed;
+                    return;
+                }
             }
+
+            CheckAllDeadCondition();
+        }
+
+        private void CheckAllDeadCondition()
+        {
+            var players = NetworkFirstPersonController.ActivePlayers;
+            if (players.Count == 0) return;
+            foreach (var player in players)
+            {
+                if (player != null && player.IsSpawned && !player.IsDead)
+                    return;
+            }
+            Phase.Value = RoundPhase.AllDead;
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -256,6 +274,7 @@ namespace FriendSlop.Round
 
                 var spawn = playerSpawnPoints[index % playerSpawnPoints.Length];
                 player.ServerTeleport(spawn.position, spawn.rotation);
+                player.ServerRevive();
             }
         }
     }

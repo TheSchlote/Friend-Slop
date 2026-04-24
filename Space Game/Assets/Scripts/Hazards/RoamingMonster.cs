@@ -25,6 +25,10 @@ namespace FriendSlop.Hazards
         [SerializeField] private float spottedPauseMax = .8f;
         [SerializeField] private float visionAngle = 60f;
         [SerializeField] private float visionOriginHeight = 1.2f;
+        [SerializeField] private float proximityDetectionRange = 2.5f;
+        [SerializeField] private float targetSwitchRange = 5f;
+        [SerializeField] private float stunDuration = 1.5f;
+        [SerializeField] private int attackDamage = 20;
 
         private enum State { Roaming, Chasing, Investigating }
 
@@ -37,6 +41,9 @@ namespace FriendSlop.Hazards
         private Vector3 _investigateTarget;
         private float _roamPauseTimer;
         private float _spottedPauseTimer;
+        private NetworkFirstPersonController _chaseTarget;
+        private NetworkFirstPersonController _stunnedPlayer;
+        private float _stunnedPlayerUntil;
 
         private void Awake()
         {
@@ -75,6 +82,7 @@ namespace FriendSlop.Hazards
                 case State.Roaming:
                     if (nearest != null)
                     {
+                        _chaseTarget = nearest;
                         _state = State.Chasing;
                         _spottedPauseTimer = Random.Range(spottedPauseMin, spottedPauseMax);
                         break;
@@ -99,11 +107,22 @@ namespace FriendSlop.Hazards
                         _spottedPauseTimer -= Time.deltaTime;
                         break;
                     }
-                    if (nearest != null)
+                    // Switch to a closer visible player if one enters targetSwitchRange
+                    if (nearest != null && nearest != _chaseTarget
+                        && Vector3.Distance(transform.position, nearest.transform.position) < targetSwitchRange)
                     {
-                        _lastKnownPosition = nearest.transform.position;
-                        MoveToward(world, nearest.transform.position);
-                        TryAttack(world, nearest);
+                        _chaseTarget = nearest;
+                    }
+                    if (CanDetectPlayer(world, _chaseTarget))
+                    {
+                        _lastKnownPosition = _chaseTarget.transform.position;
+                        MoveToward(world, _chaseTarget.transform.position);
+                        if (TryAttack(world, _chaseTarget))
+                        {
+                            _lastKnownPosition = _chaseTarget.transform.position;
+                            _state = State.Roaming;
+                            PickRetreatTarget(world, _chaseTarget.transform.position);
+                        }
                     }
                     else
                     {
@@ -116,6 +135,7 @@ namespace FriendSlop.Hazards
                 case State.Investigating:
                     if (nearest != null)
                     {
+                        _chaseTarget = nearest;
                         _state = State.Chasing;
                         _spottedPauseTimer = 0f;
                         goto case State.Chasing;
@@ -168,9 +188,23 @@ namespace FriendSlop.Hazards
                 if (player == null || !player.IsSpawned)
                     continue;
 
+                if (player.IsDead)
+                    continue;
+
+                if (player == _stunnedPlayer && Time.time < _stunnedPlayerUntil)
+                    continue;
+
                 var distance = Vector3.Distance(transform.position, player.transform.position);
                 if (distance >= bestDistance)
                     continue;
+
+                // Within proximity radius: detect regardless of cone or line of sight
+                if (distance < proximityDetectionRange)
+                {
+                    bestDistance = distance;
+                    bestPlayer = player;
+                    continue;
+                }
 
                 var toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, up);
                 if (toPlayer.sqrMagnitude < 0.001f)
@@ -187,6 +221,42 @@ namespace FriendSlop.Hazards
             }
 
             return bestPlayer;
+        }
+
+        private bool CanDetectPlayer(SphereWorld world, NetworkFirstPersonController player)
+        {
+            if (player == null || !player.IsSpawned)
+                return false;
+
+            if (player.IsDead)
+                return false;
+
+            if (player == _stunnedPlayer && Time.time < _stunnedPlayerUntil)
+                return false;
+
+            var distance = Vector3.Distance(transform.position, player.transform.position);
+
+            if (distance < proximityDetectionRange)
+                return true;
+
+            if (distance >= detectionRange)
+                return false;
+
+            var up = world.GetUp(transform.position);
+            var surfaceForward = Vector3.ProjectOnPlane(transform.forward, up);
+            if (surfaceForward.sqrMagnitude < 0.001f)
+                surfaceForward = transform.forward;
+            else
+                surfaceForward.Normalize();
+
+            var toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, up);
+            if (toPlayer.sqrMagnitude < 0.001f)
+                return false;
+
+            if (Vector3.Angle(surfaceForward, toPlayer) > visionAngle * 0.5f)
+                return false;
+
+            return !IsOccluded(world, player);
         }
 
         private bool IsOccluded(SphereWorld world, NetworkFirstPersonController player)
@@ -215,25 +285,30 @@ namespace FriendSlop.Hazards
             AlignToSurface(world, tangent, Time.deltaTime);
         }
 
-        private void TryAttack(SphereWorld world, NetworkFirstPersonController player)
+        // Returns true when the attack landed, triggering a retreat.
+        private bool TryAttack(SphereWorld world, NetworkFirstPersonController player)
         {
+            if (player.IsDead) return false;
             if (Time.time < nextAttackTime || Vector3.Distance(transform.position, player.transform.position) > attackDistance)
-            {
-                return;
-            }
+                return false;
 
             nextAttackTime = Time.time + attackCooldown;
 
             var away = Vector3.ProjectOnPlane(player.transform.position - transform.position, world.GetUp(player.transform.position));
             if (away.sqrMagnitude < 0.001f)
-            {
                 away = player.transform.forward;
-            }
 
             away.Normalize();
             var impulse = away * knockbackStrength + world.GetUp(player.transform.position) * 3f;
+
             player.ServerForceDropHeld(impulse);
-            player.KnockbackClientRpc(impulse);
+            player.StunClientRpc(stunDuration, impulse);
+            player.ServerTakeDamage(attackDamage);
+
+            _stunnedPlayer = player;
+            _stunnedPlayerUntil = Time.time + stunDuration;
+
+            return true;
         }
 
         private void PickRoamTarget(SphereWorld world)
@@ -245,6 +320,17 @@ namespace FriendSlop.Hazards
             }
 
             var offsetPoint = spawnPosition + Random.onUnitSphere * roamRadius;
+            roamTarget = world.GetSurfacePoint(world.GetUp(offsetPoint), surfaceHeight);
+        }
+
+        private void PickRetreatTarget(SphereWorld world, Vector3 fromPosition)
+        {
+            var up = world.GetUp(transform.position);
+            var awayDir = Vector3.ProjectOnPlane(transform.position - fromPosition, up);
+            if (awayDir.sqrMagnitude < 0.001f)
+                awayDir = transform.forward;
+            awayDir.Normalize();
+            var offsetPoint = transform.position + awayDir * roamRadius;
             roamTarget = world.GetSurfacePoint(world.GetUp(offsetPoint), surfaceHeight);
         }
 
