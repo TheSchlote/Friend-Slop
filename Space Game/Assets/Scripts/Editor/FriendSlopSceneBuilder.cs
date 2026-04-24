@@ -537,6 +537,9 @@ namespace FriendSlop.Editor
             planetObject.transform.localScale = Vector3.one * PlanetRadius * 2f;
             SetMaterial(planetObject, materials["PlanetGrass"]);
 
+            planetObject.AddComponent<NetworkObject>();
+            planetObject.AddComponent<PlanetColorRandomizer>();
+
             var world = planetObject.AddComponent<SphereWorld>();
             var worldSo = new SerializedObject(world);
             worldSo.FindProperty("radius").floatValue = PlanetRadius;
