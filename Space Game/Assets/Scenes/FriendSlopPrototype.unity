@@ -2987,6 +2987,7 @@ GameObject:
   - component: {fileID: 1807919581}
   - component: {fileID: 1807919585}
   - component: {fileID: 1807919586}
+  - component: {fileID: 1807919587}
   m_Layer: 0
   m_Name: Starter Junk Planet
   m_TagString: Untagged
@@ -3139,6 +3140,29 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Core.PlanetColorRandomizer
   ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &1807919587
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1807919579}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2ddd1bd888c237a48bdb0ce016db81cc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Core.PlanetTreeSpawner
+  ShowTopMostFoldoutHeaderGroup: 1
+  treeCount: 45
+  minTrunkHeight: 1
+  maxTrunkHeight: 2.4
+  minTrunkRadius: 0.07
+  maxTrunkRadius: 0.16
+  minCanopyRadius: 0.65
+  maxCanopyRadius: 1.55
+  minTreeSpacing: 2.2
+  launchpadExclusionDeg: 22
+  spawnAreaExclusionDeg: 18
 --- !u!1 &1821790802
 GameObject:
   m_ObjectHideFlags: 0

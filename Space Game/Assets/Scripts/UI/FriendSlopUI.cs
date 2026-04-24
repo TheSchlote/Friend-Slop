@@ -45,6 +45,12 @@ namespace FriendSlop.UI
         private Text gameOverText;
         private Image damageFlashImage;
         private float _damageFlashAlpha;
+        private GameObject loadingScreenRoot;
+        private Text loadingStatusText;
+        private RectTransform loadingBarFillRect;
+        private bool _lateJoinLoading;
+        private float _lateJoinLoadingStartTime;
+        private const float LateJoinLoadingDuration = 3f;
         private RectTransform chargePanelRect;
         private RectTransform chargeFillRect;
         private Image chargeFillImage;
@@ -92,6 +98,9 @@ namespace FriendSlop.UI
                 menuPinned = !menuPinned;
             }
 
+            if (_lateJoinLoading && Time.time - _lateJoinLoadingStartTime >= LateJoinLoadingDuration)
+                _lateJoinLoading = false;
+
             if (_damageFlashAlpha > 0f)
             {
                 _damageFlashAlpha = Mathf.Max(0f, _damageFlashAlpha - Time.deltaTime * 1.8f);
@@ -118,18 +127,14 @@ namespace FriendSlop.UI
 
         private bool IsBlockingGameplayInput()
         {
-            if (playerNameInput != null && playerNameInput.isFocused)
-            {
-                return true;
-            }
-
-            if (joinInput != null && joinInput.isFocused)
-            {
-                return true;
-            }
+            if (playerNameInput != null && playerNameInput.isFocused) return true;
+            if (joinInput != null && joinInput.isFocused) return true;
 
             var round = RoundManager.Instance;
-            var activeRound = round != null && round.Phase.Value == RoundPhase.Active;
+            var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
+            if (phase == RoundPhase.Loading || _lateJoinLoading) return true;
+
+            var activeRound = round != null && phase == RoundPhase.Active;
             return !activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked;
         }
 
@@ -142,7 +147,10 @@ namespace FriendSlop.UI
             var isHost = networkManager != null && networkManager.IsHost;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var activeRound = connected && phase == RoundPhase.Active;
-            var showMenu = !activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked;
+            var isLoading = phase == RoundPhase.Loading || _lateJoinLoading;
+            var showMenu = !isLoading && (!activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked);
+
+            UpdateLoadingScreen(isLoading, phase, round);
 
             menuRoot.SetActive(showMenu);
             if (namePanelRoot != null) namePanelRoot.SetActive(showMenu);
@@ -465,6 +473,40 @@ namespace FriendSlop.UI
             });
             shutdownButton = CreateButton("Leave Session", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.Shutdown());
             quitButton = CreateButton("Quit", menuRoot.transform, Vector2.zero, QuitGame);
+
+            // Loading screen — added last so it renders on top of all other UI
+            loadingScreenRoot = CreatePanel("LoadingScreen", canvasObject.transform,
+                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+                new Color(0.05f, 0.05f, 0.08f, 0.94f));
+
+            CreateText("LoadingTitle", loadingScreenRoot.transform, "LOADING",
+                52, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 60f), new Vector2(500f, 70f));
+
+            loadingStatusText = CreateText("LoadingStatus", loadingScreenRoot.transform,
+                "Waiting for players...", 20, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 8f), new Vector2(460f, 30f));
+            loadingStatusText.color = new Color(1f, 1f, 1f, 0.75f);
+
+            var loadingBarBg = CreatePanel("LoadingBarBg", loadingScreenRoot.transform,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, -30f), new Vector2(500f, 20f),
+                new Color(0.1f, 0.1f, 0.1f, 0.9f));
+
+            var loadingBarFillObj = new GameObject("LoadingBarFill");
+            loadingBarFillObj.transform.SetParent(loadingBarBg.transform, false);
+            loadingBarFillRect = loadingBarFillObj.AddComponent<RectTransform>();
+            loadingBarFillRect.anchorMin = new Vector2(0f, 0.5f);
+            loadingBarFillRect.anchorMax = new Vector2(0f, 0.5f);
+            loadingBarFillRect.pivot = new Vector2(0f, 0.5f);
+            loadingBarFillRect.anchoredPosition = new Vector2(2f, 0f);
+            loadingBarFillRect.sizeDelta = new Vector2(0f, 16f);
+            var loadingBarFill = loadingBarFillObj.AddComponent<Image>();
+            loadingBarFill.color = new Color(0.3f, 0.65f, 1f, 0.9f);
+
+            loadingScreenRoot.SetActive(false);
         }
 
         private GameObject CreatePanel(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, Vector2 size, Color color)
@@ -634,6 +676,46 @@ namespace FriendSlop.UI
             _damageFlashAlpha = 0.44f;
             if (damageFlashImage != null)
                 damageFlashImage.color = new Color(0.72f, 0f, 0f, _damageFlashAlpha);
+        }
+
+        public void ShowLateJoinLoading()
+        {
+            _lateJoinLoading = true;
+            _lateJoinLoadingStartTime = Time.time;
+        }
+
+        private void UpdateLoadingScreen(bool isLoading, RoundPhase phase, RoundManager round)
+        {
+            if (loadingScreenRoot == null) return;
+            loadingScreenRoot.SetActive(isLoading);
+            if (!isLoading) return;
+
+            float progress;
+            string statusMsg;
+            if (phase == RoundPhase.Loading && round != null)
+            {
+                var ready = round.PlayersReady.Value;
+                var expected = Mathf.Max(1, round.PlayersExpectedToLoad.Value);
+                progress = (float)ready / expected;
+                statusMsg = ready >= expected
+                    ? "All players ready!"
+                    : $"Waiting for players... ({ready} / {expected})";
+            }
+            else
+            {
+                progress = Mathf.Clamp01((Time.time - _lateJoinLoadingStartTime) / LateJoinLoadingDuration);
+                statusMsg = "Syncing world...";
+            }
+
+            if (loadingStatusText != null)
+                loadingStatusText.text = statusMsg;
+
+            if (loadingBarFillRect != null)
+            {
+                var barBg = loadingBarFillRect.parent as RectTransform;
+                var barWidth = barBg != null ? Mathf.Max(0f, barBg.rect.width - 4f) : 496f;
+                loadingBarFillRect.sizeDelta = new Vector2(barWidth * progress, 16f);
+            }
         }
 
         private void QuitGame()

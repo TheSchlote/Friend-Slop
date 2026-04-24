@@ -539,6 +539,7 @@ namespace FriendSlop.Editor
 
             planetObject.AddComponent<NetworkObject>();
             planetObject.AddComponent<PlanetColorRandomizer>();
+            planetObject.AddComponent<PlanetTreeSpawner>();
 
             var world = planetObject.AddComponent<SphereWorld>();
             var worldSo = new SerializedObject(world);
@@ -868,6 +869,15 @@ namespace FriendSlop.Editor
                 worldSo.FindProperty("gravityAcceleration").floatValue = PlanetGravityAcceleration;
                 worldSo.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(world);
+
+                // Ensure PlanetTreeSpawner is present (added after some scenes were built).
+                var planet = world.gameObject;
+                if (planet.GetComponent<PlanetTreeSpawner>() == null)
+                {
+                    planet.AddComponent<PlanetTreeSpawner>();
+                    EditorUtility.SetDirty(planet);
+                    EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+                }
             }
 
             RemoveLaunchpadCollisionInOpenScene();
