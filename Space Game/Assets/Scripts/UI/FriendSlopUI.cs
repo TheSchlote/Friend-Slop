@@ -37,6 +37,17 @@ namespace FriendSlop.UI
         private RectTransform staminaPanelRect;
         private RectTransform staminaFillRect;
         private Image staminaFillImage;
+        private RectTransform healthPanelRect;
+        private RectTransform healthFillRect;
+        private Image healthFillImage;
+        private Text healthLabelText;
+        private Text deathOverlayText;
+        private Text gameOverText;
+        private Image damageFlashImage;
+        private float _damageFlashAlpha;
+        private RectTransform chargePanelRect;
+        private RectTransform chargeFillRect;
+        private Image chargeFillImage;
         private GameObject menuRoot;
         private Text titleText;
         private Text statusText;
@@ -47,6 +58,9 @@ namespace FriendSlop.UI
         private Text carriedText;
         private Text resultText;
         private InputField joinInput;
+        private InputField playerNameInput;
+        private GameObject namePanelRoot;
+        private string _lastSyncedName = string.Empty;
         private Button hostButton;
         private Button joinButton;
         private Button localHostButton;
@@ -78,11 +92,37 @@ namespace FriendSlop.UI
                 menuPinned = !menuPinned;
             }
 
+            if (_damageFlashAlpha > 0f)
+            {
+                _damageFlashAlpha = Mathf.Max(0f, _damageFlashAlpha - Time.deltaTime * 1.8f);
+                if (damageFlashImage != null)
+                    damageFlashImage.color = new Color(0.72f, 0f, 0f, _damageFlashAlpha);
+            }
+
             RefreshUi();
+        }
+
+        private void OnPlayerNameEndEdit(string value)
+        {
+            value = value.Trim();
+            if (value.Length < 2) value = "Player";
+            if (value.Length > 24) value = value[..24];
+            playerNameInput.SetTextWithoutNotify(value);
+            UnityEngine.PlayerPrefs.SetString("PlayerName", value);
+            UnityEngine.PlayerPrefs.Save();
+            if (value == _lastSyncedName) return;
+            _lastSyncedName = value;
+            var localPlayer = NetworkFirstPersonController.LocalPlayer;
+            localPlayer?.SetNameServerRpc(value);
         }
 
         private bool IsBlockingGameplayInput()
         {
+            if (playerNameInput != null && playerNameInput.isFocused)
+            {
+                return true;
+            }
+
             if (joinInput != null && joinInput.isFocused)
             {
                 return true;
@@ -105,6 +145,13 @@ namespace FriendSlop.UI
             var showMenu = !activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked;
 
             menuRoot.SetActive(showMenu);
+            if (namePanelRoot != null) namePanelRoot.SetActive(showMenu);
+            if (gameOverText != null)
+                gameOverText.gameObject.SetActive(showMenu && phase == RoundPhase.AllDead);
+            if (moneyPanelRect != null)
+                moneyPanelRect.gameObject.SetActive(activeRound);
+            if (timerText != null)
+                timerText.gameObject.SetActive(activeRound);
             LayoutHud();
 
             titleText.text = "FRIEND SLOP RETRIEVAL";
@@ -126,7 +173,7 @@ namespace FriendSlop.UI
             localJoinButton.gameObject.SetActive(!connected);
             joinInput.gameObject.SetActive(!connected);
             startButton.gameObject.SetActive(connected && isHost && phase == RoundPhase.Lobby);
-            restartButton.gameObject.SetActive(connected && isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed));
+            restartButton.gameObject.SetActive(connected && isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed || phase == RoundPhase.AllDead));
             shutdownButton.gameObject.SetActive(connected);
             lobbyQueueText.gameObject.SetActive(connected);
 
@@ -142,6 +189,7 @@ namespace FriendSlop.UI
                     RoundPhase.Active => string.Empty,
                     RoundPhase.Success => "ROCKET ASSEMBLED: next planet travel comes later.",
                     RoundPhase.Failed => "FAILED: the timer ate your paycheck.",
+                    RoundPhase.AllDead => $"WIPE OUT — everyone died.\nCollected ${round.CollectedValue.Value} toward quota.",
                     _ => string.Empty
                 };
             }
@@ -168,6 +216,9 @@ namespace FriendSlop.UI
                 carriedText.text = string.Empty;
             }
             UpdateStaminaBar(localPlayer, activeRound);
+            UpdateHealthBar(localPlayer, activeRound);
+            UpdateDeathOverlay(localPlayer, activeRound);
+            UpdateChargeBar(localPlayer, activeRound);
         }
 
         private void LayoutMenu(bool connected, bool isHost, RoundPhase phase)
@@ -220,7 +271,7 @@ namespace FriendSlop.UI
                 return;
             }
 
-            if (isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed))
+            if (isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed || phase == RoundPhase.AllDead))
             {
                 SetPosition(restartButton.GetComponent<RectTransform>(), new Vector2(0f, primaryButtonY));
                 SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, secondaryButtonY));
@@ -261,6 +312,27 @@ namespace FriendSlop.UI
 
             canvasObject.AddComponent<GraphicRaycaster>();
 
+            // Name input panel — top-right corner, visible whenever the menu is showing
+            var namePanel = CreatePanel("NamePanel", canvasObject.transform,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(0f, -18f), new Vector2(240f, 68f),
+                new Color(0.04f, 0.05f, 0.05f, 0.96f));
+            namePanelRoot = namePanel;
+            var nameLabel = CreateText("NameLabel", namePanel.transform, "YOUR NAME", 12,
+                TextAnchor.UpperCenter, new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(0f, -6f), new Vector2(-16f, 18f));
+            nameLabel.color = new Color(1f, 1f, 1f, 0.65f);
+            playerNameInput = CreateInput("PlayerNameInput", namePanel.transform, "Enter your name...", new Vector2(0f, -18f));
+            var nameInputRect = playerNameInput.GetComponent<RectTransform>();
+            nameInputRect.sizeDelta = new Vector2(220f, 32f);
+            nameInputRect.anchoredPosition = new Vector2(0f, -26f);
+            var savedName = UnityEngine.PlayerPrefs.GetString("PlayerName", "Player");
+            if (savedName.Length < 2) savedName = "Player";
+            playerNameInput.text = savedName;
+            _lastSyncedName = savedName;
+            playerNameInput.onEndEdit.AddListener(OnPlayerNameEndEdit);
+            namePanelRoot.SetActive(false);
+
             var hudRoot = CreatePanel("HUD", canvasObject.transform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(18f, -18f), new Vector2(760f, 180f), new Color(0f, 0f, 0f, 0f));
             var moneyPanel = CreatePanel("TeamMoneyPanel", canvasObject.transform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-18f, -18f), new Vector2(380f, 42f), new Color(0.02f, 0.03f, 0.03f, 0.72f));
             hudRect = hudRoot.GetComponent<RectTransform>();
@@ -298,6 +370,77 @@ namespace FriendSlop.UI
             var staminaOutline = staminaLabel.gameObject.AddComponent<Outline>();
             staminaOutline.effectColor = Color.black;
             staminaOutline.effectDistance = new Vector2(1f, -1f);
+
+            var healthPanel = CreatePanel("HealthPanel", canvasObject.transform,
+                new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(12f, 40f), new Vector2(320f, 22f),
+                new Color(0.02f, 0.02f, 0.02f, 0.8f));
+            healthPanelRect = healthPanel.GetComponent<RectTransform>();
+
+            var healthFillObject = new GameObject("HealthFill");
+            healthFillObject.transform.SetParent(healthPanel.transform, false);
+            healthFillRect = healthFillObject.AddComponent<RectTransform>();
+            healthFillRect.anchorMin = new Vector2(0f, 0.5f);
+            healthFillRect.anchorMax = new Vector2(0f, 0.5f);
+            healthFillRect.pivot = new Vector2(0f, 0.5f);
+            healthFillRect.anchoredPosition = new Vector2(2f, 0f);
+            healthFillRect.sizeDelta = new Vector2(316f, 18f);
+            healthFillImage = healthFillObject.AddComponent<Image>();
+            healthFillImage.color = new Color(0.82f, 0.25f, 0.25f, 0.92f);
+
+            healthLabelText = CreateText("HealthLabel", healthPanel.transform, "HP", 13,
+                TextAnchor.MiddleCenter, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            var healthOutline = healthLabelText.gameObject.AddComponent<Outline>();
+            healthOutline.effectColor = Color.black;
+            healthOutline.effectDistance = new Vector2(1f, -1f);
+
+            deathOverlayText = CreateText("DeathOverlay", canvasObject.transform, string.Empty, 26,
+                TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 60f), new Vector2(700f, 90f));
+            deathOverlayText.color = new Color(1f, 0.35f, 0.35f, 1f);
+            deathOverlayText.gameObject.SetActive(false);
+
+            var chargePanel = CreatePanel("ChargePanel", canvasObject.transform,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, -48f), new Vector2(180f, 14f),
+                new Color(0.02f, 0.02f, 0.02f, 0.80f));
+            chargePanelRect = chargePanel.GetComponent<RectTransform>();
+
+            var chargeFillObject = new GameObject("ChargeFill");
+            chargeFillObject.transform.SetParent(chargePanel.transform, false);
+            chargeFillRect = chargeFillObject.AddComponent<RectTransform>();
+            chargeFillRect.anchorMin = new Vector2(0f, 0.5f);
+            chargeFillRect.anchorMax = new Vector2(0f, 0.5f);
+            chargeFillRect.pivot = new Vector2(0f, 0.5f);
+            chargeFillRect.anchoredPosition = new Vector2(2f, 0f);
+            chargeFillRect.sizeDelta = new Vector2(176f, 10f);
+            chargeFillImage = chargeFillObject.AddComponent<Image>();
+            chargeFillImage.color = new Color(0.92f, 0.78f, 0.18f, 0.92f);
+
+            chargePanelRect.gameObject.SetActive(false);
+
+            // Game over title — big red text above the menu, only shown on AllDead
+            gameOverText = CreateText("GameOverTitle", canvasObject.transform, "GAME OVER",
+                72, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 230f), new Vector2(700f, 90f));
+            gameOverText.color = new Color(0.95f, 0.15f, 0.15f, 1f);
+            var gameOverOutline = gameOverText.gameObject.AddComponent<Outline>();
+            gameOverOutline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+            gameOverOutline.effectDistance = new Vector2(3f, -3f);
+            gameOverText.gameObject.SetActive(false);
+
+            // Damage flash overlay — full-screen red, triggered on hit, fades out over ~0.5s
+            var flashObj = new GameObject("DamageFlash");
+            flashObj.transform.SetParent(canvasObject.transform, false);
+            var flashRect = flashObj.AddComponent<RectTransform>();
+            flashRect.anchorMin = Vector2.zero;
+            flashRect.anchorMax = Vector2.one;
+            flashRect.offsetMin = Vector2.zero;
+            flashRect.offsetMax = Vector2.zero;
+            damageFlashImage = flashObj.AddComponent<Image>();
+            damageFlashImage.color = new Color(0.72f, 0f, 0f, 0f);
+            damageFlashImage.raycastTarget = false;
 
             menuRoot = CreatePanel("Menu", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(MaxMenuWidth, MinDisconnectedMenuHeight), new Color(0.04f, 0.05f, 0.05f, 0.96f));
             menuRect = menuRoot.GetComponent<RectTransform>();
@@ -486,6 +629,13 @@ namespace FriendSlop.UI
             return builder.ToString();
         }
 
+        public void ShowDamageFlash()
+        {
+            _damageFlashAlpha = 0.44f;
+            if (damageFlashImage != null)
+                damageFlashImage.color = new Color(0.72f, 0f, 0f, _damageFlashAlpha);
+        }
+
         private void QuitGame()
         {
 #if UNITY_EDITOR
@@ -514,7 +664,7 @@ namespace FriendSlop.UI
                 return;
             }
 
-            var show = activeRound && localPlayer != null;
+            var show = activeRound && localPlayer != null && !localPlayer.IsDeadLocally;
             if (staminaPanelRect.gameObject.activeSelf != show)
             {
                 staminaPanelRect.gameObject.SetActive(show);
@@ -542,6 +692,77 @@ namespace FriendSlop.UI
                 staminaFillImage.color = new Color(0.92f, 0.24f, 0.18f, 0.92f);   // red
             }
         }
-    
+
+        private void UpdateHealthBar(NetworkFirstPersonController localPlayer, bool activeRound)
+        {
+            if (healthPanelRect == null) return;
+
+            var show = activeRound && localPlayer != null && !localPlayer.IsDeadLocally;
+            if (healthPanelRect.gameObject.activeSelf != show)
+                healthPanelRect.gameObject.SetActive(show);
+
+            if (!show) return;
+
+            var percent = localPlayer.HealthPercent;
+            var innerWidth = Mathf.Max(0f, healthPanelRect.rect.width - 4f);
+            healthFillRect.sizeDelta = new Vector2(innerWidth * percent, 18f);
+
+            if (percent > 0.6f)
+                healthFillImage.color = new Color(0.25f, 0.82f, 0.35f, 0.92f);
+            else if (percent > 0.25f)
+                healthFillImage.color = new Color(0.92f, 0.78f, 0.18f, 0.92f);
+            else
+                healthFillImage.color = new Color(0.92f, 0.24f, 0.18f, 0.92f);
+
+            if (healthLabelText != null)
+                healthLabelText.text = $"HP  {localPlayer.CurrentHealth}/{localPlayer.MaxHealth}";
+        }
+
+        private void UpdateChargeBar(NetworkFirstPersonController localPlayer, bool activeRound)
+        {
+            if (chargePanelRect == null) return;
+
+            var interactor = localPlayer != null ? localPlayer.Interactor : null;
+            var show = activeRound && interactor != null && interactor.IsCharging && !localPlayer.IsDeadLocally;
+
+            if (chargePanelRect.gameObject.activeSelf != show)
+                chargePanelRect.gameObject.SetActive(show);
+
+            if (!show) return;
+
+            var charge = interactor.ChargePercent;
+            var innerWidth = Mathf.Max(0f, chargePanelRect.rect.width - 4f);
+            chargeFillRect.sizeDelta = new Vector2(innerWidth * charge, 10f);
+
+            chargeFillImage.color = charge > 0.7f
+                ? new Color(0.92f, 0.24f, 0.18f, 0.92f)
+                : new Color(0.92f, 0.78f, 0.18f, 0.92f);
+        }
+
+        private void UpdateDeathOverlay(NetworkFirstPersonController localPlayer, bool activeRound)
+        {
+            if (deathOverlayText == null) return;
+
+            var isDead = activeRound && localPlayer != null && localPlayer.IsDeadLocally;
+            if (!isDead)
+            {
+                if (deathOverlayText.gameObject.activeSelf) deathOverlayText.gameObject.SetActive(false);
+                return;
+            }
+
+            if (!deathOverlayText.gameObject.activeSelf) deathOverlayText.gameObject.SetActive(true);
+
+            if (localPlayer.IsSpectatingLocally)
+            {
+                var label = localPlayer.SpectatorTargetLabel;
+                deathOverlayText.text = label == "nobody"
+                    ? "YOU DIED\nno survivors to spectate"
+                    : $"SPECTATING: {label}\nE / Q to cycle";
+            }
+            else
+            {
+                deathOverlayText.text = "YOU DIED";
+            }
+        }
     }
 }
