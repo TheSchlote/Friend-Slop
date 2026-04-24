@@ -15,6 +15,7 @@ permissions:
   checks: write
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   UNITY_PROJECT_PATH: Space Game
   UNITY_VERSION: 6000.3.4f1
   BUILD_TARGET: StandaloneWindows64
@@ -26,7 +27,7 @@ env:
 jobs:
   editmode-tests:
     name: Run EditMode tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Check Unity license secrets
@@ -87,7 +88,7 @@ jobs:
 
   playmode-tests:
     name: Run PlayMode smoke tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: editmode-tests
 
     steps:
@@ -137,6 +138,7 @@ jobs:
           testMode: PlayMode
           artifactsPath: playmode-test-results
           githubToken: ${{ secrets.GITHUB_TOKEN }}
+          useHostNetwork: true
 
       - name: Upload PlayMode test results
         if: always()
@@ -149,7 +151,7 @@ jobs:
 
   build-windows:
     name: Build Windows player
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - editmode-tests
       - playmode-tests
@@ -247,7 +249,7 @@ jobs:
 
   deploy-itch:
     name: Deploy Windows build to itch.io
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: build-windows
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     environment:
