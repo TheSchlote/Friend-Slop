@@ -25,9 +25,8 @@ namespace FriendSlop.Networking
         private float nextLobbyHeartbeat;
 
         public string LastJoinCode { get; private set; } = string.Empty;
+        public string LastRelayRegion { get; private set; } = string.Empty;
         public string Status { get; private set; } = "Not connected.";
-
-        private static readonly char[] CodeSeparators = { '.', ':', '\\', '/' };
 
         private void Awake()
         {
@@ -67,23 +66,31 @@ namespace FriendSlop.Networking
             catch (Exception exception)
             {
                 Debug.LogWarning($"Relay host failed, falling back to local host: {exception.Message}");
-                StartLocalHost();
-                Status = $"Relay unavailable. Local host started on port {localPort}.";
+                if (StartLocalHost())
+                {
+                    Status = $"Relay unavailable. Local host started on port {localPort}.";
+                }
             }
         }
 
         public async void JoinOnline(string joinCodeOrAddress)
         {
-            var target = NormalizeJoinTarget(joinCodeOrAddress);
+            var target = JoinCodeUtility.NormalizeJoinTarget(joinCodeOrAddress);
             if (string.IsNullOrWhiteSpace(target))
             {
-                StartLocalClient("127.0.0.1");
+                Status = "Enter a Relay code, or use Join LAN for local testing.";
                 return;
             }
 
-            if (LooksLikeLanAddress(target))
+            if (JoinCodeUtility.LooksLikeLanAddress(target))
             {
                 StartLocalClient(target);
+                return;
+            }
+
+            if (!JoinCodeUtility.IsValidRelayJoinCode(target))
+            {
+                Status = $"'{target}' is not a valid Relay code. Codes are {JoinCodeUtility.MinRelayCodeLength}-{JoinCodeUtility.MaxRelayCodeLength} letters or numbers.";
                 return;
             }
 
@@ -93,32 +100,61 @@ namespace FriendSlop.Networking
             }
             catch (Exception exception)
             {
-                Debug.LogWarning($"Relay join failed: {exception.Message}");
-                Status = $"Join code failed: {exception.Message}";
+                Debug.LogWarning($"Relay join failed for code {target}: {exception}");
+                LastJoinCode = string.Empty;
+                LastRelayRegion = string.Empty;
+                Status = JoinCodeUtility.GetFriendlyJoinFailure(exception, target);
             }
         }
 
-        public void StartLocalHost()
+        public bool StartLocalHost()
         {
             var networkManager = NetworkManager.Singleton;
-            if (networkManager == null || networkManager.IsListening)
+            if (networkManager == null)
             {
-                return;
+                Status = "Network Manager missing.";
+                return false;
             }
 
-            var transport = networkManager.GetComponent<UnityTransport>();
+            if (networkManager.IsListening)
+            {
+                Status = "A session is already running.";
+                return false;
+            }
+
+            if (!TryGetTransport(networkManager, out var transport))
+            {
+                return false;
+            }
+
             transport.SetConnectionData("127.0.0.1", localPort, "0.0.0.0");
+            if (!networkManager.StartHost())
+            {
+                LastJoinCode = string.Empty;
+                LastRelayRegion = string.Empty;
+                Status = $"Failed to start local host on port {localPort}.";
+                return false;
+            }
+
             LastJoinCode = "LAN: " + GetLocalAddressHint();
+            LastRelayRegion = "LAN";
             Status = $"Local host running. Join by LAN IP on port {localPort}.";
-            networkManager.StartHost();
+            return true;
         }
 
-        public void StartLocalClient(string address)
+        public bool StartLocalClient(string address)
         {
             var networkManager = NetworkManager.Singleton;
-            if (networkManager == null || networkManager.IsListening)
+            if (networkManager == null)
             {
-                return;
+                Status = "Network Manager missing.";
+                return false;
+            }
+
+            if (networkManager.IsListening)
+            {
+                Status = "A session is already running.";
+                return false;
             }
 
             if (string.IsNullOrWhiteSpace(address))
@@ -126,11 +162,24 @@ namespace FriendSlop.Networking
                 address = "127.0.0.1";
             }
 
-            var transport = networkManager.GetComponent<UnityTransport>();
+            if (!TryGetTransport(networkManager, out var transport))
+            {
+                return false;
+            }
+
             transport.SetConnectionData(address, localPort);
+            if (!networkManager.StartClient())
+            {
+                LastJoinCode = string.Empty;
+                LastRelayRegion = string.Empty;
+                Status = $"Failed to start a client for {address}:{localPort}.";
+                return false;
+            }
+
             LastJoinCode = string.Empty;
+            LastRelayRegion = "LAN";
             Status = $"Joining {address}:{localPort}...";
-            networkManager.StartClient();
+            return true;
         }
 
         public async void Shutdown()
@@ -143,15 +192,21 @@ namespace FriendSlop.Networking
             }
 
             LastJoinCode = string.Empty;
+            LastRelayRegion = string.Empty;
             Status = "Not connected.";
         }
 
         private async Task HostRelayAsync()
         {
             var networkManager = NetworkManager.Singleton;
-            if (networkManager == null || networkManager.IsListening)
+            if (networkManager == null)
             {
-                return;
+                throw new InvalidOperationException("Network Manager missing.");
+            }
+
+            if (networkManager.IsListening)
+            {
+                throw new InvalidOperationException("A session is already running.");
             }
 
             Status = "Signing in to Unity services...";
@@ -160,8 +215,13 @@ namespace FriendSlop.Networking
             Status = "Creating Relay allocation...";
             var allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers - 1);
             LastJoinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+            LastRelayRegion = allocation.Region;
 
-            var transport = networkManager.GetComponent<UnityTransport>();
+            if (!TryGetTransport(networkManager, out var transport))
+            {
+                throw new InvalidOperationException(Status);
+            }
+
             transport.SetRelayServerData(allocation.ToRelayServerData("dtls"));
 
             try
@@ -183,31 +243,55 @@ namespace FriendSlop.Networking
                 Debug.LogWarning($"Lobby creation failed; continuing with Relay code only: {exception.Message}");
             }
 
+            if (!networkManager.StartHost())
+            {
+                await LeaveLobbyAsync();
+                LastJoinCode = string.Empty;
+                LastRelayRegion = string.Empty;
+                Status = "Failed to start Relay host.";
+                throw new InvalidOperationException("Netcode failed to start Relay host.");
+            }
+
             Status = $"Relay host running. Code: {LastJoinCode}";
-            networkManager.StartHost();
         }
 
         private async Task JoinRelayAsync(string joinCode)
         {
             var networkManager = NetworkManager.Singleton;
-            if (networkManager == null || networkManager.IsListening)
+            if (networkManager == null)
             {
-                return;
+                throw new InvalidOperationException("Network Manager missing.");
             }
 
-            joinCode = NormalizeJoinCode(joinCode);
+            if (networkManager.IsListening)
+            {
+                throw new InvalidOperationException("A session is already running.");
+            }
+
+            joinCode = JoinCodeUtility.NormalizeJoinCode(joinCode);
             Status = "Signing in to Unity services...";
             await EnsureSignedInAsync();
 
             Status = $"Joining Relay code {joinCode}...";
             var joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
+            LastRelayRegion = joinAllocation.Region;
 
-            var transport = networkManager.GetComponent<UnityTransport>();
+            if (!TryGetTransport(networkManager, out var transport))
+            {
+                throw new InvalidOperationException(Status);
+            }
+
             transport.SetRelayServerData(joinAllocation.ToRelayServerData("dtls"));
+            if (!networkManager.StartClient())
+            {
+                LastJoinCode = string.Empty;
+                LastRelayRegion = string.Empty;
+                Status = $"Failed to join Relay code {joinCode}.";
+                throw new InvalidOperationException("Netcode failed to start Relay client.");
+            }
 
             LastJoinCode = joinCode;
             Status = $"Joining Relay code {joinCode}...";
-            networkManager.StartClient();
         }
 
         private static async Task EnsureSignedInAsync()
@@ -252,6 +336,18 @@ namespace FriendSlop.Networking
             _ = LeaveLobbyAsync();
         }
 
+        private bool TryGetTransport(NetworkManager networkManager, out UnityTransport transport)
+        {
+            transport = networkManager != null ? networkManager.GetComponent<UnityTransport>() : null;
+            if (transport != null)
+            {
+                return true;
+            }
+
+            Status = "Unity Transport is missing on the Network Manager.";
+            return false;
+        }
+
         private static string GetLocalAddressHint()
         {
             try
@@ -271,53 +367,6 @@ namespace FriendSlop.Networking
             }
 
             return "127.0.0.1";
-        }
-
-        private static bool LooksLikeLanAddress(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            var trimmed = value.Trim();
-            if (trimmed.Equals("localhost", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            return trimmed.IndexOfAny(CodeSeparators) >= 0;
-        }
-
-        private static string NormalizeJoinTarget(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return string.Empty;
-            }
-
-            var trimmed = value.Trim();
-            if (trimmed.StartsWith("join code:", StringComparison.OrdinalIgnoreCase))
-            {
-                trimmed = trimmed.Substring("join code:".Length).Trim();
-            }
-            else if (trimmed.StartsWith("code:", StringComparison.OrdinalIgnoreCase))
-            {
-                trimmed = trimmed.Substring("code:".Length).Trim();
-            }
-            else if (trimmed.StartsWith("lan:", StringComparison.OrdinalIgnoreCase))
-            {
-                trimmed = trimmed.Substring("lan:".Length).Trim();
-            }
-
-            return LooksLikeLanAddress(trimmed) ? trimmed : NormalizeJoinCode(trimmed);
-        }
-
-        private static string NormalizeJoinCode(string joinCode)
-        {
-            return string.IsNullOrWhiteSpace(joinCode)
-                ? string.Empty
-                : joinCode.Trim().ToUpperInvariant();
         }
     }
 }

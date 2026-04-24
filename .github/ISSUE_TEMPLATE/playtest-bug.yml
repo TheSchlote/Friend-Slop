@@ -1,0 +1,61 @@
+name: Playtest bug
+description: Report a bug from a Friend Slop playtest build.
+title: "[Playtest Bug]: "
+labels:
+  - bug
+  - playtest
+body:
+  - type: input
+    id: version
+    attributes:
+      label: In-game version
+      description: Copy the version from the lower-right corner of the game, for example v0.1.42.
+      placeholder: v0.1.42
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Session type
+      options:
+        - Host Online
+        - Join Code
+        - Host LAN
+        - Join LAN
+        - Solo/editor
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug in plain language.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the shortest sequence that triggers the bug.
+      placeholder: |
+        1. Host online
+        2. Join with code ABC123
+        3. Pick up the engine
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: What did you expect to happen instead?
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Screenshots, video, or logs
+      description: Attach screenshots/video or paste relevant console/log text.
+    validations:
+      required: false

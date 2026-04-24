@@ -7,7 +7,10 @@ Workflow file: `.github/workflows/build-and-deploy-itch.yml`
 ## What It Does
 
 - Builds the Unity project in `Space Game` with Unity `6000.3.4f1`.
+- Runs EditMode tests and a PlayMode scene smoke test before building.
 - Targets `StandaloneWindows64`.
+- Stamps each CI build as `0.1.<GitHub run number>`, which appears in-game and on itch.io.
+- Writes `PLAYTEST_NOTES.txt` into each build with the version, commit, workflow run, and recent commits.
 - Uploads the build as a GitHub Actions artifact.
 - Pushes the build to `theschlote/<game-slug>:windows` when `BUTLER_API_KEY` is configured.
 

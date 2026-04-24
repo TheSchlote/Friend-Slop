@@ -8,6 +8,8 @@ Unity prototype for a small co-op sphere-world salvage run.
 - Unity project folder: `Space Game`
 - Main scene: `Assets/Scenes/FriendSlopPrototype.unity`
 - CI/CD setup: `docs/itch-cicd.md`
+- Build version: `0.1.x`, with GitHub Actions setting `x` to the workflow run number
+- Debug info: press `F3` in game to show version/session details for playtest reports
 
 ## Test Loop
 
@@ -30,6 +32,7 @@ Unity prototype for a small co-op sphere-world salvage run.
 - `Q`: drop carried item
 - Right mouse: throw carried item
 - `Tab`: toggle menu
+- `F3`: toggle debug info
 - `Esc`: unlock mouse
 
 ## Current Goal
@@ -44,4 +47,4 @@ When all three parts are installed, the rocket is assembled. Flying to the next 
 
 ## Playtest Builds
 
-GitHub Actions can build the Windows player and deploy it to itch.io with butler. See `docs/itch-cicd.md` for the one-time GitHub secret and itch.io page setup.
+GitHub Actions runs EditMode tests, builds the Windows player, and deploys it to itch.io with butler. See `docs/itch-cicd.md` for the one-time GitHub secret and itch.io page setup.
