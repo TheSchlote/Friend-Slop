@@ -9,18 +9,34 @@ namespace FriendSlop.Hazards
     [RequireComponent(typeof(NetworkObject))]
     public class RoamingMonster : NetworkBehaviour
     {
-        [SerializeField] private float detectionRange = 22f;
+        [SerializeField] private float detectionRange = 30f;
         [SerializeField] private float attackDistance = 2f;
-        [SerializeField] private float moveSpeed = 4.2f;
+        [SerializeField] private float moveSpeed = 3.78f;
         [SerializeField] private float knockbackStrength = 9f;
         [SerializeField] private float attackCooldown = 2f;
         [SerializeField] private float roamRadius = 8f;
         [SerializeField] private float surfaceHeight = 0.65f;
         [SerializeField] private float rotationSharpness = 10f;
+        [SerializeField] private float investigateDuration = 7f;
+        [SerializeField] private float investigateWanderRadius = 5f;
+        [SerializeField] private float roamPauseMin = 5f;
+        [SerializeField] private float roamPauseMax = 10f;
+        [SerializeField] private float spottedPauseMin = 0.4f;
+        [SerializeField] private float spottedPauseMax = .8f;
+        [SerializeField] private float visionAngle = 60f;
+        [SerializeField] private float visionOriginHeight = 1.2f;
+
+        private enum State { Roaming, Chasing, Investigating }
 
         private Vector3 spawnPosition;
         private Vector3 roamTarget;
         private float nextAttackTime;
+        private State _state = State.Roaming;
+        private Vector3 _lastKnownPosition;
+        private float _investigateTimer;
+        private Vector3 _investigateTarget;
+        private float _roamPauseTimer;
+        private float _spottedPauseTimer;
 
         private void Awake()
         {
@@ -52,20 +68,70 @@ namespace FriendSlop.Hazards
                 return;
             }
 
-            var target = FindNearestPlayer();
-            if (target != null)
-            {
-                MoveToward(world, target.transform.position);
-                TryAttack(world, target);
-                return;
-            }
+            var nearest = FindNearestPlayer(world);
 
-            if (Vector3.Distance(transform.position, roamTarget) < 1.1f)
+            switch (_state)
             {
-                PickRoamTarget(world);
-            }
+                case State.Roaming:
+                    if (nearest != null)
+                    {
+                        _state = State.Chasing;
+                        _spottedPauseTimer = Random.Range(spottedPauseMin, spottedPauseMax);
+                        break;
+                    }
+                    if (_roamPauseTimer > 0f)
+                    {
+                        _roamPauseTimer -= Time.deltaTime;
+                        break;
+                    }
+                    if (Vector3.Distance(transform.position, roamTarget) < 1.1f)
+                    {
+                        _roamPauseTimer = Random.Range(roamPauseMin, roamPauseMax);
+                        PickRoamTarget(world);
+                        break;
+                    }
+                    MoveToward(world, roamTarget);
+                    break;
 
-            MoveToward(world, roamTarget);
+                case State.Chasing:
+                    if (_spottedPauseTimer > 0f)
+                    {
+                        _spottedPauseTimer -= Time.deltaTime;
+                        break;
+                    }
+                    if (nearest != null)
+                    {
+                        _lastKnownPosition = nearest.transform.position;
+                        MoveToward(world, nearest.transform.position);
+                        TryAttack(world, nearest);
+                    }
+                    else
+                    {
+                        _state = State.Investigating;
+                        _investigateTimer = investigateDuration;
+                        PickInvestigateTarget(world);
+                    }
+                    break;
+
+                case State.Investigating:
+                    if (nearest != null)
+                    {
+                        _state = State.Chasing;
+                        _spottedPauseTimer = 0f;
+                        goto case State.Chasing;
+                    }
+                    _investigateTimer -= Time.deltaTime;
+                    if (_investigateTimer <= 0f)
+                    {
+                        _state = State.Roaming;
+                        PickRoamTarget(world);
+                        break;
+                    }
+                    if (Vector3.Distance(transform.position, _investigateTarget) < 1.1f)
+                        PickInvestigateTarget(world);
+                    MoveToward(world, _investigateTarget);
+                    break;
+            }
         }
 
         public void ServerReset()
@@ -77,32 +143,61 @@ namespace FriendSlop.Hazards
 
             transform.position = spawnPosition;
             nextAttackTime = 0f;
+            _state = State.Roaming;
+            _investigateTimer = 0f;
+            _roamPauseTimer = 0f;
             var world = SphereWorld.GetClosest(transform.position);
             AlignToSurface(world, transform.forward, 1f);
             PickRoamTarget(world);
         }
 
-        private NetworkFirstPersonController FindNearestPlayer()
+        private NetworkFirstPersonController FindNearestPlayer(SphereWorld world)
         {
             NetworkFirstPersonController bestPlayer = null;
             var bestDistance = detectionRange;
 
+            var up = world.GetUp(transform.position);
+            var surfaceForward = Vector3.ProjectOnPlane(transform.forward, up);
+            if (surfaceForward.sqrMagnitude < 0.001f)
+                surfaceForward = transform.forward;
+            else
+                surfaceForward.Normalize();
+
             foreach (var player in NetworkFirstPersonController.ActivePlayers)
             {
                 if (player == null || !player.IsSpawned)
-                {
                     continue;
-                }
 
                 var distance = Vector3.Distance(transform.position, player.transform.position);
-                if (distance < bestDistance)
-                {
-                    bestDistance = distance;
-                    bestPlayer = player;
-                }
+                if (distance >= bestDistance)
+                    continue;
+
+                var toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, up);
+                if (toPlayer.sqrMagnitude < 0.001f)
+                    continue;
+
+                if (Vector3.Angle(surfaceForward, toPlayer) > visionAngle * 0.5f)
+                    continue;
+
+                if (IsOccluded(world, player))
+                    continue;
+
+                bestDistance = distance;
+                bestPlayer = player;
             }
 
             return bestPlayer;
+        }
+
+        private bool IsOccluded(SphereWorld world, NetworkFirstPersonController player)
+        {
+            var origin      = transform.position              + world.GetUp(transform.position)              * visionOriginHeight;
+            var destination = player.transform.position + world.GetUp(player.transform.position) * visionOriginHeight;
+
+            if (!Physics.Linecast(origin, destination, out var hit))
+                return false;
+
+            return hit.collider.transform.root != player.transform.root;
         }
 
         private void MoveToward(SphereWorld world, Vector3 targetPosition)
@@ -151,6 +246,18 @@ namespace FriendSlop.Hazards
 
             var offsetPoint = spawnPosition + Random.onUnitSphere * roamRadius;
             roamTarget = world.GetSurfacePoint(world.GetUp(offsetPoint), surfaceHeight);
+        }
+
+        private void PickInvestigateTarget(SphereWorld world)
+        {
+            if (world == null)
+            {
+                _investigateTarget = _lastKnownPosition;
+                return;
+            }
+
+            var offsetPoint = _lastKnownPosition + Random.onUnitSphere * investigateWanderRadius;
+            _investigateTarget = world.GetSurfacePoint(world.GetUp(offsetPoint), surfaceHeight);
         }
 
         private void AlignToSurface(SphereWorld world, Vector3 forwardHint, float deltaTime)
