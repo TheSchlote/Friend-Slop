@@ -18,6 +18,7 @@ namespace FriendSlop.Player
         private NetworkLootItem focusedLoot;
 
         public string CurrentPrompt { get; private set; }
+        public float InteractDistance => interactDistance;
 
         private void Awake()
         {

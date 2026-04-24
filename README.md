@@ -47,4 +47,4 @@ When all three parts are installed, the rocket is assembled. Flying to the next 
 
 ## Playtest Builds
 
-GitHub Actions runs EditMode tests, builds the Windows player, and deploys it to itch.io with butler. See `docs/itch-cicd.md` for the one-time GitHub secret and itch.io page setup.
+GitHub Actions runs EditMode tests, a PlayMode smoke test, and the Windows build on pull requests, merge groups, and `main`. itch.io deployment only runs from `main` pushes or manual dispatches, and the `itch-production` environment can require approval before the butler push uses the deployment secret. See `docs/itch-cicd.md` for the current setup.

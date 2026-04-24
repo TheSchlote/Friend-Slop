@@ -75,6 +75,14 @@ namespace FriendSlop.UI
             BuildUi();
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Instance = null;
+            }
+        }
+
         private void Update()
         {
             if (Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame)
@@ -109,6 +117,7 @@ namespace FriendSlop.UI
             var round = RoundManager.Instance;
             var connected = networkManager != null && networkManager.IsListening;
             var isHost = networkManager != null && networkManager.IsHost;
+            var sessionBusy = session != null && session.IsBusy;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var activeRound = connected && phase == RoundPhase.Active;
             var showMenu = !activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked;
@@ -138,6 +147,14 @@ namespace FriendSlop.UI
             restartButton.gameObject.SetActive(connected && isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed));
             shutdownButton.gameObject.SetActive(connected);
             lobbyQueueText.gameObject.SetActive(connected);
+            hostButton.interactable = !sessionBusy;
+            joinButton.interactable = !sessionBusy;
+            localHostButton.interactable = !sessionBusy;
+            localJoinButton.interactable = !sessionBusy;
+            startButton.interactable = !sessionBusy;
+            restartButton.interactable = !sessionBusy;
+            shutdownButton.interactable = !sessionBusy;
+            joinInput.interactable = !sessionBusy;
 
             LayoutMenu(connected, isHost, phase);
 
@@ -328,22 +345,94 @@ namespace FriendSlop.UI
             lobbyQueueText = CreateText("LobbyQueue", menuRoot.transform, string.Empty, 15, TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -176f), new Vector2(440f, 82f));
 
             joinInput = CreateInput("JoinInput", menuRoot.transform, "Relay code or LAN IP", new Vector2(0f, 68f));
-            hostButton = CreateButton("Host Online", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.HostOnline());
-            joinButton = CreateButton("Join Code", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.JoinOnline(joinInput.text));
-            localHostButton = CreateButton("Host LAN", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.StartLocalHost());
-            localJoinButton = CreateButton("Join LAN", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.StartLocalClient(string.IsNullOrWhiteSpace(joinInput.text) ? "127.0.0.1" : joinInput.text));
-            startButton = CreateButton("Start Round", menuRoot.transform, Vector2.zero, () =>
-            {
-                RoundManager.Instance?.RequestStartRoundServerRpc();
-                LockGameplayCursor();
-            });
-            restartButton = CreateButton("Restart Round", menuRoot.transform, Vector2.zero, () =>
-            {
-                RoundManager.Instance?.RequestRestartRoundServerRpc();
-                LockGameplayCursor();
-            });
-            shutdownButton = CreateButton("Leave Session", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.Shutdown());
+            hostButton = CreateButton("Host Online", menuRoot.transform, Vector2.zero, HandleHostOnlineClick);
+            joinButton = CreateButton("Join Code", menuRoot.transform, Vector2.zero, HandleJoinOnlineClick);
+            localHostButton = CreateButton("Host LAN", menuRoot.transform, Vector2.zero, HandleHostLanClick);
+            localJoinButton = CreateButton("Join LAN", menuRoot.transform, Vector2.zero, HandleJoinLanClick);
+            startButton = CreateButton("Start Round", menuRoot.transform, Vector2.zero, HandleStartRoundClick);
+            restartButton = CreateButton("Restart Round", menuRoot.transform, Vector2.zero, HandleRestartRoundClick);
+            shutdownButton = CreateButton("Leave Session", menuRoot.transform, Vector2.zero, HandleLeaveSessionClick);
             quitButton = CreateButton("Quit", menuRoot.transform, Vector2.zero, QuitGame);
+        }
+
+        private void HandleHostOnlineClick()
+        {
+            var session = NetworkSessionManager.Instance;
+            if (session == null)
+            {
+                return;
+            }
+
+            session.HostOnline();
+        }
+
+        private void HandleJoinOnlineClick()
+        {
+            var session = NetworkSessionManager.Instance;
+            if (session == null)
+            {
+                return;
+            }
+
+            session.JoinOnline(joinInput != null ? joinInput.text : string.Empty);
+        }
+
+        private void HandleHostLanClick()
+        {
+            var session = NetworkSessionManager.Instance;
+            if (session == null)
+            {
+                return;
+            }
+
+            session.StartLocalHost();
+        }
+
+        private void HandleJoinLanClick()
+        {
+            var session = NetworkSessionManager.Instance;
+            if (session == null)
+            {
+                return;
+            }
+
+            var address = joinInput != null && !string.IsNullOrWhiteSpace(joinInput.text) ? joinInput.text : "127.0.0.1";
+            session.StartLocalClient(address);
+        }
+
+        private void HandleStartRoundClick()
+        {
+            var round = RoundManager.Instance;
+            if (round == null)
+            {
+                return;
+            }
+
+            round.RequestStartRoundServerRpc();
+            LockGameplayCursor();
+        }
+
+        private void HandleRestartRoundClick()
+        {
+            var round = RoundManager.Instance;
+            if (round == null)
+            {
+                return;
+            }
+
+            round.RequestRestartRoundServerRpc();
+            LockGameplayCursor();
+        }
+
+        private void HandleLeaveSessionClick()
+        {
+            var session = NetworkSessionManager.Instance;
+            if (session == null)
+            {
+                return;
+            }
+
+            session.Shutdown();
         }
 
         private GameObject CreatePanel(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, Vector2 size, Color color)

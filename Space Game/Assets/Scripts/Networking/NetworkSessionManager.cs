@@ -23,10 +23,12 @@ namespace FriendSlop.Networking
 
         private Lobby currentLobby;
         private float nextLobbyHeartbeat;
+        private bool heartbeatInFlight;
 
         public string LastJoinCode { get; private set; } = string.Empty;
         public string LastRelayRegion { get; private set; } = string.Empty;
         public string Status { get; private set; } = "Not connected.";
+        public bool IsBusy { get; private set; }
 
         private void Awake()
         {
@@ -39,25 +41,96 @@ namespace FriendSlop.Networking
             Instance = this;
         }
 
-        private async void Update()
+        private void Update()
         {
-            if (currentLobby == null || Time.realtimeSinceStartup < nextLobbyHeartbeat)
+            if (currentLobby == null || heartbeatInFlight || Time.realtimeSinceStartup < nextLobbyHeartbeat)
             {
                 return;
             }
 
             nextLobbyHeartbeat = Time.realtimeSinceStartup + 15f;
+            _ = SendLobbyHeartbeatAsync(currentLobby.Id);
+        }
+
+        private async Task SendLobbyHeartbeatAsync(string lobbyId)
+        {
+            heartbeatInFlight = true;
             try
             {
-                await LobbyService.Instance.SendHeartbeatPingAsync(currentLobby.Id);
+                await LobbyService.Instance.SendHeartbeatPingAsync(lobbyId);
             }
             catch (Exception exception)
             {
                 Debug.LogWarning($"Lobby heartbeat failed: {exception.Message}");
             }
+            finally
+            {
+                heartbeatInFlight = false;
+            }
         }
 
-        public async void HostOnline()
+        public void HostOnline()
+        {
+            _ = RunSessionOperationAsync(HostOnlineAsync);
+        }
+
+        public void JoinOnline(string joinCodeOrAddress)
+        {
+            _ = RunSessionOperationAsync(() => JoinOnlineAsync(joinCodeOrAddress));
+        }
+
+        public bool StartLocalHost()
+        {
+            if (IsBusy)
+            {
+                Status = "Please wait for the current session request to finish.";
+                return false;
+            }
+
+            return StartLocalHostInternal();
+        }
+
+        public bool StartLocalClient(string address)
+        {
+            if (IsBusy)
+            {
+                Status = "Please wait for the current session request to finish.";
+                return false;
+            }
+
+            return StartLocalClientInternal(address);
+        }
+
+        public void Shutdown()
+        {
+            _ = RunSessionOperationAsync(ShutdownAsync);
+        }
+
+        private async Task RunSessionOperationAsync(Func<Task> operation)
+        {
+            if (IsBusy)
+            {
+                Status = "Please wait for the current session request to finish.";
+                return;
+            }
+
+            IsBusy = true;
+            try
+            {
+                await operation();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"Unexpected session operation failure: {exception}");
+                Status = "Session request failed unexpectedly.";
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        private async Task HostOnlineAsync()
         {
             try
             {
@@ -66,14 +139,14 @@ namespace FriendSlop.Networking
             catch (Exception exception)
             {
                 Debug.LogWarning($"Relay host failed, falling back to local host: {exception.Message}");
-                if (StartLocalHost())
+                if (StartLocalHostInternal())
                 {
                     Status = $"Relay unavailable. Local host started on port {localPort}.";
                 }
             }
         }
 
-        public async void JoinOnline(string joinCodeOrAddress)
+        private async Task JoinOnlineAsync(string joinCodeOrAddress)
         {
             var target = JoinCodeUtility.NormalizeJoinTarget(joinCodeOrAddress);
             if (string.IsNullOrWhiteSpace(target))
@@ -84,7 +157,7 @@ namespace FriendSlop.Networking
 
             if (JoinCodeUtility.LooksLikeLanAddress(target))
             {
-                StartLocalClient(target);
+                StartLocalClientInternal(target);
                 return;
             }
 
@@ -107,7 +180,7 @@ namespace FriendSlop.Networking
             }
         }
 
-        public bool StartLocalHost()
+        private bool StartLocalHostInternal()
         {
             var networkManager = NetworkManager.Singleton;
             if (networkManager == null)
@@ -142,7 +215,7 @@ namespace FriendSlop.Networking
             return true;
         }
 
-        public bool StartLocalClient(string address)
+        private bool StartLocalClientInternal(string address)
         {
             var networkManager = NetworkManager.Singleton;
             if (networkManager == null)
@@ -182,7 +255,7 @@ namespace FriendSlop.Networking
             return true;
         }
 
-        public async void Shutdown()
+        private async Task ShutdownAsync()
         {
             await LeaveLobbyAsync();
 
@@ -334,6 +407,14 @@ namespace FriendSlop.Networking
         private void OnApplicationQuit()
         {
             _ = LeaveLobbyAsync();
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Instance = null;
+            }
         }
 
         private bool TryGetTransport(NetworkManager networkManager, out UnityTransport transport)

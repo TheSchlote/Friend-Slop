@@ -40,6 +40,7 @@ namespace FriendSlop.Round
 
         public override void OnNetworkSpawn()
         {
+            Instance = this;
             if (NetworkManager != null)
             {
                 NetworkManager.OnClientDisconnectCallback += HandleClientDisconnect;
@@ -59,6 +60,21 @@ namespace FriendSlop.Round
             {
                 NetworkManager.OnClientDisconnectCallback -= HandleClientDisconnect;
             }
+
+            if (Instance == this)
+            {
+                Instance = null;
+            }
+        }
+
+        public override void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Instance = null;
+            }
+
+            base.OnDestroy();
         }
 
         private void Update()

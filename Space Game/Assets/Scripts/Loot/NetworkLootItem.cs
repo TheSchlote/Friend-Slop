@@ -12,6 +12,8 @@ namespace FriendSlop.Loot
     public class NetworkLootItem : NetworkBehaviour, IFriendSlopInteractable
     {
         private const ulong NoCarrier = ulong.MaxValue;
+        private const float DefaultInteractDistance = 3.2f;
+        private const float ServerPickupDistancePadding = 0.75f;
 
         [SerializeField] private string itemName = "Weird Junk";
         [SerializeField] private int value = 50;
@@ -144,14 +146,9 @@ namespace FriendSlop.Loot
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void RequestPickupServerRpc(RpcParams rpcParams = default)
         {
-            if (IsDeposited.Value || IsCarried.Value)
-            {
-                return;
-            }
-
             var senderId = rpcParams.Receive.SenderClientId;
             var player = NetworkFirstPersonController.FindByClientId(senderId);
-            if (player == null || player.HeldItem != null)
+            if (!CanServerPickup(player))
             {
                 return;
             }
@@ -160,6 +157,79 @@ namespace FriendSlop.Loot
             CarrierClientId.Value = senderId;
             ApplyPhysicsState();
             player.SetHeldItem(this);
+        }
+
+        private bool CanServerPickup(NetworkFirstPersonController player)
+        {
+            if (player == null || player.HeldItem != null || IsDeposited.Value || IsCarried.Value)
+            {
+                return false;
+            }
+
+            if (RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active)
+            {
+                return false;
+            }
+
+            var origin = player.PlayerCamera != null
+                ? player.PlayerCamera.transform.position
+                : player.transform.position + player.transform.up * 0.75f;
+            var target = GetServerPickupTarget(origin);
+            var interactDistance = player.Interactor != null ? player.Interactor.InteractDistance : DefaultInteractDistance;
+            var maxDistance = interactDistance + ServerPickupDistancePadding;
+            if ((target - origin).sqrMagnitude > maxDistance * maxDistance)
+            {
+                return false;
+            }
+
+            return HasServerLineOfSight(player, origin, target);
+        }
+
+        private Vector3 GetServerPickupTarget(Vector3 origin)
+        {
+            if (colliders != null)
+            {
+                foreach (var itemCollider in colliders)
+                {
+                    if (itemCollider != null && itemCollider.enabled)
+                    {
+                        return itemCollider.ClosestPoint(origin);
+                    }
+                }
+            }
+
+            return transform.position;
+        }
+
+        private bool HasServerLineOfSight(NetworkFirstPersonController player, Vector3 origin, Vector3 target)
+        {
+            var direction = target - origin;
+            var distance = direction.magnitude;
+            if (distance <= 0.01f)
+            {
+                return true;
+            }
+
+            var hits = Physics.RaycastAll(origin, direction / distance, distance, ~0, QueryTriggerInteraction.Ignore);
+            System.Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+
+            foreach (var hit in hits)
+            {
+                var hitCollider = hit.collider;
+                if (hitCollider == null)
+                {
+                    continue;
+                }
+
+                if (hitCollider.GetComponentInParent<NetworkFirstPersonController>() == player)
+                {
+                    continue;
+                }
+
+                return hitCollider.GetComponentInParent<NetworkLootItem>() == this;
+            }
+
+            return true;
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
