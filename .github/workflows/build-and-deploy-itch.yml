@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -203,6 +207,10 @@ jobs:
           versioning: Custom
           version: ${{ env.BUILD_VERSION }}
 
+      - name: Fix build output ownership
+        shell: bash
+        run: sudo chown -R "$(id -u):$(id -g)" build
+
       - name: Write playtest notes
         shell: bash
         run: |
@@ -241,6 +249,10 @@ jobs:
     name: Deploy Windows build to itch.io
     runs-on: ubuntu-latest
     needs: build-windows
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    environment:
+      name: itch-production
+      url: https://theschlote.itch.io/friend-slop
     env:
       BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
       BUTLER_API_KEY_PRESENT: ${{ secrets.BUTLER_API_KEY != '' }}
