@@ -355,7 +355,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 324063030
+  GlobalObjectIdHash: 1980709856
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -379,7 +379,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e99be52358ae35144bf859e3c567f27b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Networking.ClientNetworkTransform
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Networking.ClientNetworkTransform
   ShowTopMostFoldoutHeaderGroup: 1
   NetworkTransformExpanded: 0
   AutoOwnerAuthorityTickOffset: 1
@@ -450,7 +450,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e97885aa07541e34d9082403ee128ce9, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.NetworkFirstPersonController
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Player.NetworkFirstPersonController
   ShowTopMostFoldoutHeaderGroup: 1
   playerCamera: {fileID: 7002776953320039885}
   cameraRoot: {fileID: 8413589868566443427}
@@ -470,6 +470,15 @@ MonoBehaviour:
   surfaceAlignSpeed: 14
   groundProbeDistance: 0.22
   terminalFallSpeed: 18
+  maxStamina: 100
+  sprintStaminaDrainPerSecond: 25
+  staminaRegenPerSecond: 18
+  staminaRegenDelay: 0.6
+  minStaminaToStartSprint: 20
+  stunTiltAngle: 42
+  stunTiltRecoverSpeed: 80
+  maxHealth: 100
+  carryPlayerSpeedMultiplier: 0.7
   enablePhysicsDiagnostics: 1
   diagnosticSampleInterval: 0.2
   diagnosticTouchPadding: 0.08
@@ -477,6 +486,16 @@ MonoBehaviour:
   diagnosticColliderMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  IsBeingCarried:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
+  CarriedByClientId:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 18446744073709551615
 --- !u!114 &7178644401830304316
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -488,10 +507,13 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e1a9061fb65d764a94526e1c80181e6, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.PlayerInteractor
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Player.PlayerInteractor
   ShowTopMostFoldoutHeaderGroup: 1
   interactDistance: 3.2
   throwImpulse: 8
+  maxChargeDuration: 1.8
+  chargeThrowMultiplier: 3.5
+  carryPlayerDistance: 1.2
   interactMask:
     serializedVersion: 2
     m_Bits: 4294967295

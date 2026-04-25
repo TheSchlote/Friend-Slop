@@ -8,6 +8,9 @@ namespace FriendSlop.Core
         private readonly NetworkVariable<Color> _colorA = new(Color.green);
         private readonly NetworkVariable<Color> _colorB = new(Color.blue);
 
+        public Color SouthColor => _colorA.Value;
+        public Color NorthColor => _colorB.Value;
+
         public override void OnNetworkSpawn()
         {
             if (IsServer)

@@ -6,6 +6,7 @@ namespace FriendSlop.Round
         Active = 1,
         Success = 2,
         Failed = 3,
-        AllDead = 4
+        AllDead = 4,
+        Loading = 5,
     }
 }
