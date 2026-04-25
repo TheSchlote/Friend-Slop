@@ -180,8 +180,10 @@ namespace FriendSlop.Player
                 }
 
                 var roundManager = RoundManager.Instance;
-                if (roundManager != null && (roundManager.Phase.Value == RoundPhase.Active || roundManager.Phase.Value == RoundPhase.Loading))
+                if (roundManager != null)
                     roundManager.ServerPlaceNewPlayer(this);
+                else
+                    StartCoroutine(ServerPlaceWhenRoundManagerReady());
             }
 
             if (IsOwner)
@@ -519,24 +521,69 @@ namespace FriendSlop.Player
                 return;
             }
 
-            transform.SetPositionAndRotation(position, rotation);
-            TeleportClientRpc(position, rotation);
+            var safePosition = GetSurfaceSafeTeleportPosition(position);
+            var safeRotation = GetSurfaceSafeTeleportRotation(safePosition, rotation);
+            ApplyTeleport(safePosition, safeRotation);
+            TeleportClientRpc(safePosition, safeRotation);
         }
 
         [ClientRpc]
         private void TeleportClientRpc(Vector3 position, Quaternion rotation)
         {
-            if (!IsOwner)
-            {
-                transform.SetPositionAndRotation(position, rotation);
-                return;
-            }
+            ApplyTeleport(position, rotation);
+        }
 
-            characterController.enabled = false;
+        private IEnumerator ServerPlaceWhenRoundManagerReady()
+        {
+            for (var frame = 0; frame < 120; frame++)
+            {
+                if (!IsSpawned)
+                    yield break;
+
+                var roundManager = RoundManager.Instance;
+                if (roundManager != null)
+                {
+                    roundManager.ServerPlaceNewPlayer(this);
+                    yield break;
+                }
+
+                yield return null;
+            }
+        }
+
+        private void ApplyTeleport(Vector3 position, Quaternion rotation)
+        {
+            var controllerWasEnabled = characterController != null && characterController.enabled;
+            if (controllerWasEnabled)
+                characterController.enabled = false;
+
             transform.SetPositionAndRotation(position, rotation);
-            characterController.enabled = true;
+
+            if (controllerWasEnabled)
+                characterController.enabled = true;
+
             radialSpeed = 0f;
             knockbackVelocity = Vector3.zero;
+        }
+
+        private static Vector3 GetSurfaceSafeTeleportPosition(Vector3 position)
+        {
+            var world = SphereWorld.GetClosest(position);
+            if (world == null)
+                return position;
+
+            var up = world.GetUp(position);
+            return world.GetSurfacePoint(up, 0.08f);
+        }
+
+        private static Quaternion GetSurfaceSafeTeleportRotation(Vector3 position, Quaternion requestedRotation)
+        {
+            var world = SphereWorld.GetClosest(position);
+            if (world == null)
+                return requestedRotation;
+
+            var up = world.GetUp(position);
+            return world.GetSurfaceRotation(up, requestedRotation * Vector3.forward);
         }
 
         [ClientRpc]
