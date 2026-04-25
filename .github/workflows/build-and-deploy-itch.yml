@@ -15,7 +15,6 @@ permissions:
   checks: write
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   UNITY_PROJECT_PATH: Space Game
   UNITY_VERSION: 6000.3.4f1
   BUILD_TARGET: StandaloneWindows64
@@ -49,13 +48,13 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           lfs: true
 
       - name: Cache Unity Library
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.UNITY_PROJECT_PATH }}/Library
           key: Library-FriendSlop-${{ runner.os }}-EditMode-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
@@ -79,7 +78,7 @@ jobs:
 
       - name: Upload EditMode test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FriendSlop-EditMode-Test-Results-${{ github.run_number }}
           path: test-results
@@ -111,13 +110,13 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           lfs: true
 
       - name: Cache Unity Library
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.UNITY_PROJECT_PATH }}/Library
           key: Library-FriendSlop-${{ runner.os }}-PlayMode-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
@@ -142,7 +141,7 @@ jobs:
 
       - name: Upload PlayMode test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FriendSlop-PlayMode-Test-Results-${{ github.run_number }}
           path: playmode-test-results
@@ -178,13 +177,13 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           lfs: true
 
       - name: Cache Unity Library
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.UNITY_PROJECT_PATH }}/Library
           key: Library-FriendSlop-${{ runner.os }}-${{ env.BUILD_TARGET }}-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
@@ -240,7 +239,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Windows build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: FriendSlop-Windows-${{ github.run_number }}
           path: build/${{ env.BUILD_TARGET }}
@@ -268,7 +267,7 @@ jobs:
 
       - name: Download Windows build artifact
         if: env.BUTLER_API_KEY_PRESENT == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: FriendSlop-Windows-${{ github.run_number }}
           path: build/${{ env.BUILD_TARGET }}

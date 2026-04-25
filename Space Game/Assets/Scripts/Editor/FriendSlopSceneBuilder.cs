@@ -528,7 +528,7 @@ namespace FriendSlop.Editor
             networkManager.NetworkConfig.Prefabs.NetworkPrefabsLists.Clear();
             networkManager.NetworkConfig.Prefabs.NetworkPrefabsLists.Add(networkPrefabsList);
             networkManager.NetworkConfig.ConnectionApproval = false;
-            networkManager.NetworkConfig.EnableSceneManagement = false;
+            networkManager.NetworkConfig.EnableSceneManagement = true;
             networkObject.AddComponent<NetworkSessionManager>();
         }
 
