@@ -1,4 +1,5 @@
 using System.Text;
+using FriendSlop.Core;
 using FriendSlop.Networking;
 using FriendSlop.Player;
 using FriendSlop.Round;
@@ -51,6 +52,8 @@ namespace FriendSlop.UI
         private bool _lateJoinLoading;
         private float _lateJoinLoadingStartTime;
         private const float LateJoinLoadingDuration = 3f;
+        private Image _sunGlareImage;
+        private DayNightCycle _dayNightCycle;
         private RectTransform chargePanelRect;
         private RectTransform chargeFillRect;
         private Image chargeFillImage;
@@ -100,6 +103,8 @@ namespace FriendSlop.UI
 
             if (_lateJoinLoading && Time.time - _lateJoinLoadingStartTime >= LateJoinLoadingDuration)
                 _lateJoinLoading = false;
+
+            UpdateSunGlare();
 
             if (_damageFlashAlpha > 0f)
             {
@@ -450,6 +455,18 @@ namespace FriendSlop.UI
             damageFlashImage.color = new Color(0.72f, 0f, 0f, 0f);
             damageFlashImage.raycastTarget = false;
 
+            // Sun glare — full-screen warm white, fades in when staring at the sun
+            var glareObj = new GameObject("SunGlare");
+            glareObj.transform.SetParent(canvasObject.transform, false);
+            var glareRect = glareObj.AddComponent<RectTransform>();
+            glareRect.anchorMin = Vector2.zero;
+            glareRect.anchorMax = Vector2.one;
+            glareRect.offsetMin = Vector2.zero;
+            glareRect.offsetMax = Vector2.zero;
+            _sunGlareImage = glareObj.AddComponent<Image>();
+            _sunGlareImage.color = new Color(1f, 0.95f, 0.82f, 0f);
+            _sunGlareImage.raycastTarget = false;
+
             menuRoot = CreatePanel("Menu", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(MaxMenuWidth, MinDisconnectedMenuHeight), new Color(0.04f, 0.05f, 0.05f, 0.96f));
             menuRect = menuRoot.GetComponent<RectTransform>();
             titleText = CreateText("Title", menuRoot.transform, "FRIEND SLOP RETRIEVAL", 24, TextAnchor.MiddleCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -28f), new Vector2(460f, 34f));
@@ -716,6 +733,63 @@ namespace FriendSlop.UI
                 var barWidth = barBg != null ? Mathf.Max(0f, barBg.rect.width - 4f) : 496f;
                 loadingBarFillRect.sizeDelta = new Vector2(barWidth * progress, 16f);
             }
+        }
+
+        private void UpdateSunGlare()
+        {
+            if (_sunGlareImage == null) return;
+
+            // Hide glare during loading or when no camera is active
+            var isLoading = _lateJoinLoading;
+            var round = RoundManager.Instance;
+            if (round != null && round.Phase.Value == RoundPhase.Loading) isLoading = true;
+            if (isLoading)
+            {
+                _sunGlareImage.color = new Color(1f, 0.95f, 0.82f, 0f);
+                return;
+            }
+
+            var localPlayer = NetworkFirstPersonController.LocalPlayer;
+            var cam = localPlayer?.PlayerCamera;
+            if (cam == null || localPlayer.IsDeadLocally)
+            {
+                _sunGlareImage.color = new Color(1f, 0.95f, 0.82f, 0f);
+                return;
+            }
+
+            if (_dayNightCycle == null)
+                _dayNightCycle = Object.FindFirstObjectByType<DayNightCycle>();
+            if (_dayNightCycle == null)
+            {
+                _sunGlareImage.color = new Color(1f, 0.95f, 0.82f, 0f);
+                return;
+            }
+
+            var rawToSun  = _dayNightCycle.SunWorldPosition - cam.transform.position;
+            var distToSun = rawToSun.magnitude;
+            var toSun     = rawToSun / distToSun;
+            var lookDot   = Vector3.Dot(cam.transform.forward, toSun);
+            // Glare begins at ~18° off-center and peaks at dead center (~2°)
+            var glareT = Mathf.Clamp01((lookDot - 0.95f) / 0.048f);
+
+            if (glareT > 0f)
+            {
+                // Use local-horizon elevation so the planet naturally blocks glare on the night side.
+                var localSunElevation = Vector3.Dot(cam.transform.position.normalized, toSun);
+                glareT *= Mathf.Clamp01(localSunElevation * 4f);
+            }
+
+            if (glareT > 0f)
+            {
+                // Block glare when a nearby object (tree, rock, building) is in the line of sight.
+                // Start the ray slightly in front of the camera to clear the player's own geometry.
+                var rayOrigin = cam.transform.position + cam.transform.forward * 0.5f;
+                if (Physics.Raycast(rayOrigin, toSun, 50f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+                    glareT = 0f;
+            }
+
+            var alpha = glareT * glareT * 0.88f;
+            _sunGlareImage.color = new Color(1f, 0.95f, 0.82f, alpha);
         }
 
         private void QuitGame()

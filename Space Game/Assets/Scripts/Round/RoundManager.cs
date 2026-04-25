@@ -12,7 +12,7 @@ namespace FriendSlop.Round
         public static RoundManager Instance { get; private set; }
 
         [SerializeField] private int quota = 500;
-        [SerializeField] private float roundLengthSeconds = 480f;
+        [SerializeField] private float roundLengthSeconds = 0f;
         [SerializeField] private Transform[] playerSpawnPoints;
 
         public NetworkVariable<RoundPhase> Phase = new(RoundPhase.Lobby);
@@ -167,6 +167,15 @@ namespace FriendSlop.Round
             PlayersReady.Value = 0;
             PlayersExpectedToLoad.Value = NetworkManager != null ? NetworkManager.ConnectedClientsIds.Count : 1;
             _loadingTimeout = LoadingTimeoutSeconds;
+
+            // The server (host) is always immediately ready — it initiated the round and doesn't need
+            // to sync. Remote clients report via ReportLoadedServerRpc after they receive the phase change.
+            if (NetworkManager != null)
+            {
+                _readyPlayerIds.Add(NetworkManager.ServerClientId);
+                PlayersReady.Value = _readyPlayerIds.Count;
+            }
+
             RespawnPlayers();
             Phase.Value = RoundPhase.Loading;
         }
@@ -317,6 +326,17 @@ namespace FriendSlop.Round
                 player.ServerTeleport(spawn.position, spawn.rotation);
                 player.ServerRevive();
             }
+        }
+
+        public void ServerPlaceNewPlayer(NetworkFirstPersonController player)
+        {
+            if (!IsServer || player == null || playerSpawnPoints == null || playerSpawnPoints.Length == 0)
+                return;
+
+            var index = NetworkFirstPersonController.ActivePlayers.IndexOf(player);
+            if (index < 0) index = 0;
+            var spawn = playerSpawnPoints[index % playerSpawnPoints.Length];
+            player.ServerTeleport(spawn.position, spawn.rotation);
         }
     }
 }

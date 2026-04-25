@@ -178,6 +178,10 @@ namespace FriendSlop.Player
                     if (other != null && other != this && other.IsSpawned && !string.IsNullOrEmpty(other._displayName))
                         other.SyncNameToClientRpc(other._displayName, sendParams);
                 }
+
+                var roundManager = RoundManager.Instance;
+                if (roundManager != null && (roundManager.Phase.Value == RoundPhase.Active || roundManager.Phase.Value == RoundPhase.Loading))
+                    roundManager.ServerPlaceNewPlayer(this);
             }
 
             if (IsOwner)

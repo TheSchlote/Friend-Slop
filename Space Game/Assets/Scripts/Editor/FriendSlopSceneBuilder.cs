@@ -27,7 +27,7 @@ namespace FriendSlop.Editor
         private const string LootPrefabFolderPath = "Assets/Prefabs/Loot";
         private const string NetworkPrefabsListPath = "Assets/DefaultNetworkPrefabs.asset";
         private const string AutoBuildMarkerPath = "Assets/FriendSlopBuildRequested.txt";
-        private const float PlanetRadius = 18f;
+        private const float PlanetRadius = 36f;
         private const float PlanetGravityAcceleration = 18f;
         private const float PlayerJumpVelocity = 7.2f;
         private const float PlayerGravity = 14f;
@@ -481,11 +481,13 @@ namespace FriendSlop.Editor
             light.intensity = 1.25f;
             light.transform.rotation = Quaternion.Euler(38f, -28f, 0f);
 
+            // Positions expressed as multiples of PlanetRadius so they scale automatically.
+            var s = PlanetRadius;
             var fillPositions = new[]
             {
-                new Vector3(0f, 24f, -9f),
-                new Vector3(15f, 10f, 14f),
-                new Vector3(-16f, 8f, 13f)
+                new Vector3(0f,    s * 1.333f, -s * 0.500f),
+                new Vector3(s * 0.833f, s * 0.556f,  s * 0.778f),
+                new Vector3(-s * 0.889f, s * 0.444f, s * 0.722f),
             };
 
             for (var i = 0; i < fillPositions.Length; i++)
@@ -494,10 +496,14 @@ namespace FriendSlop.Editor
                 point.transform.position = fillPositions[i];
                 var pointLight = point.AddComponent<Light>();
                 pointLight.type = LightType.Point;
-                pointLight.range = 24f;
+                pointLight.range = s * 1.333f;
                 pointLight.intensity = 1.1f;
                 pointLight.color = new Color(0.88f, 0.95f, 1f);
             }
+
+            var dayNightManager = new GameObject("Day Night Manager");
+            dayNightManager.AddComponent<NetworkObject>();
+            dayNightManager.AddComponent<DayNightCycle>();
         }
 
         private static void CreateMenuCamera()
@@ -870,14 +876,35 @@ namespace FriendSlop.Editor
                 worldSo.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(world);
 
-                // Ensure PlanetTreeSpawner is present (added after some scenes were built).
+                // Keep visual scale in sync with physics radius.
                 var planet = world.gameObject;
+                planet.transform.localScale = Vector3.one * PlanetRadius * 2f;
+
+                if (planet.GetComponent<NetworkObject>() == null)
+                    planet.AddComponent<NetworkObject>();
+                if (planet.GetComponent<PlanetColorRandomizer>() == null)
+                    planet.AddComponent<PlanetColorRandomizer>();
                 if (planet.GetComponent<PlanetTreeSpawner>() == null)
-                {
                     planet.AddComponent<PlanetTreeSpawner>();
-                    EditorUtility.SetDirty(planet);
-                    EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
-                }
+
+                EditorUtility.SetDirty(planet);
+                EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            }
+
+            // Ensure exactly one Day Night Manager exists.
+            var allDayNightManagers = Object.FindObjectsByType<DayNightCycle>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (var i = 1; i < allDayNightManagers.Length; i++)
+            {
+                Object.DestroyImmediate(allDayNightManagers[i].gameObject);
+                EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            }
+            if (allDayNightManagers.Length == 0)
+            {
+                var dayNightManager = new GameObject("Day Night Manager");
+                dayNightManager.AddComponent<NetworkObject>();
+                dayNightManager.AddComponent<DayNightCycle>();
+                EditorUtility.SetDirty(dayNightManager);
+                EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
             }
 
             RemoveLaunchpadCollisionInOpenScene();
