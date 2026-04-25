@@ -95,7 +95,6 @@ namespace FriendSlop.Player
         public NetworkVariable<ulong> CarriedByClientId = new(ulong.MaxValue);
         private NetworkFirstPersonController _heldPlayer;
         private string _displayName = string.Empty;
-        private bool _subscribedToRoundPhase;
 
         public Camera PlayerCamera => playerCamera;
         public Transform CarryAnchor => carryAnchor;
@@ -178,10 +177,6 @@ namespace FriendSlop.Player
                     if (other != null && other != this && other.IsSpawned && !string.IsNullOrEmpty(other._displayName))
                         other.SyncNameToClientRpc(other._displayName, sendParams);
                 }
-
-                var roundManager = RoundManager.Instance;
-                if (roundManager != null && (roundManager.Phase.Value == RoundPhase.Active || roundManager.Phase.Value == RoundPhase.Loading))
-                    roundManager.ServerPlaceNewPlayer(this);
             }
 
             if (IsOwner)
@@ -191,17 +186,6 @@ namespace FriendSlop.Player
                 _health.OnValueChanged += OnHealthChanged;
                 var savedName = UnityEngine.PlayerPrefs.GetString("PlayerName", "Player");
                 SetNameServerRpc(savedName);
-
-                var rm = RoundManager.Instance;
-                if (rm != null)
-                {
-                    rm.Phase.OnValueChanged += OnRoundPhaseChanged;
-                    _subscribedToRoundPhase = true;
-                    if (rm.Phase.Value == RoundPhase.Loading)
-                        StartCoroutine(WaitAndReportReady());
-                    else if (rm.Phase.Value == RoundPhase.Active)
-                        FriendSlopUI.Instance?.ShowLateJoinLoading();
-                }
             }
             else
             {
@@ -222,15 +206,7 @@ namespace FriendSlop.Player
             }
 
             if (IsOwner)
-            {
                 _health.OnValueChanged -= OnHealthChanged;
-                if (_subscribedToRoundPhase)
-                {
-                    var rm = RoundManager.Instance;
-                    if (rm != null) rm.Phase.OnValueChanged -= OnRoundPhaseChanged;
-                    _subscribedToRoundPhase = false;
-                }
-            }
 
             ActivePlayers.Remove(this);
 
@@ -873,26 +849,6 @@ namespace FriendSlop.Player
                 keyboard.qKey.isPressed ? "Q" : "-",
                 mouse != null && mouse.leftButton.isPressed ? "MouseLeft" : "-",
                 mouse != null && mouse.rightButton.isPressed ? "MouseRight" : "-");
-        }
-
-        private void OnRoundPhaseChanged(RoundPhase _, RoundPhase next)
-        {
-            if (!IsOwner) return;
-            if (next == RoundPhase.Loading)
-            {
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
-                StartCoroutine(WaitAndReportReady());
-            }
-        }
-
-        private IEnumerator WaitAndReportReady()
-        {
-            yield return new WaitForSeconds(1.5f);
-            if (!IsSpawned) yield break;
-            var rm = RoundManager.Instance;
-            if (rm != null && rm.Phase.Value == RoundPhase.Loading)
-                rm.ReportLoadedServerRpc();
         }
 
         private void OnHealthChanged(int previous, int current)

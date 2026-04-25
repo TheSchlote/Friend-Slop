@@ -68,19 +68,21 @@ namespace FriendSlop.Round
 
         private void Update()
         {
-            if (!IsServer) return;
-
-            if (Phase.Value == RoundPhase.Loading)
-            {
-                _loadingTimeout -= Time.deltaTime;
-                var allReady = PlayersExpectedToLoad.Value > 0
-                    && _readyPlayerIds.Count >= PlayersExpectedToLoad.Value;
-                if (allReady || _loadingTimeout <= 0f)
-                    Phase.Value = RoundPhase.Active;
+            if (!IsServer || Phase.Value != RoundPhase.Active)
                 return;
             }
 
             if (Phase.Value != RoundPhase.Active) return;
+
+            if (roundLengthSeconds > 0f)
+            {
+                TimeRemaining.Value = Mathf.Max(0f, TimeRemaining.Value - Time.deltaTime);
+                if (TimeRemaining.Value <= 0f && CollectedValue.Value < Quota.Value)
+                {
+                    Phase.Value = RoundPhase.Failed;
+                    return;
+                }
+            }
 
             if (roundLengthSeconds > 0f)
             {
