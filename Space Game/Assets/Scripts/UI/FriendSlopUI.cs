@@ -1,5 +1,4 @@
 using System.Text;
-using FriendSlop.Core;
 using FriendSlop.Networking;
 using FriendSlop.Player;
 using FriendSlop.Round;
@@ -130,10 +129,7 @@ namespace FriendSlop.UI
             }
 
             var round = RoundManager.Instance;
-            var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
-            if (phase == RoundPhase.Loading || _lateJoinLoading) return true;
-
-            var activeRound = round != null && phase == RoundPhase.Active;
+            var activeRound = round != null && round.Phase.Value == RoundPhase.Active;
             return !activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked;
         }
 
@@ -146,10 +142,7 @@ namespace FriendSlop.UI
             var isHost = networkManager != null && networkManager.IsHost;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var activeRound = connected && phase == RoundPhase.Active;
-            var isLoading = phase == RoundPhase.Loading || _lateJoinLoading;
-            var showMenu = !isLoading && (!activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked);
-
-            UpdateLoadingScreen(isLoading, phase, round);
+            var showMenu = !activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked;
 
             menuRoot.SetActive(showMenu);
             if (namePanelRoot != null) namePanelRoot.SetActive(showMenu);
@@ -472,40 +465,6 @@ namespace FriendSlop.UI
             });
             shutdownButton = CreateButton("Leave Session", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.Shutdown());
             quitButton = CreateButton("Quit", menuRoot.transform, Vector2.zero, QuitGame);
-
-            // Loading screen — added last so it renders on top of all other UI
-            loadingScreenRoot = CreatePanel("LoadingScreen", canvasObject.transform,
-                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
-                new Color(0.05f, 0.05f, 0.08f, 0.94f));
-
-            CreateText("LoadingTitle", loadingScreenRoot.transform, "LOADING",
-                52, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(0f, 60f), new Vector2(500f, 70f));
-
-            loadingStatusText = CreateText("LoadingStatus", loadingScreenRoot.transform,
-                "Waiting for players...", 20, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(0f, 8f), new Vector2(460f, 30f));
-            loadingStatusText.color = new Color(1f, 1f, 1f, 0.75f);
-
-            var loadingBarBg = CreatePanel("LoadingBarBg", loadingScreenRoot.transform,
-                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(0f, -30f), new Vector2(500f, 20f),
-                new Color(0.1f, 0.1f, 0.1f, 0.9f));
-
-            var loadingBarFillObj = new GameObject("LoadingBarFill");
-            loadingBarFillObj.transform.SetParent(loadingBarBg.transform, false);
-            loadingBarFillRect = loadingBarFillObj.AddComponent<RectTransform>();
-            loadingBarFillRect.anchorMin = new Vector2(0f, 0.5f);
-            loadingBarFillRect.anchorMax = new Vector2(0f, 0.5f);
-            loadingBarFillRect.pivot = new Vector2(0f, 0.5f);
-            loadingBarFillRect.anchoredPosition = new Vector2(2f, 0f);
-            loadingBarFillRect.sizeDelta = new Vector2(0f, 16f);
-            var loadingBarFill = loadingBarFillObj.AddComponent<Image>();
-            loadingBarFill.color = new Color(0.3f, 0.65f, 1f, 0.9f);
-
-            loadingScreenRoot.SetActive(false);
         }
 
         private GameObject CreatePanel(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, Vector2 size, Color color)
