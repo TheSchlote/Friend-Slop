@@ -119,6 +119,37 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &5384629
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5384630}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Loot Spawn 2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5384630
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5384629}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.14459191, y: 0.04585163, z: 0.2987785, w: 0.9421901}
+  m_LocalPosition: {x: -14.513458, y: 20.58274, z: 7.916439}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881511749}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &6371229
 GameObject:
   m_ObjectHideFlags: 0
@@ -632,7 +663,7 @@ Transform:
   m_GameObject: {fileID: 120148312}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 52.5, z: 0}
+  m_LocalPosition: {x: 0, y: 40.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -727,8 +758,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 165298128}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.07996569, y: 0.0073567005, z: -0.09131549, w: 0.9925789}
-  m_LocalPosition: {x: 8.689789, y: 46.828262, z: -7.724249}
+  m_LocalRotation: {x: -0.07996569, y: 0.007356696, z: -0.091315575, w: 0.9925789}
+  m_LocalPosition: {x: 6.528595, y: 35.181854, z: -5.803192}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1535,6 +1566,37 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 406929873}
   m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &414503238
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 414503239}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Loot Spawn 8
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &414503239
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 414503238}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0.43939722, y: -0.12170597, z: 0.23757358, w: 0.8577159}
+  m_LocalPosition: {x: -7.935486, y: 13.225816, z: -21.42582}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881511749}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &430617228
 GameObject:
   m_ObjectHideFlags: 0
@@ -1559,8 +1621,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 430617228}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.07996569, y: -0.0073567005, z: 0.09131549, w: 0.9925789}
-  m_LocalPosition: {x: -8.689789, y: 46.828262, z: -7.724249}
+  m_LocalRotation: {x: -0.07996569, y: -0.007356696, z: 0.091315575, w: 0.9925789}
+  m_LocalPosition: {x: -6.528595, y: 35.181854, z: -5.803192}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2255,6 +2317,9 @@ MonoBehaviour:
   - {fileID: 1209065345}
   - {fileID: 1799704063}
   contentRoot: {fileID: 1281816104}
+  sphereWorld: {fileID: 178959892}
+  launchpadSurfaceOffset: 0.12
+  spawnSurfaceOffset: 0.25
 --- !u!4 &581019956
 Transform:
   m_ObjectHideFlags: 0
@@ -2331,6 +2396,37 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1954893809}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &724478157
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 724478158}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Loot Spawn 6
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &724478158
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 724478157}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.43939722, y: 0.12170597, z: 0.23757358, w: 0.8577159}
+  m_LocalPosition: {x: -7.935486, y: 13.225816, z: 21.42582}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881511749}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &732844411
 GameObject:
@@ -2452,6 +2548,37 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1086022442}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &752008470
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 752008471}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Loot Spawn 1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &752008471
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 752008470}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.14459191, y: -0.04585163, z: -0.2987785, w: 0.9421901}
+  m_LocalPosition: {x: 14.513458, y: 20.58274, z: 7.916439}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881511749}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &761816372
 GameObject:
@@ -2785,6 +2912,45 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 839236429}
   m_Mesh: {fileID: 10206, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &881511748
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 881511749}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Loot Spawn Points
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &881511749
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 881511748}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 752008471}
+  - {fileID: 5384630}
+  - {fileID: 1583651445}
+  - {fileID: 1999398532}
+  - {fileID: 1227661314}
+  - {fileID: 724478158}
+  - {fileID: 1094519698}
+  - {fileID: 414503239}
+  m_Father: {fileID: 901141231}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &901141229
 GameObject:
   m_ObjectHideFlags: 0
@@ -2795,6 +2961,7 @@ GameObject:
   m_Component:
   - component: {fileID: 901141231}
   - component: {fileID: 901141230}
+  - component: {fileID: 901141232}
   m_Layer: 0
   m_Name: Tier 2 Planet
   m_TagString: Untagged
@@ -2822,6 +2989,9 @@ MonoBehaviour:
   - {fileID: 1334007155}
   - {fileID: 1861941472}
   contentRoot: {fileID: 0}
+  sphereWorld: {fileID: 406929875}
+  launchpadSurfaceOffset: 0.12
+  spawnSurfaceOffset: 0.25
 --- !u!4 &901141231
 Transform:
   m_ObjectHideFlags: 0
@@ -2839,8 +3009,33 @@ Transform:
   - {fileID: 1257760392}
   - {fileID: 2104979751}
   - {fileID: 2027452051}
+  - {fileID: 881511749}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &901141232
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 901141229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6c0fcf3901b359843a711b82a654887f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Loot.PlanetLootSpawner
+  lootPool: {fileID: 11400000, guid: 8c70ca40f16d85f458738b7975af71e5, type: 2}
+  spawnPoints:
+  - {fileID: 752008471}
+  - {fileID: 5384630}
+  - {fileID: 1583651445}
+  - {fileID: 1999398532}
+  - {fileID: 1227661314}
+  - {fileID: 724478158}
+  - {fileID: 1094519698}
+  - {fileID: 414503239}
+  rollsPerSpawnPoint: 1
+  spawnSurfaceLift: 0.05
 --- !u!1 &941079322
 GameObject:
   m_ObjectHideFlags: 0
@@ -2884,20 +3079,6 @@ TextMesh:
   m_Color:
     serializedVersion: 2
     rgba: 4278255360
---- !u!114 &941079326
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 941079322}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a5d65d83eec48218f5e54458cbe9a9b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.UI.WorldTextBillboard
-  preferLocalPlayerCamera: 1
-  fallbackToMainCamera: 1
 --- !u!23 &941079324
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -2962,6 +3143,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &941079326
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 941079322}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8a5d65d83eec48218f5e54458cbe9a9b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.UI.WorldTextBillboard
+  preferLocalPlayerCamera: 1
+  fallbackToMainCamera: 1
 --- !u!1 &1010999326
 GameObject:
   m_ObjectHideFlags: 0
@@ -3196,6 +3391,37 @@ Transform:
   - {fileID: 747526376}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1094519697
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1094519698}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Loot Spawn 7
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1094519698
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1094519697}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0.43939722, y: 0.12170597, z: -0.23757358, w: 0.8577159}
+  m_LocalPosition: {x: 7.935486, y: 13.225816, z: -21.42582}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881511749}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1105202235
 GameObject:
   m_ObjectHideFlags: 0
@@ -3220,8 +3446,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1105202235}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.07996569, y: -0.0073567005, z: -0.09131549, w: 0.9925789}
-  m_LocalPosition: {x: 8.689789, y: 46.828262, z: 7.724249}
+  m_LocalRotation: {x: 0.07996569, y: -0.007356696, z: -0.091315575, w: 0.9925789}
+  m_LocalPosition: {x: 6.528595, y: 35.181854, z: 5.803192}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3251,8 +3477,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1133020672}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.07996569, y: 0.0073567005, z: 0.09131549, w: 0.9925789}
-  m_LocalPosition: {x: -8.689789, y: 46.828262, z: 7.724249}
+  m_LocalRotation: {x: 0.07996569, y: 0.007356696, z: 0.091315575, w: 0.9925789}
+  m_LocalPosition: {x: -6.528595, y: 35.181854, z: 5.803192}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3275,8 +3501,10 @@ Material:
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: -1
-  stringTagMap: {}
-  disabledShaderPasses: []
+  stringTagMap:
+    RenderType: Opaque
+  disabledShaderPasses:
+  - MOTIONVECTORS
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
@@ -3373,7 +3601,7 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 0.45, g: 0.32, b: 0.65, a: 1}
-    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _Color: {r: 0.45, g: 0.31999996, b: 0.65, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
@@ -3492,7 +3720,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1209065344}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.10038239, y: 0.009329559, z: 0.092069924, w: 0.99063593}
+  m_LocalRotation: {x: 0.1003824, y: 0.009329563, z: 0.09206992, w: 0.99063593}
   m_LocalPosition: {x: -6.544664, y: 34.904873, z: 7.2718487}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -3613,7 +3841,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1218791253}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.07996569, y: 0.0073567005, z: -0.09131549, w: 0.9925789}
+  m_LocalRotation: {x: -0.07996568, y: 0.0073567024, z: -0.09131548, w: 0.9925789}
   m_LocalPosition: {x: 4.7276, y: 25.476517, z: -4.2023115}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -3650,6 +3878,37 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1954893809}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1227661313
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1227661314}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Loot Spawn 5
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1227661314
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1227661313}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.43939722, y: -0.12170597, z: -0.23757358, w: 0.8577159}
+  m_LocalPosition: {x: 7.935486, y: 13.225816, z: 21.42582}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881511749}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1238399256
 GameObject:
@@ -3688,6 +3947,9 @@ MonoBehaviour:
   - {fileID: 1133020673}
   - {fileID: 1105202236}
   contentRoot: {fileID: 0}
+  sphereWorld: {fileID: 1264299493}
+  launchpadSurfaceOffset: 0.12
+  spawnSurfaceOffset: 0.25
 --- !u!4 &1238399258
 Transform:
   m_ObjectHideFlags: 0
@@ -4069,7 +4331,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1334007154}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.07996569, y: 0.0073567005, z: 0.09131549, w: 0.9925789}
+  m_LocalRotation: {x: 0.07996568, y: 0.0073567024, z: 0.09131548, w: 0.9925789}
   m_LocalPosition: {x: -4.7276, y: 25.476517, z: 4.2023115}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -4206,7 +4468,7 @@ Transform:
   m_GameObject: {fileID: 1483400278}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 48.12, z: 0}
+  m_LocalPosition: {x: 0, y: 36.12, z: 0}
   m_LocalScale: {x: 4.4, y: 0.08, z: 4.4}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4339,6 +4601,37 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &1583651444
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1583651445}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Loot Spawn 3
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1583651445
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1583651444}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0.14459191, y: 0.04585163, z: -0.2987785, w: 0.9421901}
+  m_LocalPosition: {x: 14.513458, y: 20.58274, z: -7.916439}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881511749}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1584795158
 GameObject:
   m_ObjectHideFlags: 0
@@ -4387,8 +4680,10 @@ Material:
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: -1
-  stringTagMap: {}
-  disabledShaderPasses: []
+  stringTagMap:
+    RenderType: Opaque
+  disabledShaderPasses:
+  - MOTIONVECTORS
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
@@ -4485,7 +4780,7 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 0.85, g: 0.72, b: 0.92, a: 1}
-    - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _Color: {r: 0.85, g: 0.72, b: 0.92, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
@@ -4725,7 +5020,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1799704062}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.10038239, y: -0.009329559, z: -0.092069924, w: 0.99063593}
+  m_LocalRotation: {x: 0.1003824, y: -0.009329563, z: -0.09206992, w: 0.99063593}
   m_LocalPosition: {x: 6.544664, y: 34.904873, z: 7.2718487}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -5066,7 +5361,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1861941471}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.07996569, y: -0.0073567005, z: -0.09131549, w: 0.9925789}
+  m_LocalRotation: {x: 0.07996568, y: -0.0073567024, z: -0.09131548, w: 0.9925789}
   m_LocalPosition: {x: 4.7276, y: 25.476517, z: 4.2023115}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -5097,7 +5392,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1936901173}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.07996569, y: -0.0073567005, z: 0.09131549, w: 0.9925789}
+  m_LocalRotation: {x: -0.07996568, y: -0.0073567024, z: 0.09131548, w: 0.9925789}
   m_LocalPosition: {x: -4.7276, y: 25.476517, z: -4.2023115}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -5146,6 +5441,37 @@ Transform:
   - {fileID: 599906509}
   - {fileID: 178965464}
   m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1999398531
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1999398532}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Loot Spawn 4
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1999398532
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1999398531}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0.14459191, y: -0.04585163, z: 0.2987785, w: 0.9421901}
+  m_LocalPosition: {x: -14.513458, y: 20.58274, z: -7.916439}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 881511749}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2027452050
 GameObject:

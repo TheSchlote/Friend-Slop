@@ -64,6 +64,18 @@ namespace FriendSlop.UI
         private RectTransform chargePanelRect;
         private RectTransform chargeFillRect;
         private Image chargeFillImage;
+        private RectTransform inventoryPanelRect;
+        private Image[] inventorySlotBackgrounds;
+        private Image[] inventorySlotBorders;
+        private Text[] inventorySlotItemTexts;
+        private Text[] inventorySlotValueTexts;
+        private RawImage[] inventorySlotPreviews;
+        private InventoryPreviewRig inventoryPreviewRig;
+        private static readonly Color InventorySlotEmptyColor = new(0.04f, 0.05f, 0.06f, 0.78f);
+        private static readonly Color InventorySlotFilledColor = new(0.10f, 0.13f, 0.16f, 0.86f);
+        private static readonly Color InventorySlotActiveColor = new(0.18f, 0.34f, 0.46f, 0.94f);
+        private static readonly Color InventorySlotBorderIdleColor = new(0.18f, 0.20f, 0.22f, 0.85f);
+        private static readonly Color InventorySlotBorderActiveColor = new(0.95f, 0.78f, 0.18f, 1f);
         private Image menuBackdropImage;
         private GameObject menuRoot;
         private Text titleText;
@@ -112,7 +124,18 @@ namespace FriendSlop.UI
             }
 
             EnsureEventSystem();
+            BuildInventoryPreviewRig();
             BuildUi();
+        }
+
+        private void BuildInventoryPreviewRig()
+        {
+            // Lives outside the canvas so it can hold real 3D objects. Parented to this
+            // GameObject so it dies with the UI instead of leaking into scene reloads.
+            var rigObject = new GameObject("InventoryPreviewRig");
+            rigObject.transform.SetParent(transform, worldPositionStays: false);
+            inventoryPreviewRig = rigObject.AddComponent<InventoryPreviewRig>();
+            inventoryPreviewRig.Initialize(NetworkFirstPersonController.InventorySize);
         }
 
         private void Update()
@@ -350,6 +373,7 @@ namespace FriendSlop.UI
             UpdateHealthBar(localPlayer, activeRound);
             UpdateDeathOverlay(localPlayer, activeRound);
             UpdateChargeBar(localPlayer, activeRound);
+            UpdateInventoryHud(localPlayer, activeRound);
         }
 
         private void LayoutMenu(bool connected, bool isHost, RoundPhase phase)
@@ -605,6 +629,8 @@ namespace FriendSlop.UI
 
             chargePanelRect.gameObject.SetActive(false);
 
+            BuildInventoryPanel(canvasObject);
+
             // Game over title - big red text above the menu, only shown on AllDead
             gameOverText = CreateText("GameOverTitle", canvasObject.transform, "GAME OVER",
                 72, TextAnchor.MiddleCenter,
@@ -751,6 +777,162 @@ namespace FriendSlop.UI
             _fadeOverlayImage.color = new Color(0f, 0f, 0f, 0f);
             _fadeOverlayImage.raycastTarget = false;
             loadingScreenRoot.transform.SetAsLastSibling();
+        }
+
+        private void BuildInventoryPanel(GameObject canvasObject)
+        {
+            const int slotCount = NetworkFirstPersonController.InventorySize;
+            const float slotWidth = 120f;
+            const float slotHeight = 120f;
+            const float slotGap = 10f;
+            var totalWidth = slotCount * slotWidth + (slotCount - 1) * slotGap;
+
+            // Anchor at bottom-center, sitting above the prompt line.
+            var panel = CreatePanel("InventoryPanel", canvasObject.transform,
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                new Vector2(0f, 140f), new Vector2(totalWidth, slotHeight),
+                new Color(0f, 0f, 0f, 0f));
+            inventoryPanelRect = panel.GetComponent<RectTransform>();
+
+            inventorySlotBackgrounds = new Image[slotCount];
+            inventorySlotBorders = new Image[slotCount];
+            inventorySlotItemTexts = new Text[slotCount];
+            inventorySlotValueTexts = new Text[slotCount];
+            inventorySlotPreviews = new RawImage[slotCount];
+
+            for (var i = 0; i < slotCount; i++)
+            {
+                var slotX = -totalWidth * 0.5f + slotWidth * 0.5f + i * (slotWidth + slotGap);
+
+                // Border (sits behind the slot fill so it shows as a thin frame).
+                var border = CreatePanel($"Slot{i + 1}Border", panel.transform,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                    new Vector2(slotX, 0f), new Vector2(slotWidth, slotHeight),
+                    InventorySlotBorderIdleColor);
+                inventorySlotBorders[i] = border.GetComponent<Image>();
+
+                var slotBg = CreatePanel($"Slot{i + 1}", border.transform,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                    Vector2.zero, new Vector2(slotWidth - 4f, slotHeight - 4f),
+                    InventorySlotEmptyColor);
+                inventorySlotBackgrounds[i] = slotBg.GetComponent<Image>();
+
+                // 3D preview RawImage. Added first so it sits behind the text overlays.
+                var previewObject = new GameObject($"Slot{i + 1}Preview");
+                previewObject.transform.SetParent(slotBg.transform, false);
+                var previewRect = previewObject.AddComponent<RectTransform>();
+                previewRect.anchorMin = new Vector2(0.5f, 0.5f);
+                previewRect.anchorMax = new Vector2(0.5f, 0.5f);
+                previewRect.pivot = new Vector2(0.5f, 0.5f);
+                previewRect.anchoredPosition = new Vector2(0f, 14f);
+                previewRect.sizeDelta = new Vector2(72f, 72f);
+                var preview = previewObject.AddComponent<RawImage>();
+                preview.raycastTarget = false;
+                if (inventoryPreviewRig != null)
+                {
+                    preview.texture = inventoryPreviewRig.RenderTexture;
+                    preview.uvRect = inventoryPreviewRig.GetSlotUvRect(i);
+                }
+                inventorySlotPreviews[i] = preview;
+
+                var numberLabel = CreateText($"Slot{i + 1}Number", slotBg.transform,
+                    (i + 1).ToString(), 14, TextAnchor.UpperLeft,
+                    new Vector2(0f, 1f), new Vector2(0f, 1f),
+                    new Vector2(8f, -4f), new Vector2(20f, 18f));
+                numberLabel.color = new Color(1f, 1f, 1f, 0.85f);
+                var numberOutline = numberLabel.gameObject.AddComponent<Outline>();
+                numberOutline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+                numberOutline.effectDistance = new Vector2(1f, -1f);
+
+                var itemText = CreateText($"Slot{i + 1}Item", slotBg.transform,
+                    string.Empty, 13, TextAnchor.LowerCenter,
+                    new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                    new Vector2(0f, 22f), new Vector2(slotWidth - 14f, 14f));
+                itemText.horizontalOverflow = HorizontalWrapMode.Overflow;
+                var itemOutline = itemText.gameObject.AddComponent<Outline>();
+                itemOutline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+                itemOutline.effectDistance = new Vector2(1f, -1f);
+                inventorySlotItemTexts[i] = itemText;
+
+                var valueText = CreateText($"Slot{i + 1}Value", slotBg.transform,
+                    string.Empty, 12, TextAnchor.LowerCenter,
+                    new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+                    new Vector2(0f, 4f), new Vector2(slotWidth - 14f, 14f));
+                valueText.color = new Color(0.92f, 1f, 0.52f, 1f);
+                var valueOutline = valueText.gameObject.AddComponent<Outline>();
+                valueOutline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+                valueOutline.effectDistance = new Vector2(1f, -1f);
+                inventorySlotValueTexts[i] = valueText;
+            }
+
+            // Hidden until the round is active and the local player exists.
+            inventoryPanelRect.gameObject.SetActive(false);
+        }
+
+        private void UpdateInventoryHud(NetworkFirstPersonController localPlayer, bool activeRound)
+        {
+            if (inventoryPanelRect == null) return;
+
+            var show = activeRound && localPlayer != null && !localPlayer.IsDeadLocally;
+            if (inventoryPanelRect.gameObject.activeSelf != show)
+                inventoryPanelRect.gameObject.SetActive(show);
+            if (!show)
+            {
+                // Clear the preview rig so dead/menu states don't leave ghost meshes spinning.
+                if (inventoryPreviewRig != null)
+                {
+                    for (var i = 0; i < NetworkFirstPersonController.InventorySize; i++)
+                        inventoryPreviewRig.SetSlotItem(i, null);
+                }
+                return;
+            }
+
+            var activeSlot = Mathf.Clamp(localPlayer.ActiveInventorySlot.Value, 0, NetworkFirstPersonController.InventorySize - 1);
+            for (var i = 0; i < NetworkFirstPersonController.InventorySize; i++)
+            {
+                var item = localPlayer.GetInventoryItem(i);
+                var isActive = i == activeSlot;
+                if (inventorySlotBackgrounds[i] != null)
+                {
+                    inventorySlotBackgrounds[i].color = isActive
+                        ? InventorySlotActiveColor
+                        : item != null ? InventorySlotFilledColor : InventorySlotEmptyColor;
+                }
+                if (inventorySlotBorders[i] != null)
+                {
+                    inventorySlotBorders[i].color = isActive
+                        ? InventorySlotBorderActiveColor
+                        : InventorySlotBorderIdleColor;
+                }
+                if (inventorySlotPreviews[i] != null)
+                {
+                    inventorySlotPreviews[i].enabled = item != null;
+                }
+                if (inventorySlotItemTexts[i] != null)
+                {
+                    inventorySlotItemTexts[i].text = item != null ? TruncateForSlot(item.ItemName) : "Empty";
+                    inventorySlotItemTexts[i].color = item != null
+                        ? Color.white
+                        : new Color(1f, 1f, 1f, 0.4f);
+                }
+                if (inventorySlotValueTexts[i] != null)
+                {
+                    inventorySlotValueTexts[i].text = item != null && !item.IsShipPart ? $"${item.Value}"
+                        : item != null ? item.ShipPartType.ToString().ToUpperInvariant()
+                        : string.Empty;
+                }
+                if (inventoryPreviewRig != null)
+                {
+                    inventoryPreviewRig.SetSlotItem(i, item);
+                }
+            }
+        }
+
+        private static string TruncateForSlot(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+            const int maxLength = 14;
+            return text.Length <= maxLength ? text : text[..maxLength];
         }
 
         private GameObject CreatePanel(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, Vector2 size, Color color)

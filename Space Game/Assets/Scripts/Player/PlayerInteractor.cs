@@ -65,6 +65,7 @@ namespace FriendSlop.Player
                 return;
 
             HandleCarryInput(keyboard, mouse);
+            HandleInventorySlotInput(keyboard);
 
             if (keyboard.eKey.wasPressedThisFrame)
             {
@@ -72,6 +73,25 @@ namespace FriendSlop.Player
                     focusedLoot.Interact(controller);
                 else if (focusedPlayer != null)
                     focusedPlayer.RequestPickupByPlayerServerRpc();
+            }
+        }
+
+        private void HandleInventorySlotInput(Keyboard keyboard)
+        {
+            // 1..4 select inventory slot. The owner has write permission on ActiveInventorySlot
+            // so we set it directly — no RPC round-trip needed for hand-swapping.
+            int requested = -1;
+            if (keyboard.digit1Key.wasPressedThisFrame) requested = 0;
+            else if (keyboard.digit2Key.wasPressedThisFrame) requested = 1;
+            else if (keyboard.digit3Key.wasPressedThisFrame) requested = 2;
+            else if (keyboard.digit4Key.wasPressedThisFrame) requested = 3;
+            if (requested < 0) return;
+
+            var clamped = Mathf.Clamp(requested, 0, NetworkFirstPersonController.InventorySize - 1);
+            if (controller.ActiveInventorySlot.Value != clamped)
+            {
+                controller.ActiveInventorySlot.Value = clamped;
+                ResetCarrySync();
             }
         }
 

@@ -1,7 +1,10 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using FriendSlop.Core;
+using FriendSlop.Loot;
 using FriendSlop.Round;
+using Unity.Netcode;
+using Unity.Netcode.Components;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -20,6 +23,12 @@ namespace FriendSlop.Editor
         private const string Tier2ObjectivePath = "Assets/Planets/Tier2_SmashAndGrab.asset";
         private const string Tier3ObjectivePath = "Assets/Planets/Tier3_HoldThePad.asset";
         private const string RoundManagerPrefabPath = "Assets/Prefabs/RoundManager.prefab";
+
+        private const string PoolLootFolder = "Assets/Prefabs/PoolLoot";
+        private const string LootMaterialsFolder = "Assets/Materials/LootRarity";
+        private const string LootPoolsFolder = "Assets/Loot";
+        private const string Tier2LootPoolPath = "Assets/Loot/Tier2_LootPool.asset";
+        private const string NetworkPrefabsListPath = "Assets/DefaultNetworkPrefabs.asset";
 
         private const int Tier2QuotaTarget = 350;
         private const float Tier2RoundLength = 240f;
@@ -71,9 +80,13 @@ namespace FriendSlop.Editor
                 return;
             }
 
+            var testLootPrefabs = BuildTestLootPrefabs();
+            var tier2LootPool = BuildTier2LootPool(testLootPrefabs);
+            EnsureNetworkPrefabsRegistered(testLootPrefabs);
+
             EnsureTier1Environment(tier1Def);
-            BuildExtraPlanet(tier2Def, "Tier 2 Planet", new Vector3(Tier2OffsetX, 0f, 0f), Tier2Radius, new Color(0.55f, 0.42f, 0.35f), new Color(0.32f, 0.24f, 0.2f));
-            BuildExtraPlanet(tier3Def, "Tier 3 Planet", new Vector3(Tier3OffsetX, 0f, 0f), Tier3Radius, new Color(0.45f, 0.32f, 0.65f), new Color(0.85f, 0.72f, 0.92f));
+            BuildExtraPlanet(tier2Def, "Tier 2 Planet", new Vector3(Tier2OffsetX, 0f, 0f), Tier2Radius, new Color(0.55f, 0.42f, 0.35f), new Color(0.32f, 0.24f, 0.2f), tier2LootPool);
+            BuildExtraPlanet(tier3Def, "Tier 3 Planet", new Vector3(Tier3OffsetX, 0f, 0f), Tier3Radius, new Color(0.45f, 0.32f, 0.65f), new Color(0.85f, 0.72f, 0.92f), null);
 
             WireRoundManagerPrefab(catalog, tier1Def, defaultObjective);
 
@@ -89,6 +102,9 @@ namespace FriendSlop.Editor
                 "  - DefaultRocketAssemblyObjective (tier 1 fallback)\n" +
                 "  - Tier2_SmashAndGrab (Quota, $350 / 240s)\n" +
                 "  - Tier3_HoldThePad (Survival, 180s)\n\n" +
+                $"Loot pool: {Tier2LootPoolPath}\n" +
+                $"Test loot prefabs under {PoolLootFolder}/\n" +
+                "Tier 2 spawns rolled loot (8 spawn points) when players travel there.\n\n" +
                 "RoundManager prefab is wired with the catalog, starting planet, and default objective.",
                 "OK");
         }
@@ -97,6 +113,16 @@ namespace FriendSlop.Editor
         {
             if (!AssetDatabase.IsValidFolder(PlanetsFolder))
                 AssetDatabase.CreateFolder("Assets", "Planets");
+            if (!AssetDatabase.IsValidFolder("Assets/Prefabs"))
+                AssetDatabase.CreateFolder("Assets", "Prefabs");
+            if (!AssetDatabase.IsValidFolder(PoolLootFolder))
+                AssetDatabase.CreateFolder("Assets/Prefabs", "PoolLoot");
+            if (!AssetDatabase.IsValidFolder("Assets/Materials"))
+                AssetDatabase.CreateFolder("Assets", "Materials");
+            if (!AssetDatabase.IsValidFolder(LootMaterialsFolder))
+                AssetDatabase.CreateFolder("Assets/Materials", "LootRarity");
+            if (!AssetDatabase.IsValidFolder(LootPoolsFolder))
+                AssetDatabase.CreateFolder("Assets", "Loot");
         }
 
         private static T LoadOrCreate<T>(string path) where T : ScriptableObject
@@ -234,13 +260,16 @@ namespace FriendSlop.Editor
             // disabling the wrapper leaves the sphere and its shadow visible during transitions.
             var so = new SerializedObject(env);
             var contentRootProp = so.FindProperty("contentRoot");
-            if (contentRootProp != null)
-            {
-                var tinyWorld = GameObject.Find("Tiny Sphere World");
-                if (tinyWorld != null) contentRootProp.objectReferenceValue = tinyWorld;
-                so.ApplyModifiedPropertiesWithoutUndo();
-            }
+            var tinyWorld = GameObject.Find("Tiny Sphere World");
+            if (contentRootProp != null && tinyWorld != null)
+                contentRootProp.objectReferenceValue = tinyWorld;
+            so.ApplyModifiedPropertiesWithoutUndo();
 
+            // Tier 1's SphereWorld lives on the legacy content root, not under the env itself.
+            var sphere = tinyWorld != null ? tinyWorld.GetComponentInChildren<SphereWorld>(true) : null;
+            if (sphere != null) env.SetSphereWorld(sphere);
+
+            env.SnapAssetsToSurface();
             EditorUtility.SetDirty(env);
         }
 
@@ -250,14 +279,20 @@ namespace FriendSlop.Editor
             return go != null ? go.GetComponent<PlanetEnvironment>() : null;
         }
 
-        private static void BuildExtraPlanet(PlanetDefinition planet, string objectName, Vector3 worldPosition, float radius, Color groundColor, Color padColor)
+        private static void BuildExtraPlanet(PlanetDefinition planet, string objectName, Vector3 worldPosition, float radius, Color groundColor, Color padColor, LootPool lootPool)
         {
-            // Idempotency: skip rebuilding if the user already has one of these in scene.
+            // Idempotency: if the planet is already in the scene, just (re)wire its loot
+            // spawner so the pool reference stays current, then exit.
             var existing = GameObject.Find(objectName);
             if (existing != null)
             {
                 var existingEnv = existing.GetComponent<PlanetEnvironment>();
-                if (existingEnv != null && existingEnv.Planet == planet) return;
+                if (existingEnv != null && existingEnv.Planet == planet)
+                {
+                    if (lootPool != null)
+                        EnsurePlanetLootSpawner(existing, existingEnv, lootPool);
+                    return;
+                }
             }
 
             var root = new GameObject(objectName);
@@ -288,7 +323,11 @@ namespace FriendSlop.Editor
             // Beacon so players can see the pad from a distance.
             var beacon = new GameObject($"{objectName} Beacon");
             beacon.transform.SetParent(root.transform, false);
-            beacon.transform.position = world.GetSurfacePoint(padNormal, 4.5f);
+            const float beaconSurfaceOffset = 4.5f;
+            beacon.transform.position = world.GetSurfacePoint(padNormal, beaconSurfaceOffset);
+            var beaconAnchor = beacon.AddComponent<PlanetSurfaceAnchor>();
+            beaconAnchor.SetSurfaceOffset(beaconSurfaceOffset);
+            beaconAnchor.SetAlignRotation(false);
             var beaconLight = beacon.AddComponent<Light>();
             beaconLight.type = LightType.Point;
             beaconLight.color = padColor * 1.4f;
@@ -318,10 +357,117 @@ namespace FriendSlop.Editor
 
             var env = root.AddComponent<PlanetEnvironment>();
             env.Configure(planet, zone, spawns);
+            env.SetSphereWorld(world);
+            env.SnapAssetsToSurface();
             EditorUtility.SetDirty(env);
+
+            if (lootPool != null)
+                EnsurePlanetLootSpawner(root, env, lootPool);
 
             // Tier 2+ planets start inactive — they are enabled on-demand when players travel to them.
             root.SetActive(false);
+        }
+
+        private static void EnsurePlanetLootSpawner(GameObject planetRoot, PlanetEnvironment env, LootPool lootPool)
+        {
+            var spawner = planetRoot.GetComponentInChildren<PlanetLootSpawner>(true);
+            var world = env.SphereWorld != null ? env.SphereWorld : planetRoot.GetComponentInChildren<SphereWorld>(true);
+            if (world == null) return;
+
+            // Eight loot anchors arranged around the planet's "northern hemisphere", away
+            // from the launchpad so players have a reason to explore.
+            var anchors = new[]
+            {
+                new Vector3( 0.55f, 0.78f,  0.30f),
+                new Vector3(-0.55f, 0.78f,  0.30f),
+                new Vector3( 0.55f, 0.78f, -0.30f),
+                new Vector3(-0.55f, 0.78f, -0.30f),
+                new Vector3( 0.30f, 0.50f,  0.81f),
+                new Vector3(-0.30f, 0.50f,  0.81f),
+                new Vector3( 0.30f, 0.50f, -0.81f),
+                new Vector3(-0.30f, 0.50f, -0.81f),
+            };
+
+            var spawnRoot = planetRoot.transform.Find($"{planetRoot.name} Loot Spawn Points");
+            if (spawnRoot == null)
+            {
+                var go = new GameObject($"{planetRoot.name} Loot Spawn Points");
+                go.transform.SetParent(planetRoot.transform, false);
+                spawnRoot = go.transform;
+            }
+
+            var points = new Transform[anchors.Length];
+            for (var i = 0; i < anchors.Length; i++)
+            {
+                var name = $"{planetRoot.name} Loot Spawn {i + 1}";
+                var existingChild = spawnRoot.Find(name);
+                var go = existingChild != null ? existingChild.gameObject : new GameObject(name);
+                if (existingChild == null) go.transform.SetParent(spawnRoot, false);
+
+                var normal = anchors[i].normalized;
+                go.transform.position = world.GetSurfacePoint(normal, 0.4f);
+                go.transform.rotation = world.GetSurfaceRotation(normal, Vector3.forward);
+                points[i] = go.transform;
+                EditorUtility.SetDirty(go);
+            }
+
+            if (spawner == null)
+                spawner = planetRoot.AddComponent<PlanetLootSpawner>();
+            spawner.Configure(lootPool, points, rolls: 1);
+            EditorUtility.SetDirty(spawner);
+        }
+
+        [MenuItem("Tools/Friend Slop/Snap Planet Assets to Surface")]
+        public static void SnapAllPlanetAssetsToSurface()
+        {
+            var envs = Object.FindObjectsByType<PlanetEnvironment>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            if (envs.Length == 0)
+            {
+                Debug.LogWarning("Friend Slop: no PlanetEnvironment found in the active scene.");
+                return;
+            }
+
+            Undo.SetCurrentGroupName("Snap planet assets to surface");
+            var undoGroup = Undo.GetCurrentGroup();
+
+            foreach (var env in envs)
+            {
+                if (env == null) continue;
+
+                // Auto-wire the sphere world reference so future runs (and OnEnable snaps)
+                // don't have to scan the hierarchy.
+                if (env.SphereWorld == null)
+                {
+                    var found = env.GetComponentInChildren<SphereWorld>(true);
+                    if (found == null && env.ContentRoot != null)
+                        found = env.ContentRoot.GetComponentInChildren<SphereWorld>(true);
+                    if (found != null)
+                    {
+                        Undo.RecordObject(env, "Wire planet sphere world");
+                        env.SetSphereWorld(found);
+                    }
+                }
+
+                if (env.LaunchpadZone != null)
+                    Undo.RecordObject(env.LaunchpadZone.transform, "Snap launchpad");
+                if (env.PlayerSpawnPoints != null)
+                {
+                    foreach (var spawn in env.PlayerSpawnPoints)
+                        if (spawn != null) Undo.RecordObject(spawn, "Snap player spawn");
+                }
+                foreach (var anchor in env.GetComponentsInChildren<PlanetSurfaceAnchor>(true))
+                    if (anchor != null) Undo.RecordObject(anchor.transform, "Snap surface anchor");
+
+                env.SnapAssetsToSurface();
+                EditorUtility.SetDirty(env);
+            }
+
+            Undo.CollapseUndoOperations(undoGroup);
+
+            var scene = SceneManager.GetActiveScene();
+            if (scene.IsValid()) EditorSceneManager.MarkSceneDirty(scene);
+
+            Debug.Log($"Friend Slop: snapped {envs.Length} planet environment(s) to their surface.");
         }
 
         private static void WireRoundManagerPrefab(PlanetCatalog catalog, PlanetDefinition startingPlanet, RoundObjective defaultObjective)
@@ -363,6 +509,176 @@ namespace FriendSlop.Editor
         private static void DestroyComponent(Component component)
         {
             if (component != null) Object.DestroyImmediate(component);
+        }
+
+        // ----- Loot pool system -----
+
+        private readonly struct TestLootSpec
+        {
+            public readonly string Name;
+            public readonly int Value;
+            public readonly LootRarity Rarity;
+            public readonly PrimitiveType Shape;
+            public readonly Vector3 Scale;
+            public readonly float CarrySpeedMultiplier;
+
+            public TestLootSpec(string name, int value, LootRarity rarity, PrimitiveType shape, Vector3 scale, float carrySpeedMultiplier)
+            {
+                Name = name;
+                Value = value;
+                Rarity = rarity;
+                Shape = shape;
+                Scale = scale;
+                CarrySpeedMultiplier = carrySpeedMultiplier;
+            }
+        }
+
+        private static TestLootSpec[] GetTestLootSpecs() => new[]
+        {
+            // Values scale roughly 4x per tier so picking up rarer loot is dramatically better.
+            new TestLootSpec("Cracked Bolt",      25,   LootRarity.Common,    PrimitiveType.Cube,     new Vector3(0.55f, 0.55f, 0.55f), 0.96f),
+            new TestLootSpec("Rusty Toolbox",     80,   LootRarity.Uncommon,  PrimitiveType.Cube,     new Vector3(1.1f, 0.55f, 0.7f),  0.86f),
+            new TestLootSpec("Holo Tablet",       240,  LootRarity.Rare,      PrimitiveType.Cube,     new Vector3(0.95f, 0.08f, 0.65f), 0.9f),
+            new TestLootSpec("Cryo Diamond",      650,  LootRarity.Epic,      PrimitiveType.Sphere,   new Vector3(0.7f, 0.7f, 0.7f),   0.78f),
+            new TestLootSpec("Quantum Idol",      1500, LootRarity.Legendary, PrimitiveType.Capsule,  new Vector3(0.7f, 1.1f, 0.7f),   0.7f),
+        };
+
+        private static NetworkLootItem[] BuildTestLootPrefabs()
+        {
+            var specs = GetTestLootSpecs();
+            var prefabs = new NetworkLootItem[specs.Length];
+            for (var i = 0; i < specs.Length; i++)
+            {
+                prefabs[i] = BuildSingleTestLootPrefab(specs[i]);
+            }
+            return prefabs;
+        }
+
+        private static NetworkLootItem BuildSingleTestLootPrefab(TestLootSpec spec)
+        {
+            var prefabPath = $"{PoolLootFolder}/{SanitizeAssetName(spec.Name)}.prefab";
+            var lootObject = GameObject.CreatePrimitive(spec.Shape);
+            lootObject.name = spec.Name;
+            lootObject.transform.localScale = spec.Scale;
+            ApplyRarityMaterial(lootObject, spec.Rarity);
+
+            var body = lootObject.AddComponent<Rigidbody>();
+            body.mass = Mathf.Lerp(1.2f, 8f, 1f - spec.CarrySpeedMultiplier);
+            body.angularDamping = 0.15f;
+            body.useGravity = false;
+
+            lootObject.AddComponent<SphericalRigidbodyGravity>();
+            lootObject.AddComponent<NetworkObject>();
+            lootObject.AddComponent<NetworkTransform>();
+            var loot = lootObject.AddComponent<NetworkLootItem>();
+            var so = new SerializedObject(loot);
+            so.FindProperty("itemName").stringValue = spec.Name;
+            so.FindProperty("value").intValue = spec.Value;
+            so.FindProperty("carrySpeedMultiplier").floatValue = spec.CarrySpeedMultiplier;
+            so.FindProperty("carryDistance").floatValue = Mathf.Lerp(2.35f, 1.7f, 1f - spec.CarrySpeedMultiplier);
+            so.FindProperty("shipPartType").enumValueIndex = 0;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            var prefab = PrefabUtility.SaveAsPrefabAsset(lootObject, prefabPath);
+            Object.DestroyImmediate(lootObject);
+            return prefab.GetComponent<NetworkLootItem>();
+        }
+
+        private static void ApplyRarityMaterial(GameObject go, LootRarity rarity)
+        {
+            var renderer = go.GetComponent<Renderer>();
+            if (renderer == null) return;
+
+            var path = $"{LootMaterialsFolder}/Rarity_{rarity}.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                material = new Material(shader) { name = $"Rarity_{rarity}" };
+                AssetDatabase.CreateAsset(material, path);
+            }
+            material.color = rarity.DisplayTint();
+            // Glow for higher rarities so they're visible on the planet at a distance.
+            if (rarity >= LootRarity.Rare && material.HasProperty("_EmissionColor"))
+            {
+                material.EnableKeyword("_EMISSION");
+                material.SetColor("_EmissionColor", rarity.DisplayTint() * (rarity == LootRarity.Legendary ? 1.6f : 1.0f));
+            }
+            EditorUtility.SetDirty(material);
+            renderer.sharedMaterial = material;
+        }
+
+        private static LootPool BuildTier2LootPool(NetworkLootItem[] testLoot)
+        {
+            var pool = AssetDatabase.LoadAssetAtPath<LootPool>(Tier2LootPoolPath);
+            if (pool == null)
+            {
+                pool = ScriptableObject.CreateInstance<LootPool>();
+                AssetDatabase.CreateAsset(pool, Tier2LootPoolPath);
+            }
+
+            var entries = new List<LootPool.Entry>();
+            var specs = GetTestLootSpecs();
+            for (var i = 0; i < testLoot.Length && i < specs.Length; i++)
+            {
+                if (testLoot[i] == null) continue;
+                entries.Add(new LootPool.Entry
+                {
+                    prefab = testLoot[i],
+                    rarity = specs[i].Rarity,
+                });
+            }
+            pool.SetEntries(entries);
+            EditorUtility.SetDirty(pool);
+            return pool;
+        }
+
+        private static void EnsureNetworkPrefabsRegistered(NetworkLootItem[] prefabs)
+        {
+            var list = AssetDatabase.LoadAssetAtPath<NetworkPrefabsList>(NetworkPrefabsListPath);
+            if (list == null)
+            {
+                Debug.LogWarning($"NetworkPrefabsList not found at {NetworkPrefabsListPath}; rebuild the prototype scene first.");
+                return;
+            }
+
+            var so = new SerializedObject(list);
+            var listProp = so.FindProperty("List");
+
+            foreach (var loot in prefabs)
+            {
+                if (loot == null) continue;
+                if (ContainsPrefab(listProp, loot.gameObject)) continue;
+
+                var index = listProp.arraySize;
+                listProp.InsertArrayElementAtIndex(index);
+                var entry = listProp.GetArrayElementAtIndex(index);
+                entry.FindPropertyRelative("Override").enumValueIndex = (int)NetworkPrefabOverride.None;
+                entry.FindPropertyRelative("Prefab").objectReferenceValue = loot.gameObject;
+                entry.FindPropertyRelative("SourcePrefabToOverride").objectReferenceValue = null;
+                entry.FindPropertyRelative("SourceHashToOverride").uintValue = 0;
+                entry.FindPropertyRelative("OverridingTargetPrefab").objectReferenceValue = null;
+            }
+
+            so.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(list);
+        }
+
+        private static bool ContainsPrefab(SerializedProperty listProp, GameObject prefab)
+        {
+            for (var i = 0; i < listProp.arraySize; i++)
+            {
+                var entry = listProp.GetArrayElementAtIndex(i);
+                if (entry.FindPropertyRelative("Prefab").objectReferenceValue == prefab) return true;
+            }
+            return false;
+        }
+
+        private static string SanitizeAssetName(string name)
+        {
+            foreach (var c in System.IO.Path.GetInvalidFileNameChars())
+                name = name.Replace(c, '_');
+            return name.Replace(' ', '_');
         }
     }
 }
