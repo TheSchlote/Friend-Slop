@@ -58,6 +58,9 @@ namespace FriendSlop.UI
         private const float LateJoinLoadingDuration = 3f;
         private Image _sunGlareImage;
         private DayNightCycle _dayNightCycle;
+        private Image _fadeOverlayImage;
+        private float _fadeAlpha;
+        private const float FadeSpeed = 2.2f; // alpha units per second
         private RectTransform chargePanelRect;
         private RectTransform chargeFillRect;
         private Image chargeFillImage;
@@ -89,9 +92,13 @@ namespace FriendSlop.UI
         private Button cancelButton;
         private Button startButton;
         private Button restartButton;
+        private Text restartButtonLabel;
+        private Button cyclePlanetButton;
+        private Text cyclePlanetButtonLabel;
         private Button shutdownButton;
         private Button quitButton;
         private bool activeMenuOpen;
+        private bool _wasConnected;
         private Font font;
         private float _copyCodeFeedbackUntil;
 
@@ -112,6 +119,8 @@ namespace FriendSlop.UI
         {
             HandleMenuHotkeys();
 
+            DetectDisconnection();
+
             if (_lateJoinLoading && Time.time - _lateJoinLoadingStartTime >= LateJoinLoadingDuration)
             {
                 _lateJoinLoading = false;
@@ -131,6 +140,7 @@ namespace FriendSlop.UI
             }
 
             RefreshUi();
+            UpdateFade();
         }
 
         private void HandleMenuHotkeys()
@@ -183,6 +193,25 @@ namespace FriendSlop.UI
             localPlayer?.SetNameServerRpc(value);
         }
 
+        private void DetectDisconnection()
+        {
+            var nm = NetworkManager.Singleton;
+            var connected = nm != null && nm.IsListening;
+
+            if (_wasConnected && !connected)
+            {
+                // Connection just dropped (host left, kicked, or shutdown). The local player
+                // is gone, so its Esc handler can't unlock the cursor - do it here so the menu
+                // is reachable.
+                _lateJoinLoading = false;
+                activeMenuOpen = true;
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+
+            _wasConnected = connected;
+        }
+
         private bool IsBlockingGameplayInput()
         {
             if (playerNameInput != null && playerNameInput.isFocused) return true;
@@ -190,7 +219,7 @@ namespace FriendSlop.UI
 
             var round = RoundManager.Instance;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
-            if (phase == RoundPhase.Loading || _lateJoinLoading) return true;
+            if (phase == RoundPhase.Loading || phase == RoundPhase.Transitioning || _lateJoinLoading) return true;
 
             var activeRound = IsActiveRound();
             return !activeRound || activeMenuOpen;
@@ -207,7 +236,7 @@ namespace FriendSlop.UI
             var connectionInProgress = session != null && session.IsSessionOperationInProgress;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var activeRound = connected && phase == RoundPhase.Active;
-            var isLoading = phase == RoundPhase.Loading || _lateJoinLoading;
+            var isLoading = phase == RoundPhase.Loading || phase == RoundPhase.Transitioning || _lateJoinLoading;
             if (!activeRound)
             {
                 activeMenuOpen = false;
@@ -273,6 +302,8 @@ namespace FriendSlop.UI
             SetButtonColor(cancelButton, canCancelSessionOperation ? CancelButtonColor : DefaultButtonColor);
             startButton.gameObject.SetActive(connected && isHost && phase == RoundPhase.Lobby);
             restartButton.gameObject.SetActive(connected && isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed || phase == RoundPhase.AllDead));
+            UpdateRestartButtonLabel(round, phase);
+            UpdateCyclePlanetButton(round, phase, connected, isHost);
             shutdownButton.gameObject.SetActive(connected);
             SetButtonLabel(shutdownButton, canCancelSessionOperation && !isHost ? "Cancel Join" : "Leave Session");
             lobbyQueueText.gameObject.SetActive(connected && !canCancelSessionOperation);
@@ -282,12 +313,12 @@ namespace FriendSlop.UI
             if (round != null)
             {
                 quotaText.text = $"Team Money: ${round.CollectedValue.Value}";
-                timerText.text = $"Parts: {FormatPart(round.HasCockpit.Value, "Cockpit")} | {FormatPart(round.HasWings.Value, "Wings")} | {FormatPart(round.HasEngine.Value, "Engine")}";
+                timerText.text = BuildObjectiveHudText(round);
                 resultText.text = phase switch
                 {
-                    RoundPhase.Lobby => connected ? "Lobby: host starts the planet run when everyone is in." : "Host or join to begin.",
+                    RoundPhase.Lobby => connected ? $"Lobby: host starts the run when everyone is in.\nCurrent planet: {FormatPlanetLabel(round.CurrentPlanet)}" : "Host or join to begin.",
                     RoundPhase.Active => string.Empty,
-                    RoundPhase.Success => "ROCKET ASSEMBLED: next planet travel comes later.",
+                    RoundPhase.Success => BuildSuccessResultText(round),
                     RoundPhase.Failed => "FAILED: the timer ate your paycheck.",
                     RoundPhase.AllDead => $"WIPE OUT - everyone died.\nCollected ${round.CollectedValue.Value} toward quota.",
                     _ => string.Empty
@@ -359,6 +390,7 @@ namespace FriendSlop.UI
             SetButtonSize(cancelButton, buttonWidth, buttonHeight);
             SetButtonSize(startButton, buttonWidth, buttonHeight);
             SetButtonSize(restartButton, buttonWidth, buttonHeight);
+            SetButtonSize(cyclePlanetButton, buttonWidth, buttonHeight);
             SetButtonSize(shutdownButton, buttonWidth, buttonHeight);
             SetButtonSize(quitButton, buttonWidth, buttonHeight);
             SetSize(joinInput.GetComponent<RectTransform>(), new Vector2(buttonWidth, buttonHeight));
@@ -416,9 +448,19 @@ namespace FriendSlop.UI
 
             if (isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed || phase == RoundPhase.AllDead))
             {
+                var showCycle = cyclePlanetButton != null && cyclePlanetButton.gameObject.activeSelf;
                 SetPosition(restartButton.GetComponent<RectTransform>(), new Vector2(0f, primaryButtonY));
-                SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, secondaryButtonY));
-                SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, tertiaryButtonY));
+                if (showCycle)
+                {
+                    SetPosition(cyclePlanetButton.GetComponent<RectTransform>(), new Vector2(0f, secondaryButtonY));
+                    SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, tertiaryButtonY));
+                    SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, tertiaryButtonY - buttonHeight - buttonGap));
+                }
+                else
+                {
+                    SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, secondaryButtonY));
+                    SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, tertiaryButtonY));
+                }
                 return;
             }
 
@@ -455,7 +497,7 @@ namespace FriendSlop.UI
 
             canvasObject.AddComponent<GraphicRaycaster>();
 
-            // Name input panel — top-right corner, visible whenever the menu is showing
+            // Name input panel - top-right corner, visible whenever the menu is showing
             var namePanel = CreatePanel("NamePanel", canvasObject.transform,
                 new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                 new Vector2(0f, -18f), new Vector2(240f, 68f),
@@ -563,7 +605,7 @@ namespace FriendSlop.UI
 
             chargePanelRect.gameObject.SetActive(false);
 
-            // Game over title — big red text above the menu, only shown on AllDead
+            // Game over title - big red text above the menu, only shown on AllDead
             gameOverText = CreateText("GameOverTitle", canvasObject.transform, "GAME OVER",
                 72, TextAnchor.MiddleCenter,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
@@ -574,7 +616,7 @@ namespace FriendSlop.UI
             gameOverOutline.effectDistance = new Vector2(3f, -3f);
             gameOverText.gameObject.SetActive(false);
 
-            // Damage flash overlay — full-screen red, triggered on hit, fades out over ~0.5s
+            // Damage flash overlay - full-screen red, triggered on hit, fades out over ~0.5s
             var flashObj = new GameObject("DamageFlash");
             flashObj.transform.SetParent(canvasObject.transform, false);
             var flashRect = flashObj.AddComponent<RectTransform>();
@@ -586,7 +628,7 @@ namespace FriendSlop.UI
             damageFlashImage.color = new Color(0.72f, 0f, 0f, 0f);
             damageFlashImage.raycastTarget = false;
 
-            // Sun glare — full-screen warm white, fades in when staring at the sun
+            // Sun glare - full-screen warm white, fades in when staring at the sun
             var glareObj = new GameObject("SunGlare");
             glareObj.transform.SetParent(canvasObject.transform, false);
             var glareRect = glareObj.AddComponent<RectTransform>();
@@ -653,11 +695,10 @@ namespace FriendSlop.UI
                 RoundManager.Instance?.RequestStartRoundServerRpc();
                 LockGameplayCursor();
             });
-            restartButton = CreateButton("Restart Round", menuRoot.transform, Vector2.zero, () =>
-            {
-                RoundManager.Instance?.RequestRestartRoundServerRpc();
-                LockGameplayCursor();
-            });
+            restartButton = CreateButton("Restart Round", menuRoot.transform, Vector2.zero, OnRestartOrTravelClicked);
+            restartButtonLabel = restartButton.GetComponentInChildren<Text>();
+            cyclePlanetButton = CreateButton("Cycle Planet", menuRoot.transform, Vector2.zero, OnCyclePlanetClicked);
+            cyclePlanetButtonLabel = cyclePlanetButton.GetComponentInChildren<Text>();
             shutdownButton = CreateButton("Leave Session", menuRoot.transform, Vector2.zero, HandleSessionExitButton);
             quitButton = CreateButton("Quit", menuRoot.transform, Vector2.zero, QuitGame);
 
@@ -696,6 +737,19 @@ namespace FriendSlop.UI
             loadingScreenRoot.SetActive(false);
             gameOverText.rectTransform.SetAsLastSibling();
             namePanelRoot.transform.SetAsLastSibling();
+
+            // Full-screen black overlay for planet transition fades. It sits above menu/HUD,
+            // while the loading screen is raised after it so travel status remains visible.
+            var fadeObj = new GameObject("PlanetFadeOverlay");
+            fadeObj.transform.SetParent(canvasObject.transform, false);
+            var fadeRect = fadeObj.AddComponent<RectTransform>();
+            fadeRect.anchorMin = Vector2.zero;
+            fadeRect.anchorMax = Vector2.one;
+            fadeRect.offsetMin = Vector2.zero;
+            fadeRect.offsetMax = Vector2.zero;
+            _fadeOverlayImage = fadeObj.AddComponent<Image>();
+            _fadeOverlayImage.color = new Color(0f, 0f, 0f, 0f);
+            _fadeOverlayImage.raycastTarget = false;
             loadingScreenRoot.transform.SetAsLastSibling();
         }
 
@@ -767,6 +821,88 @@ namespace FriendSlop.UI
         public void EnterGameplayMode()
         {
             LockGameplayCursor();
+        }
+
+        private void OnRestartOrTravelClicked()
+        {
+            var rm = RoundManager.Instance;
+            if (rm == null) return;
+
+            if (rm.Phase.Value == RoundPhase.Success && rm.GetNextTierCandidates().Count > 0 && !rm.HasReachedFinalTier)
+                rm.RequestTravelToNextPlanetServerRpc();
+            else
+                rm.RequestRestartRoundServerRpc();
+
+            LockGameplayCursor();
+        }
+
+        private void OnCyclePlanetClicked()
+        {
+            var rm = RoundManager.Instance;
+            if (rm == null || rm.Catalog == null) return;
+            var candidates = rm.GetNextTierCandidates();
+            if (candidates.Count <= 1) return;
+
+            var current = rm.SelectedNextPlanet;
+            var idx = current != null ? candidates.IndexOf(current) : -1;
+            var nextPlanet = candidates[(idx + 1) % candidates.Count];
+            var catalogIndex = rm.Catalog.IndexOf(nextPlanet);
+            if (catalogIndex >= 0)
+                rm.RequestSelectNextPlanetServerRpc(catalogIndex);
+        }
+
+        private static string FormatPlanetLabel(PlanetDefinition planet)
+        {
+            return planet != null ? $"{planet.DisplayName} (Tier {planet.Tier})" : "Unknown";
+        }
+
+        private static string BuildSuccessResultText(RoundManager round)
+        {
+            if (round == null) return "ROCKET ASSEMBLED.";
+
+            var current = FormatPlanetLabel(round.CurrentPlanet);
+            if (round.HasReachedFinalTier)
+                return $"ROCKET ASSEMBLED on {current}.\nFinal tier reached - replay to keep grinding.";
+
+            var candidates = round.GetNextTierCandidates();
+            if (candidates.Count == 0)
+                return $"ROCKET ASSEMBLED on {current}.\nNo tier {round.NextTier} planets registered yet - host can replay.";
+
+            var next = round.SelectedNextPlanet;
+            if (next == null || next.Tier != round.NextTier)
+                next = candidates[0];
+
+            var optionsLine = candidates.Count > 1
+                ? $"\n{candidates.Count} tier {round.NextTier} options - host can cycle."
+                : string.Empty;
+            return $"ROCKET ASSEMBLED on {current}.\nNext: {FormatPlanetLabel(next)}{optionsLine}";
+        }
+
+        private void UpdateRestartButtonLabel(RoundManager round, RoundPhase phase)
+        {
+            if (restartButtonLabel == null) return;
+            if (round != null && phase == RoundPhase.Success && !round.HasReachedFinalTier)
+            {
+                var candidates = round.GetNextTierCandidates();
+                if (candidates.Count > 0)
+                {
+                    var next = round.SelectedNextPlanet;
+                    if (next == null || next.Tier != round.NextTier) next = candidates[0];
+                    restartButtonLabel.text = $"Travel: {FormatPlanetLabel(next)}";
+                    return;
+                }
+            }
+            restartButtonLabel.text = "Restart Round";
+        }
+
+        private void UpdateCyclePlanetButton(RoundManager round, RoundPhase phase, bool connected, bool isHost)
+        {
+            if (cyclePlanetButton == null) return;
+            var show = connected && isHost && round != null && phase == RoundPhase.Success
+                       && !round.HasReachedFinalTier && round.GetNextTierCandidates().Count > 1;
+            cyclePlanetButton.gameObject.SetActive(show);
+            if (show && cyclePlanetButtonLabel != null)
+                cyclePlanetButtonLabel.text = $"Cycle Tier {round.NextTier} Planet";
         }
 
         private void LockGameplayCursor()
@@ -927,6 +1063,22 @@ namespace FriendSlop.UI
             return installed ? $"{label} OK" : $"{label} missing";
         }
 
+        private static string BuildObjectiveHudText(RoundManager round)
+        {
+            var objective = round != null ? round.ActiveObjective : null;
+            if (objective != null)
+            {
+                var hud = objective.BuildHudStatus(round);
+                if (!string.IsNullOrEmpty(hud)) return hud;
+                if (!string.IsNullOrEmpty(objective.Title)) return objective.Title;
+            }
+
+            // Legacy default - no objective configured, fall back to parts list.
+            return round != null
+                ? $"Parts: {FormatPart(round.HasCockpit.Value, "Cockpit")} | {FormatPart(round.HasWings.Value, "Wings")} | {FormatPart(round.HasEngine.Value, "Engine")}"
+                : "Parts: Cockpit missing | Wings missing | Engine missing";
+        }
+
         private static int GetTeamMoney(RoundManager round)
         {
             return round != null ? round.CollectedValue.Value : 0;
@@ -1070,7 +1222,15 @@ namespace FriendSlop.UI
 
             float progress;
             string statusMsg;
-            if (phase == RoundPhase.Loading && round != null)
+            if (phase == RoundPhase.Transitioning && round != null)
+            {
+                var dest = round.SelectedNextPlanet ?? round.CurrentPlanet;
+                var destName = dest != null ? dest.DisplayName : "Unknown";
+                statusMsg = $"Traveling to {destName}...";
+                // Pulse the bar back and forth as an indeterminate indicator.
+                progress = Mathf.PingPong(Time.time * 0.6f, 1f);
+            }
+            else if (phase == RoundPhase.Loading && round != null)
             {
                 var ready = round.PlayersReady.Value;
                 var expected = Mathf.Max(1, round.PlayersExpectedToLoad.Value);
@@ -1103,7 +1263,7 @@ namespace FriendSlop.UI
             // Hide glare during loading or when no camera is active
             var isLoading = _lateJoinLoading;
             var round = RoundManager.Instance;
-            if (round != null && round.Phase.Value == RoundPhase.Loading) isLoading = true;
+            if (round != null && (round.Phase.Value == RoundPhase.Loading || round.Phase.Value == RoundPhase.Transitioning)) isLoading = true;
             if (isLoading)
             {
                 _sunGlareImage.color = new Color(1f, 0.95f, 0.82f, 0f);
@@ -1151,6 +1311,16 @@ namespace FriendSlop.UI
 
             var alpha = glareT * glareT * 0.88f;
             _sunGlareImage.color = new Color(1f, 0.95f, 0.82f, alpha);
+        }
+
+        private void UpdateFade()
+        {
+            if (_fadeOverlayImage == null) return;
+            var round = RoundManager.Instance;
+            var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
+            var targetAlpha = phase == RoundPhase.Transitioning ? 1f : 0f;
+            _fadeAlpha = Mathf.MoveTowards(_fadeAlpha, targetAlpha, FadeSpeed * Time.deltaTime);
+            _fadeOverlayImage.color = new Color(0f, 0f, 0f, _fadeAlpha);
         }
 
         private void QuitGame()

@@ -11,6 +11,7 @@ namespace FriendSlop.Player
     public class PlayerInteractor : NetworkBehaviour
     {
         [SerializeField] private float interactDistance = 3.2f;
+        [SerializeField] private float interactRadius = 0.35f;
         [SerializeField] private float throwImpulse = 8f;
         [SerializeField] private float maxChargeDuration = 1.8f;
         [SerializeField] private float chargeThrowMultiplier = 3.5f;
@@ -138,8 +139,20 @@ namespace FriendSlop.Player
             if (hasHeldPlayer) UpdateHeldPlayerPose();
 
             var cameraTransform = controller.PlayerCamera.transform;
-            if (!Physics.Raycast(cameraTransform.position, cameraTransform.forward, out var hit,
-                    interactDistance, interactMask, QueryTriggerInteraction.Ignore))
+            // Use a SphereCast so grabbing a player or loot doesn't require pixel-perfect aim.
+            // Origin is shifted forward so we don't immediately collide with our own body.
+            var radius = Mathf.Max(0.05f, interactRadius);
+            var origin = cameraTransform.position + cameraTransform.forward * radius;
+            var castDistance = Mathf.Max(0f, interactDistance - radius);
+            if (!Physics.SphereCast(origin, radius, cameraTransform.forward, out var hit,
+                    castDistance, interactMask, QueryTriggerInteraction.Ignore))
+            {
+                UpdateCarryPrompt(hasHeldItem, hasHeldPlayer);
+                return;
+            }
+
+            // Skip self-hits (own capsule, child colliders).
+            if (hit.collider != null && hit.collider.transform.root == transform.root)
             {
                 UpdateCarryPrompt(hasHeldItem, hasHeldPlayer);
                 return;
