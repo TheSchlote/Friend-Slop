@@ -1,4 +1,5 @@
 using FriendSlop.Core;
+using FriendSlop.UI;
 using UnityEngine;
 
 namespace FriendSlop.Player
@@ -75,11 +76,14 @@ namespace FriendSlop.Player
             var cam = localPlayer.PlayerCamera;
             if (cam != null)
             {
-                var toCamera = cam.transform.position - nameplateRoot.transform.position;
-                if (toCamera.sqrMagnitude > 0.001f)
+                if (WorldTextBillboard.TryGetReadableTextRotation(
+                        nameplateRoot.transform.position,
+                        cam.transform.position,
+                        cam.transform.up,
+                        SphereWorld.GetGravityUp(nameplateRoot.transform.position),
+                        out var rotation))
                 {
-                    var up = SphereWorld.GetGravityUp(nameplateRoot.transform.position);
-                    nameplateRoot.transform.rotation = Quaternion.LookRotation(-toCamera.normalized, up);
+                    nameplateRoot.transform.rotation = rotation;
                 }
             }
 

@@ -23,6 +23,8 @@ namespace FriendSlop.Core
         private readonly List<Light> _fillLights = new();
         private Material _skyboxInstance;
         private Material _originalSkybox;
+        private Material _sunMaterial;
+        private Material _haloMaterial;
 
         public Vector3 SunWorldPosition { get; private set; }
         public float SunElevation { get; private set; }
@@ -72,6 +74,10 @@ namespace FriendSlop.Core
                 Destroy(_skyboxInstance);
             _skyboxInstance = null;
             _originalSkybox = null;
+            if (_sunMaterial != null) Destroy(_sunMaterial);
+            if (_haloMaterial != null) Destroy(_haloMaterial);
+            _sunMaterial = null;
+            _haloMaterial = null;
 
             // The sun visual lives on the _dirLight object — only remove the components we added.
             if (_dirLight != null)
@@ -88,6 +94,8 @@ namespace FriendSlop.Core
             var stale = GameObject.Find("Sun Visual");
             if (stale != null) Destroy(stale);
             _sunVisual = null;
+            _fillLights.Clear();
+            _dirLight = null;
         }
 
         private void Update()
@@ -126,7 +134,8 @@ namespace FriendSlop.Core
                 var mr = sunGo.AddComponent<MeshRenderer>();
                 mr.shadowCastingMode = ShadowCastingMode.Off;
                 mr.receiveShadows = false;
-                mr.sharedMaterial = MakeSunMat();
+                _sunMaterial = MakeSunMat();
+                mr.sharedMaterial = _sunMaterial;
             }
 
             // Halo — larger transparent child sphere for a soft glow ring.
@@ -140,7 +149,8 @@ namespace FriendSlop.Core
                 var haloMr = haloGo.GetComponent<MeshRenderer>();
                 haloMr.shadowCastingMode = ShadowCastingMode.Off;
                 haloMr.receiveShadows = false;
-                haloMr.sharedMaterial = MakeHaloMat();
+                _haloMaterial = MakeHaloMat();
+                haloMr.sharedMaterial = _haloMaterial;
             }
 
             _sunVisual = sunGo.transform;

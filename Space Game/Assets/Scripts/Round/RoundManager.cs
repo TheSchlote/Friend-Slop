@@ -43,6 +43,16 @@ namespace FriendSlop.Round
             Instance = this;
         }
 
+        public override void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Instance = null;
+            }
+
+            base.OnDestroy();
+        }
+
         public override void OnNetworkSpawn()
         {
             if (NetworkManager != null)
@@ -261,13 +271,20 @@ namespace FriendSlop.Round
         {
             if (!IsServer) return;
 
-            // If a client drops before reporting ready, shrink the expected count so loading isn't stuck.
-            if (Phase.Value == RoundPhase.Loading && !_readyPlayerIds.Contains(clientId)
-                && PlayersExpectedToLoad.Value > 0)
+            if (Phase.Value == RoundPhase.Loading)
             {
-                PlayersExpectedToLoad.Value--;
-                if (_readyPlayerIds.Count >= PlayersExpectedToLoad.Value)
+                var wasReady = _readyPlayerIds.Remove(clientId);
+                var loadingCounts = RoundStateUtility.RemoveDisconnectedLoadingPlayer(
+                    PlayersExpectedToLoad.Value,
+                    PlayersReady.Value,
+                    wasReady);
+                PlayersExpectedToLoad.Value = loadingCounts.ExpectedToLoad;
+                PlayersReady.Value = loadingCounts.ReadyCount;
+
+                if (PlayersExpectedToLoad.Value <= 0 || PlayersReady.Value >= PlayersExpectedToLoad.Value)
+                {
                     Phase.Value = RoundPhase.Active;
+                }
             }
 
             if (boardedPlayerIds.Remove(clientId))

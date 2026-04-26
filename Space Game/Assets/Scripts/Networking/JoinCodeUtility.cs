@@ -53,9 +53,23 @@ namespace FriendSlop.Networking
 
         public static string NormalizeJoinCode(string joinCode)
         {
-            return string.IsNullOrWhiteSpace(joinCode)
-                ? string.Empty
-                : joinCode.Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(joinCode))
+            {
+                return string.Empty;
+            }
+
+            var builder = new System.Text.StringBuilder(joinCode.Length);
+            foreach (var character in joinCode.Trim())
+            {
+                if (char.IsWhiteSpace(character) || character == '-')
+                {
+                    continue;
+                }
+
+                builder.Append(char.ToUpperInvariant(character));
+            }
+
+            return builder.ToString();
         }
 
         public static bool IsValidRelayJoinCode(string joinCode)
@@ -80,6 +94,11 @@ namespace FriendSlop.Networking
 
         public static string GetFriendlyJoinFailure(Exception exception, string joinCode)
         {
+            if (exception is TimeoutException)
+            {
+                return "Timed out contacting Relay. Check your internet connection and try again.";
+            }
+
             if (exception is RelayServiceException relayException)
             {
                 switch (relayException.Reason)

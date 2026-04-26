@@ -141,6 +141,21 @@ namespace FriendSlop.Loot
             return IsCarried.Value && CarrierClientId.Value == clientId;
         }
 
+        public void PreviewCarriedPose(Vector3 targetPosition, Quaternion targetRotation)
+        {
+            if (!IsCarried.Value || IsDeposited.Value)
+            {
+                return;
+            }
+
+            transform.SetPositionAndRotation(targetPosition, targetRotation);
+            if (body != null && body.isKinematic)
+            {
+                body.position = targetPosition;
+                body.rotation = targetRotation;
+            }
+        }
+
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void RequestPickupServerRpc(RpcParams rpcParams = default)
         {
@@ -149,9 +164,19 @@ namespace FriendSlop.Loot
                 return;
             }
 
+            var round = RoundManager.Instance;
+            if (round == null || round.Phase.Value != RoundPhase.Active)
+            {
+                return;
+            }
+
             var senderId = rpcParams.Receive.SenderClientId;
             var player = NetworkFirstPersonController.FindByClientId(senderId);
-            if (player == null || player.HeldItem != null)
+            if (player == null
+                || player.HeldItem != null
+                || player.HasHeldPlayer
+                || player.IsDead
+                || player.IsBeingCarried.Value)
             {
                 return;
             }

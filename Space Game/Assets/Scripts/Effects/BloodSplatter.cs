@@ -123,5 +123,16 @@ namespace FriendSlop.Effects
                 item.Material.color = new Color(c.r, c.g, c.b, item.StartAlpha * fade);
             }
         }
+
+        private void OnDestroy()
+        {
+            foreach (var item in _mats)
+            {
+                if (item.Material != null)
+                    Destroy(item.Material);
+            }
+
+            _mats.Clear();
+        }
     }
 }

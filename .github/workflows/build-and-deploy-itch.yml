@@ -20,6 +20,7 @@ env:
   BUILD_TARGET: StandaloneWindows64
   BUILD_NAME: FriendSlop
   BUILD_VERSION: 0.1.${{ github.run_number }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   ITCH_USER: theschlote
   ITCH_GAME: ${{ vars.ITCH_GAME != '' && vars.ITCH_GAME || 'friend-slop' }}
 

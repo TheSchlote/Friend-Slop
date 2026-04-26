@@ -26,6 +26,9 @@ namespace FriendSlop.UI
         private const float MaxButtonWidth = 380f;
         private const float MinButtonHeight = 42f;
         private const float MaxButtonHeight = 52f;
+        private static readonly Color DefaultButtonColor = new Color(0.16f, 0.18f, 0.18f, 0.96f);
+        private static readonly Color CancelButtonColor = new Color(0.48f, 0.17f, 0.12f, 0.96f);
+        private static readonly Color SuccessButtonColor = new Color(0.16f, 0.42f, 0.24f, 0.96f);
 
         public static FriendSlopUI Instance { get; private set; }
         public static bool BlocksGameplayInput => Instance != null && Instance.IsBlockingGameplayInput();
@@ -33,6 +36,7 @@ namespace FriendSlop.UI
         private Canvas canvas;
         private RectTransform canvasRect;
         private RectTransform menuRect;
+        private RectTransform namePanelRect;
         private RectTransform hudRect;
         private RectTransform moneyPanelRect;
         private RectTransform staminaPanelRect;
@@ -57,10 +61,18 @@ namespace FriendSlop.UI
         private RectTransform chargePanelRect;
         private RectTransform chargeFillRect;
         private Image chargeFillImage;
+        private Image menuBackdropImage;
         private GameObject menuRoot;
         private Text titleText;
         private Text statusText;
+        private GameObject joinCodePanelRoot;
+        private RectTransform joinCodePanelRect;
+        private Text joinCodeLabelText;
+        private Text joinCodeText;
+        private Button copyCodeButton;
+        private Text copyCodeButtonText;
         private Text lobbyQueueText;
+        private Text connectionHintText;
         private Text quotaText;
         private Text timerText;
         private Text promptText;
@@ -74,12 +86,14 @@ namespace FriendSlop.UI
         private Button joinButton;
         private Button localHostButton;
         private Button localJoinButton;
+        private Button cancelButton;
         private Button startButton;
         private Button restartButton;
         private Button shutdownButton;
         private Button quitButton;
-        private bool menuPinned;
+        private bool activeMenuOpen;
         private Font font;
+        private float _copyCodeFeedbackUntil;
 
         private void Awake()
         {
@@ -96,13 +110,16 @@ namespace FriendSlop.UI
 
         private void Update()
         {
-            if (Keyboard.current != null && Keyboard.current.tabKey.wasPressedThisFrame)
-            {
-                menuPinned = !menuPinned;
-            }
+            HandleMenuHotkeys();
 
             if (_lateJoinLoading && Time.time - _lateJoinLoadingStartTime >= LateJoinLoadingDuration)
+            {
                 _lateJoinLoading = false;
+                if (IsActiveRound())
+                {
+                    LockGameplayCursor();
+                }
+            }
 
             UpdateSunGlare();
 
@@ -114,6 +131,42 @@ namespace FriendSlop.UI
             }
 
             RefreshUi();
+        }
+
+        private void HandleMenuHotkeys()
+        {
+            if (Keyboard.current == null)
+            {
+                return;
+            }
+
+            var menuTogglePressed = Keyboard.current.tabKey.wasPressedThisFrame ||
+                                    Keyboard.current.escapeKey.wasPressedThisFrame;
+            if (!menuTogglePressed)
+            {
+                return;
+            }
+
+            var networkManager = NetworkManager.Singleton;
+            var round = RoundManager.Instance;
+            var connected = networkManager != null && networkManager.IsListening;
+            var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
+            var activeRound = connected && phase == RoundPhase.Active;
+
+            if (!activeRound)
+            {
+                UnlockMenuCursor();
+                return;
+            }
+
+            if (activeMenuOpen)
+            {
+                LockGameplayCursor();
+            }
+            else
+            {
+                OpenActiveRoundMenu();
+            }
         }
 
         private void OnPlayerNameEndEdit(string value)
@@ -139,8 +192,8 @@ namespace FriendSlop.UI
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             if (phase == RoundPhase.Loading || _lateJoinLoading) return true;
 
-            var activeRound = round != null && phase == RoundPhase.Active;
-            return !activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked;
+            var activeRound = IsActiveRound();
+            return !activeRound || activeMenuOpen;
         }
 
         private void RefreshUi()
@@ -150,12 +203,38 @@ namespace FriendSlop.UI
             var round = RoundManager.Instance;
             var connected = networkManager != null && networkManager.IsListening;
             var isHost = networkManager != null && networkManager.IsHost;
+            var canCancelSessionOperation = session != null && session.CanCancelSessionOperation;
+            var connectionInProgress = session != null && session.IsSessionOperationInProgress;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var activeRound = connected && phase == RoundPhase.Active;
             var isLoading = phase == RoundPhase.Loading || _lateJoinLoading;
-            var showMenu = !isLoading && (!activeRound || menuPinned || Cursor.lockState != CursorLockMode.Locked);
+            if (!activeRound)
+            {
+                activeMenuOpen = false;
+            }
+
+            var showMenu = !isLoading && (!activeRound || activeMenuOpen);
+
+            if (showMenu && (Cursor.lockState != CursorLockMode.None || !Cursor.visible))
+            {
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+            }
+            else if (activeRound && !activeMenuOpen && (Cursor.lockState != CursorLockMode.Locked || Cursor.visible))
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
 
             UpdateLoadingScreen(isLoading, phase, round);
+
+            if (menuBackdropImage != null)
+            {
+                menuBackdropImage.gameObject.SetActive(showMenu);
+                menuBackdropImage.color = connected
+                    ? new Color(0.01f, 0.02f, 0.02f, 0.52f)
+                    : new Color(0.01f, 0.02f, 0.02f, 0.68f);
+            }
 
             menuRoot.SetActive(showMenu);
             if (namePanelRoot != null) namePanelRoot.SetActive(showMenu);
@@ -168,27 +247,35 @@ namespace FriendSlop.UI
             LayoutHud();
 
             titleText.text = "FRIEND SLOP RETRIEVAL";
-            if (session != null)
+            statusText.text = BuildStatusText(session, round, connectionInProgress);
+            statusText.color = connectionInProgress
+                ? new Color(0.72f, 0.9f, 1f, 1f)
+                : Color.white;
+            if (connectionHintText != null)
             {
-                var code = string.IsNullOrWhiteSpace(session.LastJoinCode) ? string.Empty : $"\nCode: {session.LastJoinCode}";
-                statusText.text = session.Status + code + $"\nTeam Money: ${GetTeamMoney(round)}\nTab toggles this menu. Esc unlocks mouse.";
+                connectionHintText.gameObject.SetActive(!connected && connectionInProgress);
+                if (!connected && connectionInProgress)
+                {
+                    connectionHintText.text = BuildConnectionHint(session);
+                }
             }
-            else
-            {
-                statusText.text = "Not connected.\nTeam Money: $0\nTab toggles this menu. Esc unlocks mouse.";
-            }
+            UpdateJoinCodePanel(session, showMenu, connected, isHost);
 
             lobbyQueueText.text = BuildLobbyQueue(networkManager);
 
-            hostButton.gameObject.SetActive(!connected);
-            joinButton.gameObject.SetActive(!connected);
-            localHostButton.gameObject.SetActive(!connected);
-            localJoinButton.gameObject.SetActive(!connected);
-            joinInput.gameObject.SetActive(!connected);
+            hostButton.gameObject.SetActive(!connected && !canCancelSessionOperation);
+            joinButton.gameObject.SetActive(!connected && !canCancelSessionOperation);
+            localHostButton.gameObject.SetActive(!connected && !canCancelSessionOperation);
+            localJoinButton.gameObject.SetActive(!connected && !canCancelSessionOperation);
+            joinInput.gameObject.SetActive(!connected && !canCancelSessionOperation);
+            cancelButton.gameObject.SetActive(!connected && canCancelSessionOperation);
+            SetButtonLabel(cancelButton, "Cancel Connection");
+            SetButtonColor(cancelButton, canCancelSessionOperation ? CancelButtonColor : DefaultButtonColor);
             startButton.gameObject.SetActive(connected && isHost && phase == RoundPhase.Lobby);
             restartButton.gameObject.SetActive(connected && isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed || phase == RoundPhase.AllDead));
             shutdownButton.gameObject.SetActive(connected);
-            lobbyQueueText.gameObject.SetActive(connected);
+            SetButtonLabel(shutdownButton, canCancelSessionOperation && !isHost ? "Cancel Join" : "Leave Session");
+            lobbyQueueText.gameObject.SetActive(connected && !canCancelSessionOperation);
 
             LayoutMenu(connected, isHost, phase);
 
@@ -202,7 +289,7 @@ namespace FriendSlop.UI
                     RoundPhase.Active => string.Empty,
                     RoundPhase.Success => "ROCKET ASSEMBLED: next planet travel comes later.",
                     RoundPhase.Failed => "FAILED: the timer ate your paycheck.",
-                    RoundPhase.AllDead => $"WIPE OUT — everyone died.\nCollected ${round.CollectedValue.Value} toward quota.",
+                    RoundPhase.AllDead => $"WIPE OUT - everyone died.\nCollected ${round.CollectedValue.Value} toward quota.",
                     _ => string.Empty
                 };
             }
@@ -237,9 +324,13 @@ namespace FriendSlop.UI
         private void LayoutMenu(bool connected, bool isHost, RoundPhase phase)
         {
             var canvasSize = GetCanvasSize();
+            var showJoinCodePanel = joinCodePanelRoot != null && joinCodePanelRoot.activeSelf;
+            var showConnectionHint = connectionHintText != null && connectionHintText.gameObject.activeSelf;
             var menuWidth = Mathf.Clamp(canvasSize.x * 0.34f, MinMenuWidth, MaxMenuWidth);
             var menuHeight = connected
-                ? Mathf.Clamp(canvasSize.y * 0.44f, MinConnectedMenuHeight, MaxConnectedMenuHeight)
+                ? showJoinCodePanel
+                    ? Mathf.Clamp(canvasSize.y * 0.58f, 580f, 660f)
+                    : Mathf.Clamp(canvasSize.y * 0.44f, MinConnectedMenuHeight, MaxConnectedMenuHeight)
                 : Mathf.Clamp(canvasSize.y * 0.58f, MinDisconnectedMenuHeight, MaxDisconnectedMenuHeight);
             var contentWidth = menuWidth - 64f;
             var buttonWidth = Mathf.Clamp(menuWidth * 0.64f, MinButtonWidth, MaxButtonWidth);
@@ -248,20 +339,59 @@ namespace FriendSlop.UI
 
             menuRect.sizeDelta = new Vector2(menuWidth, menuHeight);
             SetSize(titleText.rectTransform, new Vector2(contentWidth, 38f));
-            SetSize(statusText.rectTransform, new Vector2(contentWidth, 88f));
-            SetSize(lobbyQueueText.rectTransform, new Vector2(contentWidth, 96f));
+            SetSize(statusText.rectTransform, new Vector2(contentWidth, showJoinCodePanel ? 64f : 88f));
+            if (connectionHintText != null)
+            {
+                SetSize(connectionHintText.rectTransform, new Vector2(contentWidth, 64f));
+            }
+            SetSize(lobbyQueueText.rectTransform, new Vector2(contentWidth, showJoinCodePanel ? 64f : 96f));
+            if (joinCodePanelRect != null)
+            {
+                SetSize(joinCodePanelRect, new Vector2(buttonWidth, 126f));
+                SetSize(joinCodeLabelText.rectTransform, new Vector2(buttonWidth - 20f, 18f));
+                SetSize(joinCodeText.rectTransform, new Vector2(buttonWidth - 24f, 34f));
+                SetButtonSize(copyCodeButton, Mathf.Min(buttonWidth - 24f, 230f), 30f);
+            }
             SetButtonSize(hostButton, buttonWidth, buttonHeight);
             SetButtonSize(joinButton, buttonWidth, buttonHeight);
             SetButtonSize(localHostButton, buttonWidth, buttonHeight);
             SetButtonSize(localJoinButton, buttonWidth, buttonHeight);
+            SetButtonSize(cancelButton, buttonWidth, buttonHeight);
             SetButtonSize(startButton, buttonWidth, buttonHeight);
             SetButtonSize(restartButton, buttonWidth, buttonHeight);
             SetButtonSize(shutdownButton, buttonWidth, buttonHeight);
             SetButtonSize(quitButton, buttonWidth, buttonHeight);
             SetSize(joinInput.GetComponent<RectTransform>(), new Vector2(buttonWidth, buttonHeight));
+            SetSize(gameOverText.rectTransform, new Vector2(Mathf.Max(contentWidth, 520f), 90f));
+
+            var menuTop = menuHeight * 0.5f;
+            var gameOverY = menuTop + 78f;
+            var namePanelY = phase == RoundPhase.AllDead ? gameOverY + 104f : menuTop + 72f;
+            SetPosition(gameOverText.rectTransform, new Vector2(0f, gameOverY));
+            SetPosition(namePanelRect, new Vector2(0f, namePanelY));
+            SetPosition(statusText.rectTransform, new Vector2(0f, showJoinCodePanel ? -70f : -88f));
+            if (connectionHintText != null)
+            {
+                SetPosition(connectionHintText.rectTransform, new Vector2(0f, showConnectionHint ? 52f : -176f));
+            }
+            SetPosition(lobbyQueueText.rectTransform, new Vector2(0f, showJoinCodePanel ? -302f : -176f));
+            if (joinCodePanelRect != null)
+            {
+                SetPosition(joinCodePanelRect, new Vector2(0f, 112f));
+                SetPosition(joinCodeLabelText.rectTransform, new Vector2(0f, 50f));
+                SetPosition(joinCodeText.rectTransform, new Vector2(0f, 18f));
+                SetPosition(copyCodeButton.GetComponent<RectTransform>(), new Vector2(0f, -42f));
+            }
 
             if (!connected)
             {
+                if (cancelButton != null && cancelButton.gameObject.activeSelf)
+                {
+                    SetPosition(cancelButton.GetComponent<RectTransform>(), new Vector2(0f, -32f));
+                    SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, -menuHeight * 0.5f + buttonHeight * 0.7f));
+                    return;
+                }
+
                 var inputY = 84f;
                 var firstButtonY = inputY - buttonHeight - buttonGap;
                 SetPosition(joinInput.GetComponent<RectTransform>(), new Vector2(0f, inputY));
@@ -273,7 +403,7 @@ namespace FriendSlop.UI
                 return;
             }
 
-            var primaryButtonY = -48f;
+            var primaryButtonY = showJoinCodePanel ? -126f : -48f;
             var secondaryButtonY = primaryButtonY - buttonHeight - buttonGap;
             var tertiaryButtonY = secondaryButtonY - buttonHeight - buttonGap;
             if (isHost && phase == RoundPhase.Lobby)
@@ -331,6 +461,7 @@ namespace FriendSlop.UI
                 new Vector2(0f, -18f), new Vector2(240f, 68f),
                 new Color(0.04f, 0.05f, 0.05f, 0.96f));
             namePanelRoot = namePanel;
+            namePanelRect = namePanel.GetComponent<RectTransform>();
             var nameLabel = CreateText("NameLabel", namePanel.transform, "YOUR NAME", 12,
                 TextAnchor.UpperCenter, new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(0f, -6f), new Vector2(-16f, 18f));
@@ -467,17 +598,56 @@ namespace FriendSlop.UI
             _sunGlareImage.color = new Color(1f, 0.95f, 0.82f, 0f);
             _sunGlareImage.raycastTarget = false;
 
+            var menuBackdropObject = new GameObject("MenuBackdrop");
+            menuBackdropObject.transform.SetParent(canvasObject.transform, false);
+            var menuBackdropRect = menuBackdropObject.AddComponent<RectTransform>();
+            menuBackdropRect.anchorMin = Vector2.zero;
+            menuBackdropRect.anchorMax = Vector2.one;
+            menuBackdropRect.offsetMin = Vector2.zero;
+            menuBackdropRect.offsetMax = Vector2.zero;
+            menuBackdropImage = menuBackdropObject.AddComponent<Image>();
+            menuBackdropImage.color = new Color(0.01f, 0.02f, 0.02f, 0.62f);
+            menuBackdropImage.raycastTarget = false;
+            menuBackdropObject.SetActive(false);
+
             menuRoot = CreatePanel("Menu", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(MaxMenuWidth, MinDisconnectedMenuHeight), new Color(0.04f, 0.05f, 0.05f, 0.96f));
             menuRect = menuRoot.GetComponent<RectTransform>();
             titleText = CreateText("Title", menuRoot.transform, "FRIEND SLOP RETRIEVAL", 24, TextAnchor.MiddleCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -28f), new Vector2(460f, 34f));
             statusText = CreateText("Status", menuRoot.transform, "Not connected.", 14, TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -88f), new Vector2(440f, 72f));
+            joinCodePanelRoot = CreatePanel("JoinCodePanel", menuRoot.transform,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 76f), new Vector2(380f, 92f),
+                new Color(0.01f, 0.015f, 0.015f, 0.94f));
+            joinCodePanelRect = joinCodePanelRoot.GetComponent<RectTransform>();
+            joinCodeLabelText = CreateText("JoinCodeLabel", joinCodePanelRoot.transform, "JOIN CODE", 12,
+                TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 34f), new Vector2(360f, 18f));
+            joinCodeLabelText.color = new Color(1f, 1f, 1f, 0.58f);
+            joinCodeText = CreateText("JoinCodeText", joinCodePanelRoot.transform, string.Empty, 34,
+                TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 10f), new Vector2(360f, 34f));
+            joinCodeText.color = new Color(0.92f, 1f, 0.52f, 1f);
+            var joinCodeOutline = joinCodeText.gameObject.AddComponent<Outline>();
+            joinCodeOutline.effectColor = Color.black;
+            joinCodeOutline.effectDistance = new Vector2(2f, -2f);
+            copyCodeButton = CreateButton("Copy Code", joinCodePanelRoot.transform, new Vector2(0f, -28f), CopyJoinCodeToClipboard);
+            copyCodeButtonText = copyCodeButton.GetComponentInChildren<Text>();
+            joinCodePanelRoot.SetActive(false);
             lobbyQueueText = CreateText("LobbyQueue", menuRoot.transform, string.Empty, 15, TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -176f), new Vector2(440f, 82f));
+            connectionHintText = CreateText("ConnectionHint", menuRoot.transform,
+                string.Empty, 15, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 52f), new Vector2(440f, 64f));
+            connectionHintText.color = new Color(0.72f, 0.9f, 1f, 0.92f);
+            connectionHintText.gameObject.SetActive(false);
 
             joinInput = CreateInput("JoinInput", menuRoot.transform, "Relay code or LAN IP", new Vector2(0f, 68f));
             hostButton = CreateButton("Host Online", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.HostOnline());
             joinButton = CreateButton("Join Code", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.JoinOnline(joinInput.text));
             localHostButton = CreateButton("Host LAN", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.StartLocalHost());
             localJoinButton = CreateButton("Join LAN", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.StartLocalClient(string.IsNullOrWhiteSpace(joinInput.text) ? "127.0.0.1" : joinInput.text));
+            cancelButton = CreateButton("Cancel", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.CancelSessionOperation());
+            cancelButton.gameObject.SetActive(false);
             startButton = CreateButton("Start Round", menuRoot.transform, Vector2.zero, () =>
             {
                 RoundManager.Instance?.RequestStartRoundServerRpc();
@@ -488,10 +658,10 @@ namespace FriendSlop.UI
                 RoundManager.Instance?.RequestRestartRoundServerRpc();
                 LockGameplayCursor();
             });
-            shutdownButton = CreateButton("Leave Session", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.Shutdown());
+            shutdownButton = CreateButton("Leave Session", menuRoot.transform, Vector2.zero, HandleSessionExitButton);
             quitButton = CreateButton("Quit", menuRoot.transform, Vector2.zero, QuitGame);
 
-            // Loading screen — added last so it renders on top of all other UI
+            // Loading screen is added last so it renders on top of all other UI.
             loadingScreenRoot = CreatePanel("LoadingScreen", canvasObject.transform,
                 Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
                 new Color(0.05f, 0.05f, 0.08f, 0.94f));
@@ -524,6 +694,9 @@ namespace FriendSlop.UI
             loadingBarFill.color = new Color(0.3f, 0.65f, 1f, 0.9f);
 
             loadingScreenRoot.SetActive(false);
+            gameOverText.rectTransform.SetAsLastSibling();
+            namePanelRoot.transform.SetAsLastSibling();
+            loadingScreenRoot.transform.SetAsLastSibling();
         }
 
         private GameObject CreatePanel(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, Vector2 size, Color color)
@@ -570,7 +743,7 @@ namespace FriendSlop.UI
 
         private Button CreateButton(string label, Transform parent, Vector2 anchoredPosition, UnityEngine.Events.UnityAction onClick)
         {
-            var buttonObject = CreatePanel(label, parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), anchoredPosition, new Vector2(290f, 42f), new Color(0.16f, 0.18f, 0.18f, 0.96f));
+            var buttonObject = CreatePanel(label, parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), anchoredPosition, new Vector2(290f, 42f), DefaultButtonColor);
             var button = buttonObject.AddComponent<Button>();
             button.targetGraphic = buttonObject.GetComponent<Image>();
             button.onClick.AddListener(onClick);
@@ -591,11 +764,162 @@ namespace FriendSlop.UI
             return input;
         }
 
+        public void EnterGameplayMode()
+        {
+            LockGameplayCursor();
+        }
+
         private void LockGameplayCursor()
         {
-            menuPinned = false;
+            activeMenuOpen = false;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+        }
+
+        private void OpenActiveRoundMenu()
+        {
+            activeMenuOpen = true;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        private void HandleSessionExitButton()
+        {
+            var session = NetworkSessionManager.Instance;
+            if (session == null)
+            {
+                return;
+            }
+
+            if (session.CanCancelSessionOperation)
+            {
+                session.CancelSessionOperation();
+            }
+            else
+            {
+                session.Shutdown();
+            }
+        }
+
+        public void UnlockMenuCursor()
+        {
+            activeMenuOpen = false;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        private void UpdateJoinCodePanel(NetworkSessionManager session, bool showMenu, bool connected, bool isHost)
+        {
+            if (joinCodePanelRoot == null)
+            {
+                return;
+            }
+
+            var rawCode = session != null ? session.LastJoinCode : string.Empty;
+            var copyableCode = GetCopyableJoinCode(rawCode);
+            var showJoinCode = showMenu && connected && isHost && !string.IsNullOrWhiteSpace(copyableCode);
+            joinCodePanelRoot.SetActive(showJoinCode);
+            if (!showJoinCode)
+            {
+                return;
+            }
+
+            joinCodeLabelText.text = IsLanJoinCode(rawCode) ? "LAN ADDRESS - COPY/PASTE" : "JOIN CODE - COPY/PASTE";
+            joinCodeText.text = FormatReadableJoinCode(copyableCode);
+            var copied = Time.unscaledTime < _copyCodeFeedbackUntil;
+            if (copyCodeButtonText != null)
+            {
+                copyCodeButtonText.text = copied ? "Copied to Clipboard" : "Copy Code";
+            }
+
+            SetButtonColor(copyCodeButton, copied ? SuccessButtonColor : DefaultButtonColor);
+        }
+
+        private void CopyJoinCodeToClipboard()
+        {
+            var code = GetCopyableJoinCode(NetworkSessionManager.Instance != null
+                ? NetworkSessionManager.Instance.LastJoinCode
+                : string.Empty);
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return;
+            }
+
+            GUIUtility.systemCopyBuffer = code;
+            _copyCodeFeedbackUntil = Time.unscaledTime + 1.5f;
+            if (copyCodeButtonText != null)
+            {
+                copyCodeButtonText.text = "Copied to Clipboard";
+            }
+
+            SetButtonColor(copyCodeButton, SuccessButtonColor);
+        }
+
+        private static string GetCopyableJoinCode(string rawCode)
+        {
+            if (string.IsNullOrWhiteSpace(rawCode))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = rawCode.Trim();
+            return IsLanJoinCode(trimmed) ? trimmed.Substring("LAN:".Length).Trim() : trimmed;
+        }
+
+        private static bool IsLanJoinCode(string rawCode)
+        {
+            return !string.IsNullOrWhiteSpace(rawCode)
+                && rawCode.Trim().StartsWith("LAN:", System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FormatReadableJoinCode(string code)
+        {
+            if (string.IsNullOrWhiteSpace(code) || JoinCodeUtility.LooksLikeLanAddress(code))
+            {
+                return code;
+            }
+
+            code = JoinCodeUtility.NormalizeJoinCode(code);
+            var builder = new StringBuilder(code.Length + code.Length / 3);
+            for (var i = 0; i < code.Length; i++)
+            {
+                if (i > 0 && i % 3 == 0)
+                {
+                    builder.Append(' ');
+                }
+
+                builder.Append(code[i]);
+            }
+
+            return builder.ToString();
+        }
+
+        private static string BuildStatusText(NetworkSessionManager session, RoundManager round, bool connectionInProgress)
+        {
+            var status = session != null ? session.Status : "Not connected.";
+            if (connectionInProgress)
+            {
+                status = $"{status} {GetActivityDots()}";
+            }
+
+            return status + $"\nTeam Money: ${GetTeamMoney(round)}\nTab/Esc toggles menu.";
+        }
+
+        private static string BuildConnectionHint(NetworkSessionManager session)
+        {
+            var remaining = session != null ? session.PendingConnectionSecondsRemaining : 0f;
+            if (remaining > 0f)
+            {
+                return $"Still trying for {Mathf.CeilToInt(remaining)}s.\nCancel returns to this menu safely.";
+            }
+
+            return "Contacting Unity online services.\nCancel returns to this menu safely.";
+        }
+
+        private static string GetActivityDots()
+        {
+            var count = 1 + Mathf.FloorToInt(Time.unscaledTime * 2f) % 3;
+            return new string('.', count).PadRight(3);
         }
 
         private static string FormatPart(bool installed, string label)
@@ -652,6 +976,30 @@ namespace FriendSlop.UI
             SetSize(button.GetComponent<RectTransform>(), new Vector2(width, height));
         }
 
+        private static void SetButtonLabel(Button button, string label)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            var text = button.GetComponentInChildren<Text>();
+            if (text != null && text.text != label)
+            {
+                text.text = label;
+            }
+        }
+
+        private static void SetButtonColor(Button button, Color color)
+        {
+            if (button == null || button.targetGraphic is not Image image)
+            {
+                return;
+            }
+
+            image.color = color;
+        }
+
         private static void SetSize(RectTransform rectTransform, Vector2 size)
         {
             if (rectTransform != null)
@@ -699,6 +1047,19 @@ namespace FriendSlop.UI
         {
             _lateJoinLoading = true;
             _lateJoinLoadingStartTime = Time.time;
+            activeMenuOpen = false;
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
+        private static bool IsActiveRound()
+        {
+            var networkManager = NetworkManager.Singleton;
+            var round = RoundManager.Instance;
+            return networkManager != null &&
+                   networkManager.IsListening &&
+                   round != null &&
+                   round.Phase.Value == RoundPhase.Active;
         }
 
         private void UpdateLoadingScreen(bool isLoading, RoundPhase phase, RoundManager round)
@@ -769,7 +1130,7 @@ namespace FriendSlop.UI
             var distToSun = rawToSun.magnitude;
             var toSun     = rawToSun / distToSun;
             var lookDot   = Vector3.Dot(cam.transform.forward, toSun);
-            // Glare begins at ~18° off-center and peaks at dead center (~2°)
+            // Glare begins at about 18 degrees off-center and peaks near dead center.
             var glareT = Mathf.Clamp01((lookDot - 0.95f) / 0.048f);
 
             if (glareT > 0f)

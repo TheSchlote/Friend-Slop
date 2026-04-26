@@ -7,6 +7,34 @@ namespace FriendSlop.Round
             return hasCockpit && hasWings && hasEngine;
         }
 
+        public static (int ExpectedToLoad, int ReadyCount) RemoveDisconnectedLoadingPlayer(
+            int expectedToLoad,
+            int readyCount,
+            bool playerWasReady)
+        {
+            if (expectedToLoad > 0)
+            {
+                expectedToLoad--;
+            }
+
+            if (playerWasReady && readyCount > 0)
+            {
+                readyCount--;
+            }
+
+            if (readyCount > expectedToLoad)
+            {
+                readyCount = expectedToLoad;
+            }
+
+            if (readyCount < 0)
+            {
+                readyCount = 0;
+            }
+
+            return (expectedToLoad, readyCount);
+        }
+
         public static bool IsLaunchReady(bool rocketAssembled, int boardedPlayerCount, int connectedPlayerCount)
         {
             if (!rocketAssembled || connectedPlayerCount <= 0)

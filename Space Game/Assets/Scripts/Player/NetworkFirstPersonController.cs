@@ -215,6 +215,7 @@ namespace FriendSlop.Player
         {
             if (IsServer)
             {
+                ServerForceDropHeld(Vector3.zero);
                 if (_heldPlayer != null) ServerDropHeldPlayer(Vector3.zero);
                 if (IsBeingCarried.Value)
                 {
@@ -239,6 +240,8 @@ namespace FriendSlop.Player
             if (LocalPlayer == this)
             {
                 LocalPlayer = null;
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
             }
         }
 
@@ -285,13 +288,6 @@ namespace FriendSlop.Player
             }
 
             HandleDiagnosticHotkeys();
-
-            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-            {
-                var shouldLock = Cursor.lockState != CursorLockMode.Locked;
-                Cursor.lockState = shouldLock ? CursorLockMode.Locked : CursorLockMode.None;
-                Cursor.visible = !shouldLock;
-            }
 
             if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && !FriendSlopUI.BlocksGameplayInput)
             {
@@ -927,9 +923,12 @@ namespace FriendSlop.Player
             if (!IsOwner) return;
             if (next == RoundPhase.Loading)
             {
-                Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
+                FriendSlopUI.Instance?.EnterGameplayMode();
                 StartCoroutine(WaitAndReportReady());
+            }
+            else if (next == RoundPhase.Active)
+            {
+                FriendSlopUI.Instance?.EnterGameplayMode();
             }
         }
 
@@ -955,6 +954,7 @@ namespace FriendSlop.Player
             var isDeath = _health.Value <= 0;
             if (isDeath)
             {
+                ServerForceDropHeld(Vector3.zero);
                 if (_heldPlayer != null) ServerDropHeldPlayer(Vector3.zero);
                 if (IsBeingCarried.Value)
                     FindByClientId(CarriedByClientId.Value)?.ServerDropHeldPlayer(Vector3.zero);
@@ -978,6 +978,7 @@ namespace FriendSlop.Player
         public void ServerRevive()
         {
             if (!IsServer) return;
+            ServerForceDropHeld(Vector3.zero);
             if (_heldPlayer != null) ServerDropHeldPlayer(Vector3.zero);
             if (IsBeingCarried.Value)
             {

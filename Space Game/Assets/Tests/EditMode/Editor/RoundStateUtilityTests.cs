@@ -31,5 +31,22 @@ namespace FriendSlop.Tests.EditMode
         {
             Assert.AreEqual(expected, RoundStateUtility.FormatPartStatus(installed, label));
         }
+
+        [TestCase(3, 2, true, 2, 1)]
+        [TestCase(2, 1, false, 1, 1)]
+        [TestCase(1, 1, true, 0, 0)]
+        [TestCase(0, 0, false, 0, 0)]
+        public void RemoveDisconnectedLoadingPlayer_ClampsExpectedAndReadyCounts(
+            int expectedToLoad,
+            int readyCount,
+            bool playerWasReady,
+            int expectedExpectedToLoad,
+            int expectedReadyCount)
+        {
+            var result = RoundStateUtility.RemoveDisconnectedLoadingPlayer(expectedToLoad, readyCount, playerWasReady);
+
+            Assert.AreEqual(expectedExpectedToLoad, result.ExpectedToLoad);
+            Assert.AreEqual(expectedReadyCount, result.ReadyCount);
+        }
     }
 }

@@ -151,6 +151,16 @@ namespace FriendSlop.Networking
 
         private void HandleServerStopped(bool wasHost)
         {
+            foreach (var networkObject in spawnedObjects)
+            {
+                if (networkObject == null)
+                {
+                    continue;
+                }
+
+                Destroy(networkObject.gameObject);
+            }
+
             spawnedForSession = false;
             spawnedObjects.Clear();
         }

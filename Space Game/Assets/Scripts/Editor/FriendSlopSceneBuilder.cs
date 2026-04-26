@@ -38,7 +38,6 @@ namespace FriendSlop.Editor
         static FriendSlopSceneBuilder()
         {
             EditorApplication.delayCall += TryAutoBuild;
-            EditorApplication.delayCall += TryRepairOpenPrototypeScene;
         }
 
         [MenuItem("Tools/Friend Slop/Rebuild Prototype Scene")]
@@ -135,7 +134,9 @@ namespace FriendSlop.Editor
             var roundManagerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RoundManagerPrefabPath);
             var lootPrefabs = LoadLootPrefabs();
             BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
+            EnsureBootstrapperLootReferences(lootPrefabs);
             EnsureBootstrapperMonsterReferences(monsterPrefab);
+            EnsureLaunchpadLayoutInOpenScene(materials);
             EnsureOpenSceneGameplayTuning();
 
             if (scene.isDirty)
@@ -157,7 +158,9 @@ namespace FriendSlop.Editor
             var roundManagerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RoundManagerPrefabPath);
             var lootPrefabs = LoadLootPrefabs();
             BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
+            EnsureBootstrapperLootReferences(lootPrefabs);
             EnsureBootstrapperMonsterReferences(monsterPrefab);
+            EnsureLaunchpadLayoutInOpenScene(materials);
             EnsureOpenSceneGameplayTuning();
 
             EditorSceneManager.SaveScene(scene);
@@ -614,7 +617,7 @@ namespace FriendSlop.Editor
                 var spec = specs[i];
                 var spawnPoint = new GameObject($"{spec.Name} Spawn");
                 spawnPoint.transform.SetParent(lootRoot, true);
-                PlaceOnSurface(world, spawnPoint, spec.SurfaceNormal, 0.95f, Vector3.forward);
+                PlaceOnSurface(world, spawnPoint, spec.SurfaceNormal, GetLootSurfaceOffset(spec), Vector3.forward);
                 spawnPoints[i] = spawnPoint.transform;
             }
 
@@ -660,39 +663,45 @@ namespace FriendSlop.Editor
             RemoveCollider(zone);
             zone.AddComponent<LaunchpadZone>();
 
-            var rocketBody = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            rocketBody.name = "Broken Rocket Body";
-            rocketBody.transform.SetParent(launchpadRoot, true);
-            PlaceOnSurface(world, rocketBody, padNormal, 1.25f, Vector3.forward);
-            rocketBody.transform.localScale = new Vector3(0.75f, 1.35f, 0.75f);
-            SetMaterial(rocketBody, materials["ShipPart"]);
+            var rocketBody = CreateLaunchpadProp("Broken Rocket Body", launchpadRoot, world,
+                PrimitiveType.Cylinder, padNormal, Vector2.zero, 1.45f,
+                Vector3.forward, new Vector3(0.75f, 1.35f, 0.75f), materials["ShipPart"]);
             RemoveCollider(rocketBody);
 
-            var nose = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            nose.name = "Missing Cockpit Socket";
-            nose.transform.SetParent(launchpadRoot, true);
-            PlaceOnSurface(world, nose, new Vector3(0.04f, 1f, 0.04f), 2.75f, Vector3.forward);
-            nose.transform.localScale = new Vector3(0.75f, 0.35f, 0.75f);
-            SetMaterial(nose, materials["SafetyYellow"]);
+            var nose = CreateLaunchpadProp("Missing Cockpit Socket", launchpadRoot, world,
+                PrimitiveType.Sphere, padNormal, new Vector2(0f, 0.12f), 2.95f,
+                Vector3.forward, new Vector3(0.75f, 0.35f, 0.75f), materials["SafetyYellow"]);
             RemoveCollider(nose);
 
-            var leftMount = CreateSurfaceProp("Left Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(-0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
-            var rightMount = CreateSurfaceProp("Right Empty Wing Mount", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0.08f, 1f, 0.02f), Vector3.forward, 1.2f, new Vector3(1.8f, 0.15f, 0.28f), materials["SafetyYellow"]);
-            var engineMount = CreateSurfaceProp("Empty Engine Mount", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.08f), Vector3.forward, 0.7f, new Vector3(0.55f, 0.35f, 0.55f), materials["SafetyYellow"]);
+            var leftMount = CreateLaunchpadProp("Left Empty Wing Mount", launchpadRoot, world,
+                PrimitiveType.Cube, padNormal, new Vector2(-1.05f, 0.02f), 1.42f,
+                Vector3.forward, new Vector3(1.2f, 0.15f, 0.28f), materials["SafetyYellow"]);
+            var rightMount = CreateLaunchpadProp("Right Empty Wing Mount", launchpadRoot, world,
+                PrimitiveType.Cube, padNormal, new Vector2(1.05f, 0.02f), 1.42f,
+                Vector3.forward, new Vector3(1.2f, 0.15f, 0.28f), materials["SafetyYellow"]);
+            var engineMount = CreateLaunchpadProp("Empty Engine Mount", launchpadRoot, world,
+                PrimitiveType.Cylinder, padNormal, new Vector2(0f, -0.62f), 0.78f,
+                Vector3.forward, new Vector3(0.55f, 0.35f, 0.55f), materials["SafetyYellow"]);
             RemoveCollider(leftMount);
             RemoveCollider(rightMount);
             RemoveCollider(engineMount);
 
-            var installedCockpit = CreateSurfaceProp("Installed Cockpit Visual", launchpadRoot, world, PrimitiveType.Sphere, new Vector3(0.04f, 1f, 0.08f), Vector3.forward, 2.9f, new Vector3(0.9f, 0.45f, 0.9f), materials["ShipPart"]);
-            var installedWings = CreateSurfaceProp("Installed Wings Visual", launchpadRoot, world, PrimitiveType.Cube, new Vector3(0f, 1f, 0.02f), Vector3.right, 1.38f, new Vector3(3.6f, 0.12f, 0.55f), materials["ShipPart"]);
-            var installedEngine = CreateSurfaceProp("Installed Engine Visual", launchpadRoot, world, PrimitiveType.Cylinder, new Vector3(0f, 1f, -0.1f), Vector3.forward, 0.58f, new Vector3(0.62f, 0.45f, 0.62f), materials["ShipPart"]);
+            var installedCockpit = CreateLaunchpadProp("Installed Cockpit Visual", launchpadRoot, world,
+                PrimitiveType.Sphere, padNormal, new Vector2(0f, 0.12f), 3.02f,
+                Vector3.forward, new Vector3(0.9f, 0.45f, 0.9f), materials["ShipPart"]);
+            var installedWings = CreateLaunchpadProp("Installed Wings Visual", launchpadRoot, world,
+                PrimitiveType.Cube, padNormal, new Vector2(0f, 0.02f), 1.48f,
+                Vector3.forward, new Vector3(2.9f, 0.12f, 0.5f), materials["ShipPart"]);
+            var installedEngine = CreateLaunchpadProp("Installed Engine Visual", launchpadRoot, world,
+                PrimitiveType.Cylinder, padNormal, new Vector2(0f, -0.62f), 0.74f,
+                Vector3.forward, new Vector3(0.62f, 0.45f, 0.62f), materials["ShipPart"]);
             RemoveCollider(installedCockpit);
             RemoveCollider(installedWings);
             RemoveCollider(installedEngine);
 
             var readyBeacon = new GameObject("Rocket Ready Beacon");
             readyBeacon.transform.SetParent(launchpadRoot, true);
-            readyBeacon.transform.position = world.GetSurfacePoint(new Vector3(0f, 1f, 0f), 4.35f);
+            PlaceOnLaunchpad(world, readyBeacon, padNormal, Vector2.zero, 4.35f, Vector3.forward);
             var readyLight = readyBeacon.AddComponent<Light>();
             readyLight.type = LightType.Point;
             readyLight.color = Color.green;
@@ -712,7 +721,7 @@ namespace FriendSlop.Editor
             displaySo.FindProperty("readyBeacon").objectReferenceValue = readyBeacon;
             displaySo.ApplyModifiedPropertiesWithoutUndo();
 
-            CreateFloatingText("Launchpad Sign", "LAUNCHPAD\nNeeds cockpit, wings, engine", world, new Vector3(0.08f, 1f, -0.02f), 4.1f, Color.green);
+            CreateFloatingText("Launchpad Sign", "LAUNCHPAD\nBring parts here", launchpadRoot, world, padNormal, Vector2.zero, 4.6f, Color.green);
         }
 
         private static void CreateMonster(IReadOnlyDictionary<string, Material> materials)
@@ -782,6 +791,17 @@ namespace FriendSlop.Editor
             return prop;
         }
 
+        private static GameObject CreateLaunchpadProp(string name, Transform parent, SphereWorld world, PrimitiveType shape, Vector3 padNormal, Vector2 tangentOffset, float heightOffset, Vector3 forwardHint, Vector3 scale, Material material)
+        {
+            var prop = GameObject.CreatePrimitive(shape);
+            prop.name = name;
+            prop.transform.SetParent(parent, true);
+            PlaceOnLaunchpad(world, prop, padNormal, tangentOffset, heightOffset, forwardHint);
+            prop.transform.localScale = scale;
+            SetMaterial(prop, material);
+            return prop;
+        }
+
         private static void PlaceOnSurface(SphereWorld world, GameObject gameObject, Vector3 surfaceNormal, float heightOffset, Vector3 forwardHint)
         {
             var normal = surfaceNormal.normalized;
@@ -789,11 +809,43 @@ namespace FriendSlop.Editor
             gameObject.transform.rotation = world.GetSurfaceRotation(normal, forwardHint);
         }
 
+        private static void PlaceOnLaunchpad(SphereWorld world, GameObject gameObject, Vector3 padNormal, Vector2 tangentOffset, float heightOffset, Vector3 forwardHint)
+        {
+            var normal = padNormal.normalized;
+            var rotation = world.GetSurfaceRotation(normal, forwardHint);
+            var right = rotation * Vector3.right;
+            var forward = rotation * Vector3.forward;
+            var center = world.GetSurfacePoint(normal, heightOffset);
+            gameObject.transform.SetPositionAndRotation(
+                center + right * tangentOffset.x + forward * tangentOffset.y,
+                rotation);
+        }
+
         private static void CreateFloatingText(string name, string content, SphereWorld world, Vector3 surfaceNormal, float heightOffset, Color color)
+        {
+            CreateFloatingText(name, content, null, world, surfaceNormal, Vector2.zero, heightOffset, color);
+        }
+
+        private static void CreateFloatingText(string name, string content, SphereWorld world, Vector3 surfaceNormal, Vector2 tangentOffset, float heightOffset, Color color)
+        {
+            CreateFloatingText(name, content, null, world, surfaceNormal, tangentOffset, heightOffset, color);
+        }
+
+        private static void CreateFloatingText(string name, string content, Transform parent, SphereWorld world, Vector3 surfaceNormal, Vector2 tangentOffset, float heightOffset, Color color)
         {
             var normal = surfaceNormal.normalized;
             var textObject = new GameObject(name);
-            textObject.transform.position = world.GetSurfacePoint(normal, heightOffset);
+            if (parent != null)
+            {
+                textObject.transform.SetParent(parent, true);
+            }
+
+            var surfaceRotation = world.GetSurfaceRotation(normal, Vector3.forward);
+            var right = surfaceRotation * Vector3.right;
+            var forward = surfaceRotation * Vector3.forward;
+            textObject.transform.position = world.GetSurfacePoint(normal, heightOffset)
+                + right * tangentOffset.x
+                + forward * tangentOffset.y;
 
             var upHint = Vector3.ProjectOnPlane(Vector3.forward, normal);
             if (upHint.sqrMagnitude < 0.001f)
@@ -801,14 +853,15 @@ namespace FriendSlop.Editor
                 upHint = Vector3.ProjectOnPlane(Vector3.right, normal);
             }
 
-            textObject.transform.rotation = Quaternion.LookRotation(normal, upHint.normalized);
+            textObject.transform.rotation = Quaternion.LookRotation(-normal, upHint.normalized);
             var text = textObject.AddComponent<TextMesh>();
             text.text = content;
             text.anchor = TextAnchor.MiddleCenter;
             text.alignment = TextAlignment.Center;
-            text.fontSize = 52;
-            text.characterSize = 0.13f;
+            text.fontSize = 48;
+            text.characterSize = 0.11f;
             text.color = color;
+            textObject.AddComponent<WorldTextBillboard>();
         }
 
         private static GameObject CreateCube(string name, Transform parent, Vector3 position, Vector3 scale, Material material)
@@ -863,6 +916,83 @@ namespace FriendSlop.Editor
             EditorUtility.SetDirty(spawn);
             EditorUtility.SetDirty(root);
             return new[] { spawn.transform };
+        }
+
+        private static void EnsureBootstrapperLootReferences(NetworkLootItem[] lootPrefabs)
+        {
+            var bootstrapper = Object.FindFirstObjectByType<PrototypeNetworkBootstrapper>();
+            if (bootstrapper == null)
+            {
+                return;
+            }
+
+            var spawnPoints = EnsureLootSpawnPointsInOpenScene();
+            var serializedBootstrapper = new SerializedObject(bootstrapper);
+            AssignObjectArray(serializedBootstrapper.FindProperty("lootPrefabs"), lootPrefabs);
+            AssignObjectArray(serializedBootstrapper.FindProperty("lootSpawnPoints"), spawnPoints);
+            serializedBootstrapper.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(bootstrapper);
+        }
+
+        private static Transform[] EnsureLootSpawnPointsInOpenScene()
+        {
+            var world = Object.FindFirstObjectByType<SphereWorld>();
+            if (world == null)
+            {
+                return System.Array.Empty<Transform>();
+            }
+
+            var existingRoot = GameObject.Find("Loot Spawn Points");
+            if (existingRoot != null)
+            {
+                Object.DestroyImmediate(existingRoot);
+                EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            }
+
+            var spawnPoints = CreateLootSpawnPoints();
+            foreach (var spawnPoint in spawnPoints)
+            {
+                if (spawnPoint != null)
+                {
+                    EditorUtility.SetDirty(spawnPoint);
+                }
+            }
+
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            return spawnPoints;
+        }
+
+        private static void EnsureLaunchpadLayoutInOpenScene(IReadOnlyDictionary<string, Material> materials)
+        {
+            var existingRoot = GameObject.Find("Launchpad Assembly Site");
+            if (existingRoot != null)
+            {
+                Object.DestroyImmediate(existingRoot);
+                EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            }
+
+            DestroyOpenSceneObjectsNamed("Launchpad Sign");
+
+            CreateLaunchpad(materials);
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        }
+
+        private static void DestroyOpenSceneObjectsNamed(string objectName)
+        {
+            var scene = SceneManager.GetActiveScene();
+            foreach (var gameObject in Resources.FindObjectsOfTypeAll<GameObject>())
+            {
+                if (gameObject == null ||
+                    gameObject.name != objectName ||
+                    gameObject.scene != scene ||
+                    EditorUtility.IsPersistent(gameObject))
+                {
+                    continue;
+                }
+
+                Object.DestroyImmediate(gameObject);
+                EditorSceneManager.MarkSceneDirty(scene);
+            }
         }
 
         private static void EnsureOpenSceneGameplayTuning()
@@ -1013,14 +1143,34 @@ namespace FriendSlop.Editor
                 AssetDatabase.CreateAsset(material, path);
             }
 
-            material.color = color;
-            if (name == "GlowCube")
+            var changed = false;
+            if (material.color != color)
             {
-                material.EnableKeyword("_EMISSION");
-                material.SetColor("_EmissionColor", color * 1.4f);
+                material.color = color;
+                changed = true;
             }
 
-            EditorUtility.SetDirty(material);
+            if (name == "GlowCube")
+            {
+                if (!material.IsKeywordEnabled("_EMISSION"))
+                {
+                    material.EnableKeyword("_EMISSION");
+                    changed = true;
+                }
+
+                var emissionColor = color * 1.4f;
+                if (material.HasProperty("_EmissionColor") && material.GetColor("_EmissionColor") != emissionColor)
+                {
+                    material.SetColor("_EmissionColor", emissionColor);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                EditorUtility.SetDirty(material);
+            }
+
             return material;
         }
 
@@ -1082,9 +1232,9 @@ namespace FriendSlop.Editor
         {
             return new[]
             {
-                new LootSpec("Cockpit Nosecone", 0, 0.72f, PrimitiveType.Capsule, new Vector3(-0.78f, 0.35f, 0.52f), new Vector3(0.95f, 1.25f, 0.95f), "ShipPart", ShipPartType.Cockpit),
-                new LootSpec("Bent Rocket Wings", 0, 0.68f, PrimitiveType.Cube, new Vector3(0.62f, -0.18f, 0.76f), new Vector3(2.3f, 0.28f, 0.85f), "ShipPart", ShipPartType.Wings),
-                new LootSpec("Coughing Engine", 0, 0.62f, PrimitiveType.Cylinder, new Vector3(-0.26f, -0.72f, -0.64f), new Vector3(0.75f, 1.25f, 0.75f), "ShipPart", ShipPartType.Engine),
+                new LootSpec("Cockpit Nosecone", 0, 0.72f, PrimitiveType.Capsule, new Vector3(-0.42f, 0.82f, 0.38f), new Vector3(0.95f, 1.25f, 0.95f), "ShipPart", ShipPartType.Cockpit),
+                new LootSpec("Bent Rocket Wings", 0, 0.68f, PrimitiveType.Cube, new Vector3(0.48f, 0.78f, 0.42f), new Vector3(2.3f, 0.28f, 0.85f), "ShipPart", ShipPartType.Wings),
+                new LootSpec("Coughing Engine", 0, 0.62f, PrimitiveType.Cylinder, new Vector3(0.04f, 0.78f, -0.62f), new Vector3(0.75f, 1.25f, 0.75f), "ShipPart", ShipPartType.Engine),
                 new LootSpec("Ancient Monitor", 90, 0.78f, PrimitiveType.Cube, new Vector3(-0.58f, 0.62f, -0.54f), new Vector3(1.2f, 0.8f, 0.7f), "LootBlue"),
                 new LootSpec("Printer From Hell", 120, 0.68f, PrimitiveType.Cube, new Vector3(0.18f, 0.34f, -0.92f), new Vector3(1.4f, 0.7f, 1f), "LootMetal"),
                 new LootSpec("Questionable Barrel", 75, 0.82f, PrimitiveType.Cylinder, new Vector3(-0.9f, -0.08f, -0.42f), new Vector3(0.9f, 1.2f, 0.9f), "LootGreen"),
@@ -1094,6 +1244,18 @@ namespace FriendSlop.Editor
                 new LootSpec("Wet Floor Sign", 45, 0.95f, PrimitiveType.Cube, new Vector3(0.96f, -0.08f, 0.26f), new Vector3(0.35f, 1.1f, 0.9f), "SafetyYellow"),
                 new LootSpec("Suspicious Server", 130, 0.65f, PrimitiveType.Cube, new Vector3(-0.38f, -0.42f, 0.82f), new Vector3(1f, 1.4f, 0.9f), "LootBlue"),
                 new LootSpec("Mystery Orb", 110, 0.8f, PrimitiveType.Sphere, new Vector3(0.5f, -0.76f, 0.18f), new Vector3(1f, 1f, 1f), "LootPink")
+            };
+        }
+
+        private static float GetLootSurfaceOffset(LootSpec spec)
+        {
+            return spec.Shape switch
+            {
+                PrimitiveType.Cube => spec.Scale.y * 0.5f + 0.04f,
+                PrimitiveType.Sphere => Mathf.Max(spec.Scale.x, spec.Scale.y, spec.Scale.z) * 0.5f + 0.04f,
+                PrimitiveType.Cylinder => spec.Scale.y + 0.04f,
+                PrimitiveType.Capsule => spec.Scale.y + 0.04f,
+                _ => 0.5f
             };
         }
 

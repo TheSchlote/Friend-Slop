@@ -15,6 +15,9 @@ namespace FriendSlop.Player
         [SerializeField] private float maxChargeDuration = 1.8f;
         [SerializeField] private float chargeThrowMultiplier = 3.5f;
         [SerializeField] private float carryPlayerDistance = 1.2f;
+        [SerializeField] private float carrySyncInterval = 0.033f;
+        [SerializeField] private float carrySyncPositionThreshold = 0.01f;
+        [SerializeField] private float carrySyncAngleThreshold = 1f;
         [SerializeField] private LayerMask interactMask = ~0;
 
         private NetworkFirstPersonController controller;
@@ -22,6 +25,10 @@ namespace FriendSlop.Player
         private NetworkFirstPersonController focusedPlayer;
         private float _chargeStartTime = -1f;
         private bool _isCharging;
+        private bool _hasCarrySyncPose;
+        private float _nextCarrySyncTime;
+        private Vector3 _lastCarrySyncPosition;
+        private Quaternion _lastCarrySyncRotation = Quaternion.identity;
 
         public string CurrentPrompt { get; private set; }
         public float ChargePercent => _isCharging ? Mathf.Clamp01((Time.time - _chargeStartTime) / maxChargeDuration) : 0f;
@@ -38,7 +45,10 @@ namespace FriendSlop.Player
                 return;
 
             if (controller.IsDeadLocally || controller.IsBeingCarried.Value)
+            {
+                ResetCarrySync();
                 return;
+            }
 
             UpdateFocus();
 
@@ -73,12 +83,14 @@ namespace FriendSlop.Player
             if (!hasHeldItem && !hasHeldPlayer)
             {
                 _isCharging = false;
+                ResetCarrySync();
                 return;
             }
 
             if (keyboard.qKey.wasPressedThisFrame)
             {
                 _isCharging = false;
+                ResetCarrySync();
                 if (hasHeldItem) heldItem.RequestDropServerRpc(Vector3.zero);
                 else controller.RequestDropHeldPlayerServerRpc(Vector3.zero);
                 return;
@@ -97,6 +109,7 @@ namespace FriendSlop.Player
                 var impulse = controller.PlayerCamera.transform.forward
                     * throwImpulse * (1f + charge * (chargeThrowMultiplier - 1f));
                 _isCharging = false;
+                ResetCarrySync();
                 if (hasHeldItem) heldItem.RequestDropServerRpc(impulse);
                 else controller.RequestDropHeldPlayerServerRpc(impulse);
             }
@@ -115,6 +128,11 @@ namespace FriendSlop.Player
             var heldItem = controller.HeldItem;
             var hasHeldItem = heldItem != null && heldItem.IsHeldBy(OwnerClientId);
             var hasHeldPlayer = controller.HasHeldPlayer;
+
+            if (!hasHeldItem && !hasHeldPlayer)
+            {
+                ResetCarrySync();
+            }
 
             if (hasHeldItem) UpdateHeldItemPose(heldItem);
             if (hasHeldPlayer) UpdateHeldPlayerPose();
@@ -185,7 +203,23 @@ namespace FriendSlop.Player
             if (carriedForward.sqrMagnitude < 0.001f)
                 carriedForward = Vector3.Cross(up, Vector3.forward);
             var targetRotation = Quaternion.LookRotation(carriedForward.normalized, up);
+            heldItem.PreviewCarriedPose(targetPosition, targetRotation);
+            if (!CarrySyncUtility.ShouldSendPose(
+                    _hasCarrySyncPose,
+                    Time.time,
+                    _nextCarrySyncTime,
+                    _lastCarrySyncPosition,
+                    _lastCarrySyncRotation,
+                    targetPosition,
+                    targetRotation,
+                    carrySyncPositionThreshold,
+                    carrySyncAngleThreshold))
+            {
+                return;
+            }
+
             heldItem.MoveCarriedServerRpc(targetPosition, targetRotation);
+            MarkCarryPoseSent(targetPosition, targetRotation);
         }
 
         private void UpdateHeldPlayerPose()
@@ -203,7 +237,36 @@ namespace FriendSlop.Player
                 targetPosition = world.GetSurfacePoint(world.GetUp(targetPosition), 0.1f);
 
             var targetRotation = Quaternion.LookRotation(forward, up);
+            if (!CarrySyncUtility.ShouldSendPose(
+                    _hasCarrySyncPose,
+                    Time.time,
+                    _nextCarrySyncTime,
+                    _lastCarrySyncPosition,
+                    _lastCarrySyncRotation,
+                    targetPosition,
+                    targetRotation,
+                    carrySyncPositionThreshold,
+                    carrySyncAngleThreshold))
+            {
+                return;
+            }
+
             controller.MoveHeldPlayerServerRpc(targetPosition, targetRotation);
+            MarkCarryPoseSent(targetPosition, targetRotation);
+        }
+
+        private void ResetCarrySync()
+        {
+            _hasCarrySyncPose = false;
+            _nextCarrySyncTime = 0f;
+        }
+
+        private void MarkCarryPoseSent(Vector3 targetPosition, Quaternion targetRotation)
+        {
+            _lastCarrySyncPosition = targetPosition;
+            _lastCarrySyncRotation = targetRotation;
+            _hasCarrySyncPose = true;
+            _nextCarrySyncTime = Time.time + Mathf.Max(0.01f, carrySyncInterval);
         }
     }
 }
