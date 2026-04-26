@@ -25,9 +25,22 @@ env:
   ITCH_GAME: ${{ vars.ITCH_GAME != '' && vars.ITCH_GAME || 'friend-slop' }}
 
 jobs:
+  validate-unity-version:
+    name: Validate Unity version
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify workflow Unity version matches project
+        shell: pwsh
+        run: ./tools/Assert-UnityVersion.ps1 -ExpectedUnityVersion '${{ env.UNITY_VERSION }}'
+
   editmode-tests:
     name: Run EditMode tests
     runs-on: ubuntu-22.04
+    needs: validate-unity-version
 
     steps:
       - name: Check Unity license secrets

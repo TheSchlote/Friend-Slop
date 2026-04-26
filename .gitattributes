@@ -1,0 +1,36 @@
+* text=auto
+
+# Unity text assets. Configure the local merge driver with:
+# .\tools\Configure-UnityMerge.ps1
+*.unity merge=unityyamlmerge text eol=lf
+*.prefab merge=unityyamlmerge text eol=lf
+*.asset merge=unityyamlmerge text eol=lf
+*.mat merge=unityyamlmerge text eol=lf
+*.anim merge=unityyamlmerge text eol=lf
+*.controller merge=unityyamlmerge text eol=lf
+*.overrideController merge=unityyamlmerge text eol=lf
+*.physicMaterial merge=unityyamlmerge text eol=lf
+*.physicsMaterial2D merge=unityyamlmerge text eol=lf
+*.meta text eol=lf
+*.cs text eol=lf diff=csharp
+*.asmdef text eol=lf
+*.asmref text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ps1 text eol=crlf
+
+# Binary assets should use Git LFS before they become large enough to hurt clones.
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.jpeg filter=lfs diff=lfs merge=lfs -text
+*.tga filter=lfs diff=lfs merge=lfs -text
+*.psd filter=lfs diff=lfs merge=lfs -text
+*.fbx filter=lfs diff=lfs merge=lfs -text
+*.blend filter=lfs diff=lfs merge=lfs -text
+*.wav filter=lfs diff=lfs merge=lfs -text
+*.mp3 filter=lfs diff=lfs merge=lfs -text
+*.ogg filter=lfs diff=lfs merge=lfs -text
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.mov filter=lfs diff=lfs merge=lfs -text
