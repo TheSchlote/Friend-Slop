@@ -54,6 +54,12 @@ namespace FriendSlop.Player
         [Header("Player Carrying")]
         [SerializeField] private float carryPlayerSpeedMultiplier = 0.7f;
 
+        [Header("Crouch")]
+        [SerializeField] private float standHeight = 0f;
+        [SerializeField] private float crouchHeight = 0.9f;
+        [SerializeField] private float crouchSpeedMultiplier = 0.45f;
+        [SerializeField] private float crouchTransitionSpeed = 8f;
+
         [Header("Diagnostics")]
         [SerializeField] private bool enablePhysicsDiagnostics = true;
         [SerializeField] private float diagnosticSampleInterval = 0.2f;
@@ -93,6 +99,12 @@ namespace FriendSlop.Player
 
         public NetworkVariable<bool> IsBeingCarried = new(false);
         public NetworkVariable<ulong> CarriedByClientId = new(ulong.MaxValue);
+        public NetworkVariable<bool> IsCrouching = new(
+            false,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner);
+        private float _currentBodyHeight;
+        private Vector3 _baseCameraLocalPos;
         private NetworkFirstPersonController _heldPlayer;
         private string _displayName = string.Empty;
         private bool _subscribedToRoundPhase;
@@ -108,9 +120,36 @@ namespace FriendSlop.Player
         public float HealthPercent => maxHealth > 0 ? Mathf.Clamp01((float)_health.Value / maxHealth) : 0f;
         public int CurrentHealth => _health.Value;
         public int MaxHealth => maxHealth;
-        public NetworkFirstPersonController HeldPlayer => _heldPlayer;
-        public bool HasHeldPlayer => _heldPlayer != null && _heldPlayer.IsBeingCarried.Value;
+        public NetworkFirstPersonController HeldPlayer => ResolveHeldPlayer();
+        public bool HasHeldPlayer => ResolveHeldPlayer() != null;
+
+        private NetworkFirstPersonController ResolveHeldPlayer()
+        {
+            if (_heldPlayer != null
+                && _heldPlayer.IsSpawned
+                && _heldPlayer.IsBeingCarried.Value
+                && _heldPlayer.CarriedByClientId.Value == OwnerClientId)
+            {
+                return _heldPlayer;
+            }
+
+            foreach (var p in ActivePlayers)
+            {
+                if (p == null || p == this || !p.IsSpawned) continue;
+                if (p.IsBeingCarried.Value && p.CarriedByClientId.Value == OwnerClientId)
+                {
+                    _heldPlayer = p;
+                    return p;
+                }
+            }
+
+            _heldPlayer = null;
+            return null;
+        }
         public float CarryPlayerSpeedMultiplier => carryPlayerSpeedMultiplier;
+        public float StandHeight => standHeight;
+        public float CrouchHeight => crouchHeight;
+        public float CurrentBodyHeight => IsCrouching.Value ? crouchHeight : standHeight;
         public string DisplayName
         {
             get
@@ -151,6 +190,18 @@ namespace FriendSlop.Player
                 cameraRoot = playerCamera.transform;
 
             currentStamina = maxStamina;
+
+            if (characterController != null)
+            {
+                if (standHeight <= 0f) standHeight = characterController.height;
+                _currentBodyHeight = characterController.height;
+            }
+            else
+            {
+                if (standHeight <= 0f) standHeight = 1.8f;
+                _currentBodyHeight = standHeight;
+            }
+            if (cameraRoot != null) _baseCameraLocalPos = cameraRoot.localPosition;
 
             if (GetComponent<PlayerNameplate>() == null)
                 gameObject.AddComponent<PlayerNameplate>();
@@ -328,9 +379,55 @@ namespace FriendSlop.Player
             {
                 HandleLook();
             }
+            HandleCrouch();
             HandleMovement();
             AlignToSphereSurface();
             SamplePhysicsDiagnostics("moving");
+        }
+
+        private void HandleCrouch()
+        {
+            if (characterController == null) return;
+
+            var wantsCrouch = false;
+            if (_stunTimer <= 0f && Keyboard.current != null && !FriendSlopUI.BlocksGameplayInput)
+            {
+                wantsCrouch = Keyboard.current.leftCtrlKey.isPressed
+                    || Keyboard.current.rightCtrlKey.isPressed
+                    || Keyboard.current.cKey.isPressed;
+            }
+
+            // Stay crouched if something is overhead so we don't pop into geometry.
+            if (!wantsCrouch && _currentBodyHeight < standHeight - 0.01f)
+            {
+                var up = SphereWorld.GetGravityUp(transform.position);
+                var origin = transform.position + up * crouchHeight;
+                var checkRadius = Mathf.Max(0.1f, characterController.radius * 0.92f);
+                var rayDistance = Mathf.Max(0.05f, standHeight - crouchHeight + 0.1f);
+                if (Physics.SphereCast(origin, checkRadius, up, out _, rayDistance, ~0, QueryTriggerInteraction.Ignore))
+                    wantsCrouch = true;
+            }
+
+            var targetHeight = wantsCrouch ? crouchHeight : standHeight;
+            if (!Mathf.Approximately(_currentBodyHeight, targetHeight))
+            {
+                _currentBodyHeight = Mathf.MoveTowards(_currentBodyHeight, targetHeight, crouchTransitionSpeed * Time.deltaTime);
+                characterController.height = _currentBodyHeight;
+                characterController.center = Vector3.up * (_currentBodyHeight * 0.5f);
+
+                if (cameraRoot != null && standHeight > 0.01f)
+                {
+                    var ratio = Mathf.Clamp01(_currentBodyHeight / standHeight);
+                    cameraRoot.localPosition = new Vector3(
+                        _baseCameraLocalPos.x,
+                        _baseCameraLocalPos.y * ratio,
+                        _baseCameraLocalPos.z);
+                }
+            }
+
+            var crouching = _currentBodyHeight < (standHeight + crouchHeight) * 0.5f;
+            if (crouching != IsCrouching.Value)
+                IsCrouching.Value = crouching;
         }
 
         private void HandleLook()
@@ -377,15 +474,17 @@ namespace FriendSlop.Player
             input.y -= Keyboard.current.sKey.isPressed ? 1f : 0f;
             input = Vector2.ClampMagnitude(input, 1f);
 
-            var wantsJump = Keyboard.current.spaceKey.wasPressedThisFrame;
+            var crouching = IsCrouching.Value;
+            var wantsJump = !crouching && Keyboard.current.spaceKey.wasPressedThisFrame;
             var carryingMultiplier = HeldItem != null ? HeldItem.CarrySpeedMultiplier
                 : (HasHeldPlayer ? carryPlayerSpeedMultiplier : 1f);
-            var wantsSprintInput = Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed;
+            var crouchMultiplier = crouching ? crouchSpeedMultiplier : 1f;
+            var wantsSprintInput = (Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed) && !crouching;
             var isMoving = input.sqrMagnitude > 0.01f;
             var isSprinting = wantsSprintInput && isMoving && !staminaExhausted && currentStamina > 0f;
             UpdateStamina(isSprinting);
             IsSprinting = isSprinting;
-            var speed = (isSprinting ? sprintSpeed : walkSpeed) * carryingMultiplier;
+            var speed = (isSprinting ? sprintSpeed : walkSpeed) * carryingMultiplier * crouchMultiplier;
             lastMoveInput = input;
             lastSphereGrounded = isGrounded;
             lastWantsJump = wantsJump;

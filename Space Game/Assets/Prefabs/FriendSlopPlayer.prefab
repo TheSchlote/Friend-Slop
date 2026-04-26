@@ -355,7 +355,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1980709856
+  GlobalObjectIdHash: 3490575544
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -479,6 +479,10 @@ MonoBehaviour:
   stunTiltRecoverSpeed: 80
   maxHealth: 100
   carryPlayerSpeedMultiplier: 0.7
+  standHeight: 0
+  crouchHeight: 0.9
+  crouchSpeedMultiplier: 0.45
+  crouchTransitionSpeed: 8
   enablePhysicsDiagnostics: 1
   diagnosticSampleInterval: 0.2
   diagnosticTouchPadding: 0.08
@@ -496,6 +500,11 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: 18446744073709551615
+  IsCrouching:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 0
 --- !u!114 &7178644401830304316
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -510,6 +519,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Player.PlayerInteractor
   ShowTopMostFoldoutHeaderGroup: 1
   interactDistance: 3.2
+  interactRadius: 0.35
   throwImpulse: 8
   maxChargeDuration: 1.8
   chargeThrowMultiplier: 3.5

@@ -21,6 +21,7 @@ namespace FriendSlop.Hazards
         [SerializeField] private float investigateWanderRadius = 5f;
         [SerializeField] private float roamPauseMin = 5f;
         [SerializeField] private float roamPauseMax = 10f;
+        [SerializeField] private float roundStartGraceSeconds = 3f;
         [SerializeField] private float spottedPauseMin = 0.4f;
         [SerializeField] private float spottedPauseMax = .8f;
         [SerializeField] private float visionAngle = 60f;
@@ -31,6 +32,8 @@ namespace FriendSlop.Hazards
         [SerializeField] private int attackDamage = 20;
 
         private enum State { Roaming, Chasing, Investigating }
+
+        private static readonly float[] BodySampleHeights = { 0.25f, 0.5f, 0.75f, 0.95f };
 
         private Vector3 spawnPosition;
         private Vector3 roamTarget;
@@ -44,6 +47,7 @@ namespace FriendSlop.Hazards
         private NetworkFirstPersonController _chaseTarget;
         private NetworkFirstPersonController _stunnedPlayer;
         private float _stunnedPlayerUntil;
+        private bool _roundActive;
 
         private void Awake()
         {
@@ -66,6 +70,7 @@ namespace FriendSlop.Hazards
         {
             if (!IsServer || RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active)
             {
+                _roundActive = false;
                 return;
             }
 
@@ -73,6 +78,17 @@ namespace FriendSlop.Hazards
             if (world == null)
             {
                 return;
+            }
+
+            if (!_roundActive)
+            {
+                // Give players a brief head-start, then pick a fresh target so the monster
+                // actually leaves spawn instead of potentially camping there.
+                _roundActive = true;
+                _state = State.Roaming;
+                _chaseTarget = null;
+                _roamPauseTimer = Mathf.Max(0f, roundStartGraceSeconds);
+                PickRoamTarget(world);
             }
 
             var nearest = FindNearestPlayer(world);
@@ -166,6 +182,10 @@ namespace FriendSlop.Hazards
             _state = State.Roaming;
             _investigateTimer = 0f;
             _roamPauseTimer = 0f;
+            _roundActive = false;
+            _chaseTarget = null;
+            _stunnedPlayer = null;
+            _stunnedPlayerUntil = 0f;
             var world = SphereWorld.GetClosest(transform.position);
             AlignToSurface(world, transform.forward, 1f);
             PickRoamTarget(world);
@@ -198,13 +218,23 @@ namespace FriendSlop.Hazards
                 if (distance >= bestDistance)
                     continue;
 
-                // Within proximity radius: detect regardless of cone or line of sight
+                // Stealth model: more body parts blocked → harder to spot. Crouching shrinks
+                // the sampled body height, so cover hides more of the player.
+                var visibility = ComputeBodyVisibility(world, player);
+                if (visibility <= 0f)
+                    continue;
+
                 if (distance < proximityDetectionRange)
                 {
+                    // Point-blank: still detected as long as something is exposed.
                     bestDistance = distance;
                     bestPlayer = player;
                     continue;
                 }
+
+                var effectiveRange = detectionRange * visibility;
+                if (distance >= effectiveRange)
+                    continue;
 
                 var toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, up);
                 if (toPlayer.sqrMagnitude < 0.001f)
@@ -213,14 +243,36 @@ namespace FriendSlop.Hazards
                 if (Vector3.Angle(surfaceForward, toPlayer) > visionAngle * 0.5f)
                     continue;
 
-                if (IsOccluded(world, player))
-                    continue;
-
                 bestDistance = distance;
                 bestPlayer = player;
             }
 
             return bestPlayer;
+        }
+
+        private float ComputeBodyVisibility(SphereWorld world, NetworkFirstPersonController player)
+        {
+            if (player == null || world == null) return 0f;
+
+            var origin = transform.position + world.GetUp(transform.position) * visionOriginHeight;
+            var up = world.GetUp(player.transform.position);
+            var bodyHeight = Mathf.Max(0.1f, player.CurrentBodyHeight);
+            var visible = 0;
+
+            for (var i = 0; i < BodySampleHeights.Length; i++)
+            {
+                var point = player.transform.position + up * (bodyHeight * BodySampleHeights[i]);
+                if (!Physics.Linecast(origin, point, out var hit))
+                {
+                    visible++;
+                    continue;
+                }
+
+                if (hit.collider != null && hit.collider.transform.root == player.transform.root)
+                    visible++;
+            }
+
+            return (float)visible / BodySampleHeights.Length;
         }
 
         private bool CanDetectPlayer(SphereWorld world, NetworkFirstPersonController player)
@@ -319,7 +371,18 @@ namespace FriendSlop.Hazards
                 return;
             }
 
-            var offsetPoint = spawnPosition + Random.onUnitSphere * roamRadius;
+            // Pick the offset in the local tangent plane so a near-radial random pick
+            // doesn't collapse back onto spawnPosition after surface projection.
+            var up = world.GetUp(spawnPosition);
+            var tangent = Vector3.ProjectOnPlane(Random.onUnitSphere, up);
+            if (tangent.sqrMagnitude < 0.01f)
+                tangent = Vector3.ProjectOnPlane(Vector3.right, up);
+            if (tangent.sqrMagnitude < 0.01f)
+                tangent = Vector3.ProjectOnPlane(Vector3.forward, up);
+            tangent.Normalize();
+
+            var distance = Random.Range(roamRadius * 0.5f, roamRadius);
+            var offsetPoint = spawnPosition + tangent * distance;
             roamTarget = world.GetSurfacePoint(world.GetUp(offsetPoint), surfaceHeight);
         }
 

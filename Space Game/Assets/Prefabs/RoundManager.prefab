@@ -45,7 +45,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1980709856
+  GlobalObjectIdHash: 4148279764
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -74,6 +74,9 @@ MonoBehaviour:
   quota: 0
   roundLengthSeconds: 0
   playerSpawnPoints: []
+  planetCatalog: {fileID: 11400000, guid: b633b88ecc9715d4497101cdf30fe8af, type: 2}
+  startingPlanet: {fileID: 11400000, guid: e23f03a4d5f48ff4b8fc68c33031b581, type: 2}
+  defaultObjective: {fileID: 11400000, guid: b325c8ff756ce0e478e8f571eca1f060, type: 2}
   Phase:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
@@ -129,3 +132,18 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: 0
+  CurrentTier:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: 1
+  CurrentPlanetCatalogIndex:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: -1
+  SelectedNextPlanetCatalogIndex:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+    m_InternalValue: -1
