@@ -11,6 +11,7 @@ namespace FriendSlop.Networking
     {
         [SerializeField] private RoundManager roundManagerPrefab;
         [SerializeField] private Transform[] playerSpawnPoints;
+        [SerializeField] private Transform[] shipSpawnPoints;
         [SerializeField] private NetworkLootItem[] lootPrefabs;
         [SerializeField] private Transform[] lootSpawnPoints;
         [SerializeField] private RoamingMonster monsterPrefab;
@@ -93,6 +94,7 @@ namespace FriendSlop.Networking
 
             var round = Instantiate(roundManagerPrefab);
             round.ConfigureSpawnPoints(playerSpawnPoints);
+            round.ConfigureShipSpawnPoints(shipSpawnPoints);
             SpawnNetworkObject(round.NetworkObject);
         }
 

@@ -1,5 +1,6 @@
 using FriendSlop.Loot;
 using FriendSlop.Core;
+using FriendSlop.Interaction;
 using FriendSlop.Round;
 using Unity.Netcode;
 using UnityEngine;
@@ -24,6 +25,7 @@ namespace FriendSlop.Player
         private NetworkFirstPersonController controller;
         private NetworkLootItem focusedLoot;
         private NetworkFirstPersonController focusedPlayer;
+        private IFriendSlopInteractable focusedInteractable;
         private float _chargeStartTime = -1f;
         private bool _isCharging;
         private bool _hasCarrySyncPose;
@@ -68,8 +70,8 @@ namespace FriendSlop.Player
 
             if (keyboard.eKey.wasPressedThisFrame)
             {
-                if (focusedLoot != null)
-                    focusedLoot.Interact(controller);
+                if (focusedInteractable != null)
+                    focusedInteractable.Interact(controller);
                 else if (focusedPlayer != null)
                     focusedPlayer.RequestPickupByPlayerServerRpc();
             }
@@ -124,6 +126,7 @@ namespace FriendSlop.Player
         {
             focusedLoot = null;
             focusedPlayer = null;
+            focusedInteractable = null;
             CurrentPrompt = string.Empty;
 
             var heldItem = controller.HeldItem;
@@ -158,11 +161,12 @@ namespace FriendSlop.Player
                 return;
             }
 
-            var loot = hit.collider.GetComponentInParent<NetworkLootItem>();
-            if (loot != null && loot.CanInteract(controller))
+            var interactable = FindInteractable(hit.collider);
+            if (interactable != null && interactable.CanInteract(controller))
             {
-                focusedLoot = loot;
-                CurrentPrompt = loot.GetPrompt(controller);
+                focusedInteractable = interactable;
+                focusedLoot = interactable as NetworkLootItem;
+                CurrentPrompt = interactable.GetPrompt(controller);
                 return;
             }
 
@@ -204,7 +208,7 @@ namespace FriendSlop.Player
         {
             var cameraTransform = controller.PlayerCamera.transform;
             var distance = heldItem.CarryDistance;
-            var up = SphereWorld.GetGravityUp(cameraTransform.position);
+            var up = FlatGravityVolume.GetGravityUp(cameraTransform.position);
             var targetPosition = cameraTransform.position + cameraTransform.forward * distance + (-up) * 0.15f;
             var carriedForward = Vector3.ProjectOnPlane(cameraTransform.forward, up);
             if (carriedForward.sqrMagnitude < 0.001f)
@@ -238,7 +242,7 @@ namespace FriendSlop.Player
         private void UpdateHeldPlayerPose()
         {
             var cameraTransform = controller.PlayerCamera.transform;
-            var up = SphereWorld.GetGravityUp(cameraTransform.position);
+            var up = FlatGravityVolume.GetGravityUp(cameraTransform.position);
             var forward = Vector3.ProjectOnPlane(cameraTransform.forward, up);
             if (forward.sqrMagnitude < 0.001f) forward = Vector3.ProjectOnPlane(transform.forward, up);
             if (forward.sqrMagnitude < 0.001f) forward = Vector3.Cross(up, Vector3.right);
@@ -280,6 +284,25 @@ namespace FriendSlop.Player
             _lastCarrySyncRotation = targetRotation;
             _hasCarrySyncPose = true;
             _nextCarrySyncTime = Time.time + Mathf.Max(0.01f, carrySyncInterval);
+        }
+
+        private static IFriendSlopInteractable FindInteractable(Collider hitCollider)
+        {
+            if (hitCollider == null)
+            {
+                return null;
+            }
+
+            var behaviours = hitCollider.GetComponentsInParent<MonoBehaviour>();
+            for (var i = 0; i < behaviours.Length; i++)
+            {
+                if (behaviours[i] is IFriendSlopInteractable interactable)
+                {
+                    return interactable;
+                }
+            }
+
+            return null;
         }
     }
 }

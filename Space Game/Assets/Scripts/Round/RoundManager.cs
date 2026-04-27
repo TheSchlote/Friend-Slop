@@ -16,6 +16,10 @@ namespace FriendSlop.Round
         [SerializeField] private float roundLengthSeconds = 0f;
         [SerializeField] private Transform[] playerSpawnPoints;
 
+        [Header("Ship Lobby")]
+        [SerializeField] private Transform[] shipSpawnPoints;
+        [SerializeField] private bool returnToShipOnRoundEnd = true;
+
         [Header("Planet Progression")]
         [SerializeField] private PlanetCatalog planetCatalog;
         [SerializeField] private PlanetDefinition startingPlanet;
@@ -52,6 +56,11 @@ namespace FriendSlop.Round
             playerSpawnPoints = spawnPoints;
         }
 
+        public void ConfigureShipSpawnPoints(Transform[] spawnPoints)
+        {
+            shipSpawnPoints = spawnPoints;
+        }
+
         private void Awake()
         {
             Instance = this;
@@ -78,7 +87,7 @@ namespace FriendSlop.Round
 
             if (IsServer)
             {
-                Phase.Value = RoundPhase.Lobby;
+                ServerSetPhase(RoundPhase.Lobby);
                 TimeRemaining.Value = roundLengthSeconds;
                 Quota.Value = quota;
 
@@ -93,6 +102,8 @@ namespace FriendSlop.Round
                     Quota.Value = quota;
                     TimeRemaining.Value = roundLengthSeconds;
                 }
+
+                ServerMovePlayersToShip(revivePlayers: true);
             }
 
             ApplyActivePlanetEnvironment();
@@ -158,7 +169,7 @@ namespace FriendSlop.Round
                 var allReady = PlayersExpectedToLoad.Value > 0
                     && _readyPlayerIds.Count >= PlayersExpectedToLoad.Value;
                 if (allReady || _loadingTimeout <= 0f)
-                    Phase.Value = RoundPhase.Active;
+                    ServerSetPhase(RoundPhase.Active);
                 return;
             }
 
@@ -175,19 +186,19 @@ namespace FriendSlop.Round
                 var status = objective.Evaluate(this);
                 if (status == ObjectiveStatus.Success)
                 {
-                    Phase.Value = RoundPhase.Success;
+                    ServerSetPhase(RoundPhase.Success);
                     return;
                 }
                 if (status == ObjectiveStatus.Failed)
                 {
-                    Phase.Value = RoundPhase.Failed;
+                    ServerSetPhase(RoundPhase.Failed);
                     return;
                 }
             }
             else if (roundLengthSeconds > 0f && TimeRemaining.Value <= 0f && CollectedValue.Value < Quota.Value)
             {
                 // Legacy fallback when no objective is configured anywhere.
-                Phase.Value = RoundPhase.Failed;
+                ServerSetPhase(RoundPhase.Failed);
                 return;
             }
 
@@ -203,7 +214,7 @@ namespace FriendSlop.Round
                 if (player != null && player.IsSpawned && !player.IsDead)
                     return;
             }
-            Phase.Value = RoundPhase.AllDead;
+            ServerSetPhase(RoundPhase.AllDead);
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -314,7 +325,7 @@ namespace FriendSlop.Round
 
         private IEnumerator ServerTransitionToPlanet(PlanetDefinition next, int nextIndex)
         {
-            Phase.Value = RoundPhase.Transitioning;
+            ServerSetPhase(RoundPhase.Transitioning);
 
             // Wait for clients to fade to black before swapping the planet content.
             yield return new WaitForSeconds(TransitionFadeSeconds);
@@ -346,7 +357,7 @@ namespace FriendSlop.Round
             {
                 PlayersReady.Value = _readyPlayerIds.Count;
                 if (_readyPlayerIds.Count >= PlayersExpectedToLoad.Value)
-                    Phase.Value = RoundPhase.Active;
+                    ServerSetPhase(RoundPhase.Active);
             }
         }
 
@@ -393,8 +404,8 @@ namespace FriendSlop.Round
             // bumped quota, etc.) before we transition into Loading.
             ActiveObjective?.ServerInitialize(this);
 
-            RespawnPlayers();
-            Phase.Value = RoundPhase.Loading;
+            RespawnPlayersAtPlanet();
+            ServerSetPhase(RoundPhase.Loading);
         }
 
         public void ServerDepositLoot(NetworkLootItem loot)
@@ -473,8 +484,8 @@ namespace FriendSlop.Round
                 // Re-evaluate immediately on relevant gameplay events; otherwise Update handles polling.
                 if (Phase.Value != RoundPhase.Active) return;
                 var status = objective.Evaluate(this);
-                if (status == ObjectiveStatus.Success) Phase.Value = RoundPhase.Success;
-                else if (status == ObjectiveStatus.Failed) Phase.Value = RoundPhase.Failed;
+                if (status == ObjectiveStatus.Success) ServerSetPhase(RoundPhase.Success);
+                else if (status == ObjectiveStatus.Failed) ServerSetPhase(RoundPhase.Failed);
                 return;
             }
 
@@ -482,7 +493,7 @@ namespace FriendSlop.Round
             if (!RoundStateUtility.IsLaunchReady(RocketAssembled.Value, PlayersBoarded.Value, connectedPlayerCount))
                 return;
 
-            Phase.Value = RoundPhase.Success;
+            ServerSetPhase(RoundPhase.Success);
         }
 
         private void HandleClientDisconnect(ulong clientId)
@@ -501,7 +512,7 @@ namespace FriendSlop.Round
 
                 if (PlayersExpectedToLoad.Value <= 0 || PlayersReady.Value >= PlayersExpectedToLoad.Value)
                 {
-                    Phase.Value = RoundPhase.Active;
+                    ServerSetPhase(RoundPhase.Active);
                 }
             }
 
@@ -546,7 +557,7 @@ namespace FriendSlop.Round
             lootItems.AddRange(FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None));
         }
 
-        private void RespawnPlayers()
+        private void RespawnPlayersAtPlanet()
         {
             if (playerSpawnPoints == null || playerSpawnPoints.Length == 0)
                 return;
@@ -565,13 +576,56 @@ namespace FriendSlop.Round
 
         public void ServerPlaceNewPlayer(NetworkFirstPersonController player)
         {
-            if (!IsServer || player == null || playerSpawnPoints == null || playerSpawnPoints.Length == 0)
+            if (!IsServer || player == null)
                 return;
 
+            var spawnPoints = RoundStateUtility.IsShipPhase(Phase.Value) ? shipSpawnPoints : playerSpawnPoints;
+            if (spawnPoints == null || spawnPoints.Length == 0)
+                return;
+
+            var spawn = GetSpawnForPlayer(player, spawnPoints);
+            player.ServerTeleport(spawn.position, spawn.rotation);
+        }
+
+        private void ServerSetPhase(RoundPhase phase)
+        {
+            if (!IsServer)
+                return;
+
+            if (Phase.Value == phase)
+                return;
+
+            Phase.Value = phase;
+
+            if (returnToShipOnRoundEnd && RoundStateUtility.IsShipPhase(phase))
+            {
+                ServerMovePlayersToShip(revivePlayers: true);
+            }
+        }
+
+        private void ServerMovePlayersToShip(bool revivePlayers)
+        {
+            if (!IsServer || shipSpawnPoints == null || shipSpawnPoints.Length == 0)
+                return;
+
+            for (var index = 0; index < NetworkFirstPersonController.ActivePlayers.Count; index++)
+            {
+                var player = NetworkFirstPersonController.ActivePlayers[index];
+                if (player == null || !player.IsSpawned)
+                    continue;
+
+                var spawn = GetSpawnForPlayer(player, shipSpawnPoints);
+                if (revivePlayers)
+                    player.ServerRevive();
+                player.ServerTeleport(spawn.position, spawn.rotation);
+            }
+        }
+
+        private static Transform GetSpawnForPlayer(NetworkFirstPersonController player, Transform[] spawnPoints)
+        {
             var index = NetworkFirstPersonController.ActivePlayers.IndexOf(player);
             if (index < 0) index = 0;
-            var spawn = playerSpawnPoints[index % playerSpawnPoints.Length];
-            player.ServerTeleport(spawn.position, spawn.rotation);
+            return spawnPoints[index % spawnPoints.Length];
         }
     }
 }

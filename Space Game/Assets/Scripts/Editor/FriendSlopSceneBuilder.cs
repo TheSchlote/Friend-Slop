@@ -6,6 +6,7 @@ using FriendSlop.Loot;
 using FriendSlop.Networking;
 using FriendSlop.Player;
 using FriendSlop.Round;
+using FriendSlop.Ship;
 using FriendSlop.UI;
 using Unity.Netcode;
 using Unity.Netcode.Components;
@@ -34,6 +35,8 @@ namespace FriendSlop.Editor
         private const float PlayerSurfaceAlignSpeed = 14f;
         private const float PlayerGroundProbeDistance = 0.22f;
         private const float PlayerTerminalFallSpeed = 18f;
+        private const string ShipInteriorRootName = "Bigger-On-The-Inside Ship Interior";
+        private static readonly Vector3 ShipInteriorCenter = new(0f, 118f, 0f);
 
         static FriendSlopSceneBuilder()
         {
@@ -64,10 +67,11 @@ namespace FriendSlop.Editor
             CreateMenuCamera();
             CreateNetworkManager(playerPrefab, networkPrefabsList);
             var spawns = CreateLevel(materials);
+            var shipSpawns = CreateShipInterior(materials);
             var lootSpawnPoints = CreateLootSpawnPoints();
             var monsterSpawnPoints = CreateMonsterSpawnPoints();
             CreateLaunchpad(materials);
-            CreateRuntimeBootstrapper(roundManagerPrefab, spawns, lootPrefabs, lootSpawnPoints, monsterPrefab, monsterSpawnPoints);
+            CreateRuntimeBootstrapper(roundManagerPrefab, spawns, shipSpawns, lootPrefabs, lootSpawnPoints, monsterPrefab, monsterSpawnPoints);
             CreateRuntimeUi();
 
             EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), ScenePath);
@@ -137,6 +141,8 @@ namespace FriendSlop.Editor
             EnsureBootstrapperLootReferences(lootPrefabs);
             EnsureBootstrapperMonsterReferences(monsterPrefab);
             EnsureLaunchpadLayoutInOpenScene(materials);
+            var shipSpawns = EnsureShipInteriorInOpenScene(materials);
+            EnsureBootstrapperShipReferences(shipSpawns);
             EnsureOpenSceneGameplayTuning();
 
             if (scene.isDirty)
@@ -161,6 +167,8 @@ namespace FriendSlop.Editor
             EnsureBootstrapperLootReferences(lootPrefabs);
             EnsureBootstrapperMonsterReferences(monsterPrefab);
             EnsureLaunchpadLayoutInOpenScene(materials);
+            var shipSpawns = EnsureShipInteriorInOpenScene(materials);
+            EnsureBootstrapperShipReferences(shipSpawns);
             EnsureOpenSceneGameplayTuning();
 
             EditorSceneManager.SaveScene(scene);
@@ -188,6 +196,7 @@ namespace FriendSlop.Editor
             CreateFolder("Assets/Scripts", "Round");
             CreateFolder("Assets/Scripts", "Hazards");
             CreateFolder("Assets/Scripts", "UI");
+            CreateFolder("Assets/Scripts", "Ship");
             CreateFolder("Assets/Scripts", "Editor");
             CreateFolder("Assets", "Prefabs");
             CreateFolder("Assets/Prefabs", "Loot");
@@ -206,6 +215,12 @@ namespace FriendSlop.Editor
                 ["PlanetGrass"] = CreateMaterial("PlanetGrass", new Color(0.18f, 0.62f, 0.34f)),
                 ["PlanetDirt"] = CreateMaterial("PlanetDirt", new Color(0.38f, 0.28f, 0.2f)),
                 ["Launchpad"] = CreateMaterial("Launchpad", new Color(0.18f, 0.18f, 0.2f)),
+                ["ShipFloor"] = CreateMaterial("ShipFloor", new Color(0.33f, 0.36f, 0.34f)),
+                ["ShipWall"] = CreateMaterial("ShipWall", new Color(0.12f, 0.15f, 0.16f)),
+                ["Console"] = CreateMaterial("Console", new Color(0.08f, 0.28f, 0.38f)),
+                ["Hologram"] = CreateMaterial("Hologram", new Color(0.16f, 0.92f, 0.98f)),
+                ["Window"] = CreateMaterial("Window", new Color(0.04f, 0.08f, 0.12f)),
+                ["WarningRed"] = CreateMaterial("WarningRed", new Color(0.82f, 0.14f, 0.1f)),
                 ["ShipPart"] = CreateMaterial("ShipPart", new Color(0.92f, 0.92f, 0.88f)),
                 ["Player"] = CreateMaterial("Player", new Color(0.1f, 0.55f, 0.9f)),
                 ["Monster"] = CreateMaterial("Monster", new Color(0.85f, 0.08f, 0.06f)),
@@ -724,6 +739,61 @@ namespace FriendSlop.Editor
             CreateFloatingText("Launchpad Sign", "LAUNCHPAD\nBring parts here", launchpadRoot, world, padNormal, Vector2.zero, 4.6f, Color.green);
         }
 
+        private static Transform[] CreateShipInterior(IReadOnlyDictionary<string, Material> materials)
+        {
+            var root = new GameObject(ShipInteriorRootName).transform;
+            root.position = ShipInteriorCenter;
+
+            var gravityVolume = root.gameObject.AddComponent<FlatGravityVolume>();
+            var volumeSo = new SerializedObject(gravityVolume);
+            volumeSo.FindProperty("size").vector3Value = new Vector3(30f, 10f, 22f);
+            volumeSo.FindProperty("priority").intValue = 100;
+            volumeSo.ApplyModifiedPropertiesWithoutUndo();
+
+            CreateLocalCube("Ship Floor", root, new Vector3(0f, -0.08f, 0f), new Vector3(24f, 0.28f, 16f), materials["ShipFloor"]);
+            CreateLocalCube("Ship Ceiling", root, new Vector3(0f, 4.4f, 0f), new Vector3(24f, 0.22f, 16f), materials["ShipWall"]);
+            CreateLocalCube("Port Wall", root, new Vector3(-12.1f, 2.1f, 0f), new Vector3(0.28f, 4.4f, 16f), materials["ShipWall"]);
+            CreateLocalCube("Starboard Wall", root, new Vector3(12.1f, 2.1f, 0f), new Vector3(0.28f, 4.4f, 16f), materials["ShipWall"]);
+            CreateLocalCube("Aft Wall", root, new Vector3(0f, 2.1f, -8.1f), new Vector3(24f, 4.4f, 0.28f), materials["ShipWall"]);
+            CreateLocalCube("Cockpit Window", root, new Vector3(0f, 2.6f, 8.05f), new Vector3(9f, 2.2f, 0.18f), materials["Window"]);
+            CreateLocalCube("Cockpit Nose Wall Left", root, new Vector3(-8.3f, 2.1f, 8.1f), new Vector3(7.4f, 4.4f, 0.28f), materials["ShipWall"]);
+            CreateLocalCube("Cockpit Nose Wall Right", root, new Vector3(8.3f, 2.1f, 8.1f), new Vector3(7.4f, 4.4f, 0.28f), materials["ShipWall"]);
+
+            CreateLocalCube("Cockpit Deck Stripe", root, new Vector3(0f, 0.09f, 5.5f), new Vector3(7.6f, 0.05f, 0.35f), materials["SafetyYellow"], removeCollider: true);
+            CreateLocalCube("Port Module Bay Stripe", root, new Vector3(-6.8f, 0.1f, -2.5f), new Vector3(0.35f, 0.05f, 6f), materials["WarningRed"], removeCollider: true);
+            CreateLocalCube("Starboard Module Bay Stripe", root, new Vector3(6.8f, 0.1f, -2.5f), new Vector3(0.35f, 0.05f, 6f), materials["WarningRed"], removeCollider: true);
+
+            CreateShipStation("Pilot Console", root, new Vector3(0f, 0.75f, 5.8f), new Vector3(3.2f, 1.2f, 1.6f), materials["Console"], ShipStationRole.Pilot, "Pilot Console");
+            CreateShipStation("Holographic Idea Board", root, new Vector3(-11.7f, 2.1f, -1.1f), new Vector3(0.28f, 2.2f, 4.6f), materials["Hologram"], ShipStationRole.HolographicBoard, "Holographic Board");
+            CreateShipStation("Minigame Module Slot A", root, new Vector3(6.8f, 0.65f, -3.7f), new Vector3(2.8f, 1.1f, 2.2f), materials["Console"], ShipStationRole.MiniGame, "Module Slot A");
+            CreateShipStation("Customization Bench", root, new Vector3(-6.6f, 0.65f, -5.2f), new Vector3(3.4f, 1.1f, 1.6f), materials["ShipPart"], ShipStationRole.Customization, "Customization Bench");
+
+            CreateLocalText("Ship Lobby Label", root, "SHIP LOBBY\nwalk, wait, cause problems", new Vector3(0f, 3.2f, -7.85f), Quaternion.Euler(0f, 0f, 0f), Color.white);
+            CreateLocalText("Pilot Label", root, "PILOT", new Vector3(0f, 2.35f, 4.75f), Quaternion.Euler(58f, 0f, 0f), Color.cyan);
+
+            var spawnRoot = new GameObject("Ship Spawn Points").transform;
+            spawnRoot.SetParent(root, false);
+            var spawnPositions = new[]
+            {
+                new Vector3(-2.4f, 0.12f, -5.6f),
+                new Vector3(2.4f, 0.12f, -5.6f),
+                new Vector3(-2.4f, 0.12f, -3.2f),
+                new Vector3(2.4f, 0.12f, -3.2f)
+            };
+
+            var spawns = new Transform[spawnPositions.Length];
+            for (var i = 0; i < spawnPositions.Length; i++)
+            {
+                var spawn = new GameObject($"Ship Spawn {i + 1}");
+                spawn.transform.SetParent(spawnRoot, false);
+                spawn.transform.localPosition = spawnPositions[i];
+                spawn.transform.localRotation = Quaternion.LookRotation(Vector3.forward, Vector3.up);
+                spawns[i] = spawn.transform;
+            }
+
+            return spawns;
+        }
+
         private static void CreateMonster(IReadOnlyDictionary<string, Material> materials)
         {
             var monster = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -745,7 +815,7 @@ namespace FriendSlop.Editor
             light.intensity = 2.5f;
         }
 
-        private static void CreateRuntimeBootstrapper(RoundManager roundManagerPrefab, Transform[] playerSpawns, NetworkLootItem[] lootPrefabs, Transform[] lootSpawns, RoamingMonster monsterPrefab, Transform[] monsterSpawns)
+        private static void CreateRuntimeBootstrapper(RoundManager roundManagerPrefab, Transform[] playerSpawns, Transform[] shipSpawns, NetworkLootItem[] lootPrefabs, Transform[] lootSpawns, RoamingMonster monsterPrefab, Transform[] monsterSpawns)
         {
             var bootstrapObject = new GameObject("Network Runtime Bootstrapper");
             var bootstrapper = bootstrapObject.AddComponent<PrototypeNetworkBootstrapper>();
@@ -753,6 +823,7 @@ namespace FriendSlop.Editor
 
             serializedBootstrapper.FindProperty("roundManagerPrefab").objectReferenceValue = roundManagerPrefab;
             AssignObjectArray(serializedBootstrapper.FindProperty("playerSpawnPoints"), playerSpawns);
+            AssignObjectArray(serializedBootstrapper.FindProperty("shipSpawnPoints"), shipSpawns);
             AssignObjectArray(serializedBootstrapper.FindProperty("lootPrefabs"), lootPrefabs);
             AssignObjectArray(serializedBootstrapper.FindProperty("lootSpawnPoints"), lootSpawns);
             serializedBootstrapper.FindProperty("monsterPrefab").objectReferenceValue = monsterPrefab;
@@ -875,6 +946,51 @@ namespace FriendSlop.Editor
             return cube;
         }
 
+        private static GameObject CreateLocalCube(string name, Transform parent, Vector3 localPosition, Vector3 localScale, Material material, bool removeCollider = false)
+        {
+            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            cube.name = name;
+            cube.transform.SetParent(parent, false);
+            cube.transform.localPosition = localPosition;
+            cube.transform.localRotation = Quaternion.identity;
+            cube.transform.localScale = localScale;
+            SetMaterial(cube, material);
+            if (removeCollider)
+            {
+                RemoveCollider(cube);
+            }
+
+            return cube;
+        }
+
+        private static ShipStation CreateShipStation(string name, Transform parent, Vector3 localPosition, Vector3 localScale, Material material, ShipStationRole role, string displayName)
+        {
+            var stationObject = CreateLocalCube(name, parent, localPosition, localScale, material);
+            stationObject.AddComponent<NetworkObject>();
+            var station = stationObject.AddComponent<ShipStation>();
+            var stationSo = new SerializedObject(station);
+            stationSo.FindProperty("displayName").stringValue = displayName;
+            stationSo.FindProperty("role").enumValueIndex = (int)role;
+            stationSo.ApplyModifiedPropertiesWithoutUndo();
+            return station;
+        }
+
+        private static void CreateLocalText(string name, Transform parent, string content, Vector3 localPosition, Quaternion localRotation, Color color)
+        {
+            var textObject = new GameObject(name);
+            textObject.transform.SetParent(parent, false);
+            textObject.transform.localPosition = localPosition;
+            textObject.transform.localRotation = localRotation;
+            var text = textObject.AddComponent<TextMesh>();
+            text.text = content;
+            text.anchor = TextAnchor.MiddleCenter;
+            text.alignment = TextAlignment.Center;
+            text.fontSize = 48;
+            text.characterSize = 0.12f;
+            text.color = color;
+            textObject.AddComponent<WorldTextBillboard>();
+        }
+
         private static void EnsureBootstrapperMonsterReferences(RoamingMonster monsterPrefab)
         {
             var bootstrapper = Object.FindFirstObjectByType<PrototypeNetworkBootstrapper>();
@@ -975,6 +1091,34 @@ namespace FriendSlop.Editor
 
             CreateLaunchpad(materials);
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        }
+
+        private static Transform[] EnsureShipInteriorInOpenScene(IReadOnlyDictionary<string, Material> materials)
+        {
+            var existingRoot = GameObject.Find(ShipInteriorRootName);
+            if (existingRoot != null)
+            {
+                Object.DestroyImmediate(existingRoot);
+                EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            }
+
+            var spawns = CreateShipInterior(materials);
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            return spawns;
+        }
+
+        private static void EnsureBootstrapperShipReferences(Transform[] shipSpawns)
+        {
+            var bootstrapper = Object.FindFirstObjectByType<PrototypeNetworkBootstrapper>();
+            if (bootstrapper == null)
+            {
+                return;
+            }
+
+            var serializedBootstrapper = new SerializedObject(bootstrapper);
+            AssignObjectArray(serializedBootstrapper.FindProperty("shipSpawnPoints"), shipSpawns);
+            serializedBootstrapper.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(bootstrapper);
         }
 
         private static void DestroyOpenSceneObjectsNamed(string objectName)

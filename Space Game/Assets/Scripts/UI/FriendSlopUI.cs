@@ -99,6 +99,8 @@ namespace FriendSlop.UI
         private Button quitButton;
         private bool activeMenuOpen;
         private bool _wasConnected;
+        private bool _hasObservedRoundPhase;
+        private RoundPhase _lastObservedRoundPhase = RoundPhase.Lobby;
         private Font font;
         private float _copyCodeFeedbackUntil;
 
@@ -161,9 +163,9 @@ namespace FriendSlop.UI
             var round = RoundManager.Instance;
             var connected = networkManager != null && networkManager.IsListening;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
-            var activeRound = connected && phase == RoundPhase.Active;
+            var gameplayPhase = connected && RoundStateUtility.AllowsGameplayInput(phase);
 
-            if (!activeRound)
+            if (!gameplayPhase)
             {
                 UnlockMenuCursor();
                 return;
@@ -208,6 +210,12 @@ namespace FriendSlop.UI
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
             }
+            else if (!_wasConnected && connected)
+            {
+                activeMenuOpen = false;
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
 
             _wasConnected = connected;
         }
@@ -221,8 +229,11 @@ namespace FriendSlop.UI
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             if (phase == RoundPhase.Loading || phase == RoundPhase.Transitioning || _lateJoinLoading) return true;
 
-            var activeRound = IsActiveRound();
-            return !activeRound || activeMenuOpen;
+            var networkManager = NetworkManager.Singleton;
+            var connected = networkManager != null && networkManager.IsListening;
+            if (!connected) return true;
+
+            return !RoundStateUtility.AllowsGameplayInput(phase) || activeMenuOpen;
         }
 
         private void RefreshUi()
@@ -236,20 +247,37 @@ namespace FriendSlop.UI
             var connectionInProgress = session != null && session.IsSessionOperationInProgress;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var activeRound = connected && phase == RoundPhase.Active;
+            var gameplayPhase = connected && RoundStateUtility.AllowsGameplayInput(phase);
             var isLoading = phase == RoundPhase.Loading || phase == RoundPhase.Transitioning || _lateJoinLoading;
-            if (!activeRound)
+
+            if (!_hasObservedRoundPhase || _lastObservedRoundPhase != phase)
+            {
+                if (phase == RoundPhase.Loading || phase == RoundPhase.Active || phase == RoundPhase.Transitioning)
+                {
+                    activeMenuOpen = false;
+                }
+                else if (RoundStateUtility.IsShipPhase(phase))
+                {
+                    activeMenuOpen = false;
+                }
+
+                _lastObservedRoundPhase = phase;
+                _hasObservedRoundPhase = true;
+            }
+
+            if (!gameplayPhase)
             {
                 activeMenuOpen = false;
             }
 
-            var showMenu = !isLoading && (!activeRound || activeMenuOpen);
+            var showMenu = !isLoading && (!gameplayPhase || activeMenuOpen);
 
             if (showMenu && (Cursor.lockState != CursorLockMode.None || !Cursor.visible))
             {
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
             }
-            else if (activeRound && !activeMenuOpen && (Cursor.lockState != CursorLockMode.Locked || Cursor.visible))
+            else if (gameplayPhase && !activeMenuOpen && (Cursor.lockState != CursorLockMode.Locked || Cursor.visible))
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
@@ -316,11 +344,11 @@ namespace FriendSlop.UI
                 timerText.text = BuildObjectiveHudText(round);
                 resultText.text = phase switch
                 {
-                    RoundPhase.Lobby => connected ? $"Lobby: host starts the run when everyone is in.\nCurrent planet: {FormatPlanetLabel(round.CurrentPlanet)}" : "Host or join to begin.",
+                    RoundPhase.Lobby => connected ? $"Ship Lobby: walk around or wait for launch.\nCurrent planet: {FormatPlanetLabel(round.CurrentPlanet)}" : "Host or join to begin.",
                     RoundPhase.Active => string.Empty,
                     RoundPhase.Success => BuildSuccessResultText(round),
-                    RoundPhase.Failed => "FAILED: the timer ate your paycheck.",
-                    RoundPhase.AllDead => $"WIPE OUT - everyone died.\nCollected ${round.CollectedValue.Value} toward quota.",
+                    RoundPhase.Failed => "FAILED: back aboard the ship.\nHost can restart the planet run.",
+                    RoundPhase.AllDead => $"WIPE OUT - everyone died.\nBack aboard with ${round.CollectedValue.Value} collected.",
                     _ => string.Empty
                 };
             }
@@ -346,10 +374,10 @@ namespace FriendSlop.UI
                 promptText.text = string.Empty;
                 carriedText.text = string.Empty;
             }
-            UpdateStaminaBar(localPlayer, activeRound);
-            UpdateHealthBar(localPlayer, activeRound);
+            UpdateStaminaBar(localPlayer, gameplayPhase);
+            UpdateHealthBar(localPlayer, gameplayPhase);
             UpdateDeathOverlay(localPlayer, activeRound);
-            UpdateChargeBar(localPlayer, activeRound);
+            UpdateChargeBar(localPlayer, gameplayPhase);
         }
 
         private void LayoutMenu(bool connected, bool isHost, RoundPhase phase)

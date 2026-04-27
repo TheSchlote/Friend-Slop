@@ -444,8 +444,8 @@ namespace FriendSlop.Player
         {
             if (characterController == null || !characterController.enabled) return;
 
-            var world = SphereWorld.GetClosest(transform.position);
-            var up = world != null ? world.GetUp(transform.position) : Vector3.up;
+            var world = FlatGravityVolume.TryGetContaining(transform.position, out _) ? null : SphereWorld.GetClosest(transform.position);
+            var up = world != null ? world.GetUp(transform.position) : FlatGravityVolume.GetGravityUp(transform.position);
             var isGrounded = IsGroundedOnSphere(world);
 
             knockbackVelocity = Vector3.MoveTowards(knockbackVelocity, Vector3.zero, knockbackDamping * Time.deltaTime);
@@ -534,7 +534,7 @@ namespace FriendSlop.Player
 
         private void AlignToSphereSurface()
         {
-            var up = SphereWorld.GetGravityUp(transform.position);
+            var up = FlatGravityVolume.GetGravityUp(transform.position);
             var targetRotation = Quaternion.FromToRotation(transform.up, up) * transform.rotation;
             if (_currentTiltAngle > 0.01f)
                 targetRotation = Quaternion.AngleAxis(_currentTiltAngle, _tiltAxis) * targetRotation;
@@ -663,6 +663,9 @@ namespace FriendSlop.Player
 
         private static Vector3 GetSurfaceSafeTeleportPosition(Vector3 position)
         {
+            if (FlatGravityVolume.TryGetContaining(position, out _))
+                return position;
+
             var world = SphereWorld.GetClosest(position);
             if (world == null)
                 return position;
@@ -673,6 +676,17 @@ namespace FriendSlop.Player
 
         private static Quaternion GetSurfaceSafeTeleportRotation(Vector3 position, Quaternion requestedRotation)
         {
+            if (FlatGravityVolume.TryGetContaining(position, out var volume))
+            {
+                var flatUp = volume.Up;
+                var forward = Vector3.ProjectOnPlane(requestedRotation * Vector3.forward, flatUp);
+                if (forward.sqrMagnitude < 0.001f)
+                    forward = Vector3.ProjectOnPlane(Vector3.forward, flatUp);
+                if (forward.sqrMagnitude < 0.001f)
+                    forward = Vector3.ProjectOnPlane(Vector3.right, flatUp);
+                return Quaternion.LookRotation(forward.normalized, flatUp);
+            }
+
             var world = SphereWorld.GetClosest(position);
             if (world == null)
                 return requestedRotation;
@@ -831,8 +845,8 @@ namespace FriendSlop.Player
 
         private string BuildPhysicsDiagnosticLine(string reason)
         {
-            var world = SphereWorld.GetClosest(transform.position);
-            var up = world != null ? world.GetUp(transform.position) : Vector3.up;
+            var world = FlatGravityVolume.TryGetContaining(transform.position, out _) ? null : SphereWorld.GetClosest(transform.position);
+            var up = world != null ? world.GetUp(transform.position) : FlatGravityVolume.GetGravityUp(transform.position);
             var launchpad = GetDiagnosticLaunchpad();
             var launchpadPlanarDistance = -1f;
             var launchpadHeightDistance = -1f;
