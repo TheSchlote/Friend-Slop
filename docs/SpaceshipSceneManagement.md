@@ -6,6 +6,7 @@
 - A generated dev ship interior now exists inside that scene so the lobby is walkable immediately.
 - `RoundManager` treats `Lobby`, `Success`, `Failed`, and `AllDead` as ship phases, and `Active` as the planet phase.
 - Ship stations are reusable networked interactables so pilot controls, holographic boards, module bays, customization benches, and minigames can grow as separate systems.
+- The first scene-management foundation is in code under `Assets/Scripts/SceneManagement`: scene definitions, a scene catalog, path validation, and a server-only Netcode transition service.
 
 ## Target Scene Layout
 
@@ -25,3 +26,10 @@
 - Use dynamically spawned network prefabs for objects that can be created, destroyed, pooled, carried, purchased, or migrated.
 - Keep ship and planet spawn sets separate; never infer location from the current scene name.
 - Test pure state rules in EditMode and run PlayMode scene smoke tests for every generated scene contract.
+
+## Next Implementation Step
+
+- Create `Bootstrap`, `ShipInterior`, and the first `Planet_StarterJunk` scene assets.
+- Register them in a `GameSceneCatalog` asset.
+- Move scene-owned dev geometry out of `FriendSlopPrototype` while keeping the same spawn/station contracts.
+- Route host startup through `NetworkSceneTransitionService` once the split scenes exist and are in Build Settings.

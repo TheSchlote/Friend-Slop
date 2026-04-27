@@ -6,6 +6,7 @@ using FriendSlop.Loot;
 using FriendSlop.Networking;
 using FriendSlop.Player;
 using FriendSlop.Round;
+using FriendSlop.SceneManagement;
 using FriendSlop.Ship;
 using FriendSlop.UI;
 using Unity.Netcode;
@@ -140,6 +141,7 @@ namespace FriendSlop.Editor
             BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
             EnsureBootstrapperLootReferences(lootPrefabs);
             EnsureBootstrapperMonsterReferences(monsterPrefab);
+            EnsureSceneTransitionServiceInOpenScene();
             EnsureLaunchpadLayoutInOpenScene(materials);
             var shipSpawns = EnsureShipInteriorInOpenScene(materials);
             EnsureBootstrapperShipReferences(shipSpawns);
@@ -166,6 +168,7 @@ namespace FriendSlop.Editor
             BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
             EnsureBootstrapperLootReferences(lootPrefabs);
             EnsureBootstrapperMonsterReferences(monsterPrefab);
+            EnsureSceneTransitionServiceInOpenScene();
             EnsureLaunchpadLayoutInOpenScene(materials);
             var shipSpawns = EnsureShipInteriorInOpenScene(materials);
             EnsureBootstrapperShipReferences(shipSpawns);
@@ -548,6 +551,7 @@ namespace FriendSlop.Editor
             networkManager.NetworkConfig.ConnectionApproval = false;
             networkManager.NetworkConfig.EnableSceneManagement = true;
             networkObject.AddComponent<NetworkSessionManager>();
+            networkObject.AddComponent<NetworkSceneTransitionService>();
         }
 
         private static Transform[] CreateLevel(IReadOnlyDictionary<string, Material> materials)
@@ -1105,6 +1109,24 @@ namespace FriendSlop.Editor
             var spawns = CreateShipInterior(materials);
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
             return spawns;
+        }
+
+        private static void EnsureSceneTransitionServiceInOpenScene()
+        {
+            if (Object.FindFirstObjectByType<NetworkSceneTransitionService>() != null)
+            {
+                return;
+            }
+
+            var networkManager = Object.FindFirstObjectByType<NetworkManager>();
+            if (networkManager == null)
+            {
+                return;
+            }
+
+            networkManager.gameObject.AddComponent<NetworkSceneTransitionService>();
+            EditorUtility.SetDirty(networkManager.gameObject);
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
         }
 
         private static void EnsureBootstrapperShipReferences(Transform[] shipSpawns)
