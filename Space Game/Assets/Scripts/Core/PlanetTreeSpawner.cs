@@ -18,6 +18,7 @@ namespace FriendSlop.Core
         [SerializeField] private float minTreeSpacing = 2.2f;
         [SerializeField] private float launchpadExclusionDeg = 22f;
         [SerializeField] private float spawnAreaExclusionDeg = 18f;
+        [SerializeField] private float trunkSinkDepth = 0.08f;
 
         // Synced seed — server writes a new non-zero value each Active round,
         // 0 means no trees. All clients (including late joiners) derive identical
@@ -30,6 +31,7 @@ namespace FriendSlop.Core
         private SphereWorld _world;
         private PlanetColorRandomizer _colorizer;
         private readonly List<GameObject> _trees = new();
+        private readonly List<Material> _treeMaterials = new();
         private bool _subscribed;
 
         // --- Lifecycle ---
@@ -105,6 +107,10 @@ namespace FriendSlop.Core
             foreach (var t in _trees)
                 if (t != null) Destroy(t);
             _trees.Clear();
+
+            foreach (var material in _treeMaterials)
+                if (material != null) Destroy(material);
+            _treeMaterials.Clear();
         }
 
         private void SpawnTreesWithSeed(int seed)
@@ -121,6 +127,8 @@ namespace FriendSlop.Core
             ResolveColors(out var trunkColor, out var leafColor);
             var trunkMat = MakeOpaqueMat(trunkColor);
             var leafMat  = MakeOpaqueMat(leafColor);
+            _treeMaterials.Add(trunkMat);
+            _treeMaterials.Add(leafMat);
 
             var placedDirs = new List<Vector3>(treeCount);
             var attempts   = 0;
@@ -143,7 +151,7 @@ namespace FriendSlop.Core
                 var treeRoot = new GameObject("Tree");
                 treeRoot.transform.SetParent(transform, true);
 
-                PlaceTrunk(treeRoot.transform,  surfacePos, up, rot, trunkH, trunkR, trunkMat);
+                PlaceTrunk(treeRoot.transform, surfacePos, up, rot, trunkH, trunkR, trunkSinkDepth, trunkMat);
                 PlaceCanopy(treeRoot.transform, surfacePos, up, rot, trunkH, canopyR, leafMat);
 
                 placedDirs.Add(up);
@@ -197,11 +205,11 @@ namespace FriendSlop.Core
         // --- Mesh builders ---
 
         private static void PlaceTrunk(Transform parent, Vector3 surface, Vector3 up, Quaternion rot,
-            float height, float radius, Material mat)
+            float height, float radius, float sinkDepth, Material mat)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             go.transform.SetParent(parent, true);
-            go.transform.position = surface + up * (height * 0.5f);
+            go.transform.position = surface + up * (height * 0.5f - Mathf.Max(0f, sinkDepth));
             go.transform.rotation = rot;
             go.transform.localScale = new Vector3(radius, height * 0.5f, radius);
             var mr = go.GetComponent<MeshRenderer>();

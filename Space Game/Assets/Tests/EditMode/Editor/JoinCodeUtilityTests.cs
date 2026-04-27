@@ -10,6 +10,8 @@ namespace FriendSlop.Tests.EditMode
         [TestCase("abc123", "ABC123")]
         [TestCase(" code: abc123 ", "ABC123")]
         [TestCase("join code: a1b2c3", "A1B2C3")]
+        [TestCase("abc 123", "ABC123")]
+        [TestCase("abc-123", "ABC123")]
         public void NormalizeJoinTarget_ReturnsUppercaseRelayCode(string input, string expected)
         {
             Assert.AreEqual(expected, JoinCodeUtility.NormalizeJoinTarget(input));
@@ -51,6 +53,16 @@ namespace FriendSlop.Tests.EditMode
             var message = JoinCodeUtility.GetFriendlyJoinFailure(exception, "ABC123");
 
             Assert.AreEqual("Could not join code ABC123. Check the code or ask the host for a fresh one.", message);
+        }
+
+        [Test]
+        public void GetFriendlyJoinFailure_MapsTimeoutToRetryMessage()
+        {
+            var exception = new TimeoutException("Relay join timed out.");
+
+            var message = JoinCodeUtility.GetFriendlyJoinFailure(exception, "ABC123");
+
+            Assert.AreEqual("Timed out contacting Relay. Check your internet connection and try again.", message);
         }
     }
 }

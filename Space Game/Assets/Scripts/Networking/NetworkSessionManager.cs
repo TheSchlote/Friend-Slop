@@ -11,6 +11,7 @@ using Unity.Services.Lobbies.Models;
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
 using UnityEngine;
+using FriendSlop.UI;
 
 namespace FriendSlop.Networking
 {
@@ -23,10 +24,24 @@ namespace FriendSlop.Networking
 
         private Lobby currentLobby;
         private float nextLobbyHeartbeat;
+        private NetworkManager subscribedNetworkManager;
+        private bool localShutdownRequested;
+        private float pendingConnectionDeadline;
+        private bool sessionOperationInProgress;
+        private bool sessionOperationCancelled;
+        private int sessionOperationId;
+
+        public const float ConnectionTimeoutSeconds = 25f;
+        private const float ServiceRequestTimeoutSeconds = 20f;
 
         public string LastJoinCode { get; private set; } = string.Empty;
         public string LastRelayRegion { get; private set; } = string.Empty;
         public string Status { get; private set; } = "Not connected.";
+        public bool IsSessionOperationInProgress => sessionOperationInProgress || IsPendingClientConnection();
+        public bool CanCancelSessionOperation => IsSessionOperationInProgress;
+        public float PendingConnectionSecondsRemaining => pendingConnectionDeadline > 0f
+            ? Mathf.Max(0f, pendingConnectionDeadline - Time.realtimeSinceStartup)
+            : 0f;
 
         private void Awake()
         {
@@ -37,10 +52,19 @@ namespace FriendSlop.Networking
             }
 
             Instance = this;
+            TrySubscribeToNetworkManager();
+        }
+
+        private void OnEnable()
+        {
+            TrySubscribeToNetworkManager();
         }
 
         private async void Update()
         {
+            TrySubscribeToNetworkManager();
+            CheckPendingConnectionTimeout();
+
             if (currentLobby == null || Time.realtimeSinceStartup < nextLobbyHeartbeat)
             {
                 return;
@@ -49,7 +73,7 @@ namespace FriendSlop.Networking
             nextLobbyHeartbeat = Time.realtimeSinceStartup + 15f;
             try
             {
-                await LobbyService.Instance.SendHeartbeatPingAsync(currentLobby.Id);
+                await WithServiceTimeout(LobbyService.Instance.SendHeartbeatPingAsync(currentLobby.Id), "Lobby heartbeat");
             }
             catch (Exception exception)
             {
@@ -57,19 +81,39 @@ namespace FriendSlop.Networking
             }
         }
 
+        private void OnDisable()
+        {
+            UnsubscribeFromNetworkManager();
+        }
+
         public async void HostOnline()
         {
+            if (!TryBeginSessionOperation("Starting online host...", out var operationId))
+            {
+                return;
+            }
+
             try
             {
-                await HostRelayAsync();
+                await HostRelayAsync(operationId);
             }
             catch (Exception exception)
             {
+                if (IsSessionOperationCancelled(operationId))
+                {
+                    return;
+                }
+
                 Debug.LogWarning($"Relay host failed, falling back to local host: {exception.Message}");
+                sessionOperationInProgress = false;
                 if (StartLocalHost())
                 {
                     Status = $"Relay unavailable. Local host started on port {localPort}.";
                 }
+            }
+            finally
+            {
+                CompleteSessionOperation(operationId);
             }
         }
 
@@ -94,21 +138,42 @@ namespace FriendSlop.Networking
                 return;
             }
 
+            if (!TryBeginSessionOperation($"Joining Relay code {target}...", out var operationId))
+            {
+                return;
+            }
+
             try
             {
-                await JoinRelayAsync(target);
+                await JoinRelayAsync(target, operationId);
             }
             catch (Exception exception)
             {
+                if (IsSessionOperationCancelled(operationId))
+                {
+                    return;
+                }
+
                 Debug.LogWarning($"Relay join failed for code {target}: {exception}");
                 LastJoinCode = string.Empty;
                 LastRelayRegion = string.Empty;
                 Status = JoinCodeUtility.GetFriendlyJoinFailure(exception, target);
             }
+            finally
+            {
+                CompleteSessionOperation(operationId);
+            }
         }
 
         public bool StartLocalHost()
         {
+            if (IsSessionOperationInProgress)
+            {
+                Status = "Already working on a connection. Cancel it before starting another.";
+                return false;
+            }
+
+            localShutdownRequested = false;
             var networkManager = NetworkManager.Singleton;
             if (networkManager == null)
             {
@@ -144,6 +209,13 @@ namespace FriendSlop.Networking
 
         public bool StartLocalClient(string address)
         {
+            if (IsSessionOperationInProgress)
+            {
+                Status = "Already working on a connection. Cancel it before starting another.";
+                return false;
+            }
+
+            localShutdownRequested = false;
             var networkManager = NetworkManager.Singleton;
             if (networkManager == null)
             {
@@ -179,24 +251,39 @@ namespace FriendSlop.Networking
             LastJoinCode = string.Empty;
             LastRelayRegion = "LAN";
             Status = $"Joining {address}:{localPort}...";
+            BeginConnectionAttempt();
             return true;
         }
 
         public async void Shutdown()
         {
+            localShutdownRequested = true;
+            CancelPendingSessionOperation();
             await LeaveLobbyAsync();
 
-            if (NetworkManager.Singleton != null)
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
             {
                 NetworkManager.Singleton.Shutdown();
             }
 
-            LastJoinCode = string.Empty;
-            LastRelayRegion = string.Empty;
-            Status = "Not connected.";
+            ResetLocalSessionState("Not connected.", clearJoinCode: true);
         }
 
-        private async Task HostRelayAsync()
+        public void CancelSessionOperation()
+        {
+            localShutdownRequested = true;
+            CancelPendingSessionOperation();
+            _ = LeaveLobbyAsync();
+
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+
+            ResetLocalSessionState("Connection cancelled.", clearJoinCode: true);
+        }
+
+        private async Task HostRelayAsync(int operationId)
         {
             var networkManager = NetworkManager.Singleton;
             if (networkManager == null)
@@ -210,11 +297,14 @@ namespace FriendSlop.Networking
             }
 
             Status = "Signing in to Unity services...";
-            await EnsureSignedInAsync();
+            await WithServiceTimeout(EnsureSignedInAsync(), "Unity Services sign-in");
+            if (IsSessionOperationCancelled(operationId)) return;
 
             Status = "Creating Relay allocation...";
-            var allocation = await RelayService.Instance.CreateAllocationAsync(maxPlayers - 1);
-            LastJoinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+            var allocation = await WithServiceTimeout(RelayService.Instance.CreateAllocationAsync(maxPlayers - 1), "Relay allocation");
+            if (IsSessionOperationCancelled(operationId)) return;
+            LastJoinCode = await WithServiceTimeout(RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId), "Relay join-code request");
+            if (IsSessionOperationCancelled(operationId)) return;
             LastRelayRegion = allocation.Region;
 
             if (!TryGetTransport(networkManager, out var transport))
@@ -226,7 +316,7 @@ namespace FriendSlop.Networking
 
             try
             {
-                currentLobby = await LobbyService.Instance.CreateLobbyAsync(
+                currentLobby = await WithServiceTimeout(LobbyService.Instance.CreateLobbyAsync(
                     "Friend Slop",
                     maxPlayers,
                     new CreateLobbyOptions
@@ -236,11 +326,22 @@ namespace FriendSlop.Networking
                         {
                             { "RelayCode", new DataObject(DataObject.VisibilityOptions.Public, LastJoinCode) }
                         }
-                    });
+                    }), "Lobby creation");
+                if (IsSessionOperationCancelled(operationId))
+                {
+                    await LeaveLobbyAsync();
+                    return;
+                }
             }
             catch (Exception exception)
             {
                 Debug.LogWarning($"Lobby creation failed; continuing with Relay code only: {exception.Message}");
+            }
+
+            if (IsSessionOperationCancelled(operationId))
+            {
+                await LeaveLobbyAsync();
+                return;
             }
 
             if (!networkManager.StartHost())
@@ -252,10 +353,10 @@ namespace FriendSlop.Networking
                 throw new InvalidOperationException("Netcode failed to start Relay host.");
             }
 
-            Status = $"Relay host running. Code: {LastJoinCode}";
+            Status = "Relay host running.";
         }
 
-        private async Task JoinRelayAsync(string joinCode)
+        private async Task JoinRelayAsync(string joinCode, int operationId)
         {
             var networkManager = NetworkManager.Singleton;
             if (networkManager == null)
@@ -270,10 +371,12 @@ namespace FriendSlop.Networking
 
             joinCode = JoinCodeUtility.NormalizeJoinCode(joinCode);
             Status = "Signing in to Unity services...";
-            await EnsureSignedInAsync();
+            await WithServiceTimeout(EnsureSignedInAsync(), "Unity Services sign-in");
+            if (IsSessionOperationCancelled(operationId)) return;
 
             Status = $"Joining Relay code {joinCode}...";
-            var joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
+            var joinAllocation = await WithServiceTimeout(RelayService.Instance.JoinAllocationAsync(joinCode), "Relay join");
+            if (IsSessionOperationCancelled(operationId)) return;
             LastRelayRegion = joinAllocation.Region;
 
             if (!TryGetTransport(networkManager, out var transport))
@@ -282,6 +385,7 @@ namespace FriendSlop.Networking
             }
 
             transport.SetRelayServerData(joinAllocation.ToRelayServerData("dtls"));
+            if (IsSessionOperationCancelled(operationId)) return;
             if (!networkManager.StartClient())
             {
                 LastJoinCode = string.Empty;
@@ -292,6 +396,7 @@ namespace FriendSlop.Networking
 
             LastJoinCode = joinCode;
             Status = $"Joining Relay code {joinCode}...";
+            BeginConnectionAttempt();
         }
 
         private static async Task EnsureSignedInAsync()
@@ -318,7 +423,7 @@ namespace FriendSlop.Networking
             {
                 if (AuthenticationService.Instance.IsSignedIn)
                 {
-                    await LobbyService.Instance.DeleteLobbyAsync(currentLobby.Id);
+                    await WithServiceTimeout(LobbyService.Instance.DeleteLobbyAsync(currentLobby.Id), "Lobby cleanup");
                 }
             }
             catch (Exception exception)
@@ -334,6 +439,16 @@ namespace FriendSlop.Networking
         private void OnApplicationQuit()
         {
             _ = LeaveLobbyAsync();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromNetworkManager();
+
+            if (Instance == this)
+            {
+                Instance = null;
+            }
         }
 
         private bool TryGetTransport(NetworkManager networkManager, out UnityTransport transport)
@@ -367,6 +482,272 @@ namespace FriendSlop.Networking
             }
 
             return "127.0.0.1";
+        }
+
+        private void TrySubscribeToNetworkManager()
+        {
+            var networkManager = NetworkManager.Singleton;
+            if (ReferenceEquals(subscribedNetworkManager, networkManager))
+            {
+                return;
+            }
+
+            UnsubscribeFromNetworkManager();
+            subscribedNetworkManager = networkManager;
+            if (subscribedNetworkManager == null)
+            {
+                return;
+            }
+
+            subscribedNetworkManager.OnClientConnectedCallback += HandleClientConnected;
+            subscribedNetworkManager.OnClientDisconnectCallback += HandleClientDisconnected;
+            subscribedNetworkManager.OnClientStopped += HandleClientStopped;
+            subscribedNetworkManager.OnServerStopped += HandleServerStopped;
+            subscribedNetworkManager.OnTransportFailure += HandleTransportFailure;
+        }
+
+        private void UnsubscribeFromNetworkManager()
+        {
+            if (subscribedNetworkManager == null)
+            {
+                return;
+            }
+
+            subscribedNetworkManager.OnClientConnectedCallback -= HandleClientConnected;
+            subscribedNetworkManager.OnClientDisconnectCallback -= HandleClientDisconnected;
+            subscribedNetworkManager.OnClientStopped -= HandleClientStopped;
+            subscribedNetworkManager.OnServerStopped -= HandleServerStopped;
+            subscribedNetworkManager.OnTransportFailure -= HandleTransportFailure;
+            subscribedNetworkManager = null;
+        }
+
+        private void HandleClientConnected(ulong clientId)
+        {
+            if (subscribedNetworkManager == null ||
+                clientId != subscribedNetworkManager.LocalClientId ||
+                subscribedNetworkManager.IsServer)
+            {
+                return;
+            }
+
+            pendingConnectionDeadline = 0f;
+            sessionOperationInProgress = false;
+            Status = LastRelayRegion == "LAN"
+                ? "Connected to LAN host."
+                : "Connected to host.";
+        }
+
+        private void HandleClientDisconnected(ulong clientId)
+        {
+            if (subscribedNetworkManager == null ||
+                localShutdownRequested ||
+                subscribedNetworkManager.IsServer ||
+                clientId != subscribedNetworkManager.LocalClientId)
+            {
+                return;
+            }
+
+            Status = BuildDisconnectStatus(subscribedNetworkManager);
+            sessionOperationInProgress = false;
+            FriendSlopUI.Instance?.UnlockMenuCursor();
+        }
+
+        private void HandleClientStopped(bool wasHost)
+        {
+            if (localShutdownRequested || wasHost)
+            {
+                return;
+            }
+
+            ResetLocalSessionState(BuildDisconnectStatus(subscribedNetworkManager), clearJoinCode: false);
+        }
+
+        private void HandleServerStopped(bool wasHost)
+        {
+            if (localShutdownRequested)
+            {
+                return;
+            }
+
+            _ = LeaveLobbyAsync();
+            ResetLocalSessionState(wasHost ? "Host session ended." : "Server stopped.", clearJoinCode: false);
+        }
+
+        private void HandleTransportFailure()
+        {
+            if (localShutdownRequested)
+            {
+                return;
+            }
+
+            localShutdownRequested = true;
+            _ = LeaveLobbyAsync();
+
+            if (subscribedNetworkManager != null && subscribedNetworkManager.IsListening)
+            {
+                subscribedNetworkManager.Shutdown();
+            }
+
+            ResetLocalSessionState(BuildTransportFailureStatus(), clearJoinCode: false);
+        }
+
+        private void ResetLocalSessionState(string status, bool clearJoinCode)
+        {
+            currentLobby = null;
+            nextLobbyHeartbeat = 0f;
+            pendingConnectionDeadline = 0f;
+            sessionOperationInProgress = false;
+            LastRelayRegion = string.Empty;
+            if (clearJoinCode)
+            {
+                LastJoinCode = string.Empty;
+            }
+
+            Status = string.IsNullOrWhiteSpace(status) ? "Not connected." : status;
+            FriendSlopUI.Instance?.UnlockMenuCursor();
+        }
+
+        private string BuildDisconnectStatus(NetworkManager networkManager)
+        {
+            if (networkManager != null && !string.IsNullOrWhiteSpace(networkManager.DisconnectReason))
+            {
+                return networkManager.DisconnectReason;
+            }
+
+            return LastRelayRegion == "LAN"
+                ? "Disconnected from LAN host."
+                : "Disconnected from host.";
+        }
+
+        private string BuildTransportFailureStatus()
+        {
+            return LastRelayRegion == "LAN"
+                ? "Network transport failed. LAN session closed."
+                : "Network transport failed. Session closed.";
+        }
+
+        private string BuildConnectionTimeoutStatus()
+        {
+            return LastRelayRegion == "LAN"
+                ? "Timed out connecting to the LAN host."
+                : "Timed out connecting to the host.";
+        }
+
+        private void BeginConnectionAttempt()
+        {
+            pendingConnectionDeadline = Time.realtimeSinceStartup + ConnectionTimeoutSeconds;
+        }
+
+        private void CheckPendingConnectionTimeout()
+        {
+            if (pendingConnectionDeadline <= 0f || subscribedNetworkManager == null)
+            {
+                return;
+            }
+
+            if (!subscribedNetworkManager.IsListening ||
+                subscribedNetworkManager.IsServer ||
+                subscribedNetworkManager.IsConnectedClient)
+            {
+                pendingConnectionDeadline = 0f;
+                return;
+            }
+
+            if (Time.realtimeSinceStartup < pendingConnectionDeadline)
+            {
+                return;
+            }
+
+            localShutdownRequested = true;
+            if (subscribedNetworkManager.IsListening)
+            {
+                subscribedNetworkManager.Shutdown();
+            }
+
+            ResetLocalSessionState(BuildConnectionTimeoutStatus(), clearJoinCode: false);
+        }
+
+        private bool TryBeginSessionOperation(string startingStatus, out int operationId)
+        {
+            operationId = 0;
+            var networkManager = NetworkManager.Singleton;
+            if (IsSessionOperationInProgress)
+            {
+                Status = "Already working on a connection. Cancel it before starting another.";
+                return false;
+            }
+
+            if (networkManager != null && networkManager.IsListening)
+            {
+                Status = "A session is already running.";
+                return false;
+            }
+
+            localShutdownRequested = false;
+            sessionOperationCancelled = false;
+            sessionOperationInProgress = true;
+            operationId = ++sessionOperationId;
+            Status = startingStatus;
+            return true;
+        }
+
+        private void CancelPendingSessionOperation()
+        {
+            sessionOperationCancelled = true;
+            sessionOperationInProgress = false;
+            pendingConnectionDeadline = 0f;
+            sessionOperationId++;
+        }
+
+        private bool IsSessionOperationCancelled(int operationId)
+        {
+            return sessionOperationCancelled || operationId != sessionOperationId;
+        }
+
+        private void CompleteSessionOperation(int operationId)
+        {
+            if (operationId == sessionOperationId)
+            {
+                sessionOperationInProgress = false;
+            }
+        }
+
+        private bool IsPendingClientConnection()
+        {
+            var networkManager = subscribedNetworkManager != null ? subscribedNetworkManager : NetworkManager.Singleton;
+            if (pendingConnectionDeadline > 0f)
+            {
+                return true;
+            }
+
+            return networkManager != null &&
+                   networkManager.IsListening &&
+                   !networkManager.IsServer &&
+                   !networkManager.IsConnectedClient;
+        }
+
+        private static async Task WithServiceTimeout(Task task, string operationName)
+        {
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(ServiceRequestTimeoutSeconds));
+            var completedTask = await Task.WhenAny(task, timeoutTask);
+            if (completedTask == timeoutTask)
+            {
+                throw new TimeoutException($"{operationName} timed out.");
+            }
+
+            await task;
+        }
+
+        private static async Task<T> WithServiceTimeout<T>(Task<T> task, string operationName)
+        {
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(ServiceRequestTimeoutSeconds));
+            var completedTask = await Task.WhenAny(task, timeoutTask);
+            if (completedTask == timeoutTask)
+            {
+                throw new TimeoutException($"{operationName} timed out.");
+            }
+
+            return await task;
         }
     }
 }

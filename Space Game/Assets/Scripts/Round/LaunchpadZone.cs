@@ -141,12 +141,17 @@ namespace FriendSlop.Round
         {
             foreach (var player in NetworkFirstPersonController.ActivePlayers)
             {
-                if (player == null || player.HeldItem == null || !IsPointInsideSubmitArea(player.transform.position))
+                if (player == null || !IsPointInsideSubmitArea(player.transform.position))
                 {
                     continue;
                 }
 
-                RoundManager.Instance.ServerSubmitToLaunchpad(player.HeldItem);
+                for (var slot = 0; slot < NetworkFirstPersonController.InventorySize; slot++)
+                {
+                    var item = player.GetInventoryItem(slot);
+                    if (item != null)
+                        RoundManager.Instance.ServerSubmitToLaunchpad(item);
+                }
             }
         }
 

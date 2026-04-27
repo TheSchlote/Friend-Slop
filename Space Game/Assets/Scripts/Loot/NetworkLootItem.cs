@@ -26,9 +26,17 @@ namespace FriendSlop.Loot
         private Vector3 spawnPosition;
         private Quaternion spawnRotation;
 
+        // Declaration order matters: NGO deserializes NetworkVariables in this order, and
+        // OnCarrierChanged reads SlotIndex.Value when wiring the carrier's inventory cache.
+        // Keeping SlotIndex above CarrierClientId guarantees the slot is current by the
+        // time the carrier-change handler fires on remote clients.
         public NetworkVariable<bool> IsCarried = new(false);
+        // -1 = not in any inventory. Set by the server when the item is picked up.
+        public NetworkVariable<int> SlotIndex = new(-1);
         public NetworkVariable<ulong> CarrierClientId = new(NoCarrier);
         public NetworkVariable<bool> IsDeposited = new(false);
+
+        private NetworkFirstPersonController subscribedCarrier;
 
         public string ItemName => itemName;
         public int Value => value;
@@ -75,6 +83,7 @@ namespace FriendSlop.Loot
             CarrierClientId.OnValueChanged += OnCarrierChanged;
             IsCarried.OnValueChanged += OnCarriedChanged;
             IsDeposited.OnValueChanged += OnDepositedChanged;
+            SlotIndex.OnValueChanged += OnSlotIndexChanged;
 
             ApplyPhysicsState();
             ApplyVisibilityState();
@@ -87,6 +96,8 @@ namespace FriendSlop.Loot
             CarrierClientId.OnValueChanged -= OnCarrierChanged;
             IsCarried.OnValueChanged -= OnCarriedChanged;
             IsDeposited.OnValueChanged -= OnDepositedChanged;
+            SlotIndex.OnValueChanged -= OnSlotIndexChanged;
+            UnsubscribeFromCarrierActiveSlot();
         }
 
         public bool CanInteract(NetworkFirstPersonController player)
@@ -109,6 +120,11 @@ namespace FriendSlop.Loot
             if (IsHeldBy(player.OwnerClientId))
             {
                 return $"Carrying {itemName}: Q drop | Right Mouse throw";
+            }
+
+            if (player.InventoryCount >= NetworkFirstPersonController.InventorySize)
+            {
+                return $"Inventory full ({itemName})";
             }
 
             if (IsShipPart)
@@ -141,6 +157,21 @@ namespace FriendSlop.Loot
             return IsCarried.Value && CarrierClientId.Value == clientId;
         }
 
+        public void PreviewCarriedPose(Vector3 targetPosition, Quaternion targetRotation)
+        {
+            if (!IsCarried.Value || IsDeposited.Value)
+            {
+                return;
+            }
+
+            transform.SetPositionAndRotation(targetPosition, targetRotation);
+            if (body != null && body.isKinematic)
+            {
+                body.position = targetPosition;
+                body.rotation = targetRotation;
+            }
+        }
+
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void RequestPickupServerRpc(RpcParams rpcParams = default)
         {
@@ -149,17 +180,42 @@ namespace FriendSlop.Loot
                 return;
             }
 
-            var senderId = rpcParams.Receive.SenderClientId;
-            var player = NetworkFirstPersonController.FindByClientId(senderId);
-            if (player == null || player.HeldItem != null)
+            var round = RoundManager.Instance;
+            if (round == null || round.Phase.Value != RoundPhase.Active)
             {
                 return;
             }
 
+            var senderId = rpcParams.Receive.SenderClientId;
+            var player = NetworkFirstPersonController.FindByClientId(senderId);
+            if (player == null
+                || player.HasHeldPlayer
+                || player.IsDead
+                || player.IsBeingCarried.Value)
+            {
+                return;
+            }
+
+            // Multi-slot inventory: take the first empty slot, or refuse pickup if full.
+            if (!player.TryGetFreeInventorySlot(out var slot))
+            {
+                return;
+            }
+
+            // Order matters: SlotIndex must be set BEFORE CarrierClientId so the
+            // carrier-change handler reads the correct slot when wiring the inventory cache.
+            SlotIndex.Value = slot;
             IsCarried.Value = true;
             CarrierClientId.Value = senderId;
             ApplyPhysicsState();
             player.SetHeldItem(this);
+            // If the active slot was empty, switch to the freshly picked slot so the
+            // player sees what they just grabbed.
+            if (player.GetInventoryItem(player.ActiveInventorySlot.Value) == this
+                || player.GetInventoryItem(player.ActiveInventorySlot.Value) == null)
+            {
+                player.ServerSetActiveSlot(slot);
+            }
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -205,10 +261,13 @@ namespace FriendSlop.Loot
 
             IsCarried.Value = false;
             CarrierClientId.Value = NoCarrier;
+            SlotIndex.Value = -1;
             ApplyPhysicsState();
 
             body.AddForce(impulse, ForceMode.VelocityChange);
             body.AddTorque(Random.insideUnitSphere * impulse.magnitude * 0.25f, ForceMode.VelocityChange);
+
+            carrier?.ServerCycleToNonEmptySlotIfActiveCleared();
         }
 
         public void ServerDeposit()
@@ -223,9 +282,12 @@ namespace FriendSlop.Loot
 
             IsCarried.Value = false;
             CarrierClientId.Value = NoCarrier;
+            SlotIndex.Value = -1;
             IsDeposited.Value = true;
             ApplyPhysicsState();
             ApplyVisibilityState();
+
+            carrier?.ServerCycleToNonEmptySlotIfActiveCleared();
         }
 
         public void ServerReset()
@@ -237,6 +299,7 @@ namespace FriendSlop.Loot
 
             IsCarried.Value = false;
             CarrierClientId.Value = NoCarrier;
+            SlotIndex.Value = -1;
             IsDeposited.Value = false;
 
             body.isKinematic = true;
@@ -255,14 +318,25 @@ namespace FriendSlop.Loot
             var previousPlayer = NetworkFirstPersonController.FindByClientId(previousCarrier);
             previousPlayer?.ClearHeldItem(this);
 
+            UnsubscribeFromCarrierActiveSlot();
+
             var currentPlayer = NetworkFirstPersonController.FindByClientId(currentCarrier);
             currentPlayer?.SetHeldItem(this);
+
+            if (currentPlayer != null)
+            {
+                subscribedCarrier = currentPlayer;
+                currentPlayer.ActiveInventorySlot.OnValueChanged += OnCarrierActiveSlotChanged;
+            }
+
+            ApplyVisibilityState();
         }
 
         private void OnCarriedChanged(bool previousValue, bool currentValue)
         {
             ApplyPhysicsState();
             ApplyColliderState();
+            ApplyVisibilityState();
         }
 
         private void OnDepositedChanged(bool previousValue, bool currentValue)
@@ -270,6 +344,50 @@ namespace FriendSlop.Loot
             ApplyPhysicsState();
             ApplyVisibilityState();
             ApplyColliderState();
+        }
+
+        private void OnSlotIndexChanged(int previousValue, int currentValue)
+        {
+            ApplyVisibilityState();
+        }
+
+        private void OnCarrierActiveSlotChanged(int previousValue, int currentValue)
+        {
+            ApplyVisibilityState();
+        }
+
+        private void UnsubscribeFromCarrierActiveSlot()
+        {
+            if (subscribedCarrier == null) return;
+            subscribedCarrier.ActiveInventorySlot.OnValueChanged -= OnCarrierActiveSlotChanged;
+            subscribedCarrier = null;
+        }
+
+        // Snap stowed items to the carrier each frame on the server so they follow as the
+        // carrier walks. The active item is positioned by the owner via MoveCarriedServerRpc.
+        private void LateUpdate()
+        {
+            if (!IsServer) return;
+            if (!IsCarried.Value || IsDeposited.Value) return;
+
+            var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
+            if (carrier == null) return;
+            if (SlotIndex.Value == carrier.ActiveInventorySlot.Value) return;
+
+            var stowedPos = carrier.transform.position + carrier.transform.up * 0.6f;
+            transform.position = stowedPos;
+            if (body != null) body.position = stowedPos;
+        }
+
+        public bool IsActiveInCarriersHand
+        {
+            get
+            {
+                if (!IsCarried.Value || IsDeposited.Value) return false;
+                var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
+                if (carrier == null) return false;
+                return SlotIndex.Value == carrier.ActiveInventorySlot.Value;
+            }
         }
 
         private void ApplyPhysicsState()
@@ -313,11 +431,21 @@ namespace FriendSlop.Loot
 
         private void ApplyVisibilityState()
         {
+            var visible = !IsDeposited.Value;
+            if (visible && IsCarried.Value)
+            {
+                // Stowed inventory items (carried but not in the active slot) are hidden so
+                // only the item in the player's "hand" is visible.
+                var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
+                if (carrier != null && SlotIndex.Value != carrier.ActiveInventorySlot.Value)
+                    visible = false;
+            }
+
             foreach (var itemRenderer in renderers)
             {
                 if (itemRenderer != null)
                 {
-                    itemRenderer.enabled = !IsDeposited.Value;
+                    itemRenderer.enabled = visible;
                 }
             }
         }
