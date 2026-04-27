@@ -8,26 +8,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run
 
-This is a Unity project — there are no CLI build scripts.
+This is a Unity project. Use the checked-in PowerShell helpers for local validation:
+
+```powershell
+.\tools\Run-UnityTests.ps1 -TestPlatform All
+.\tools\Configure-UnityMerge.ps1
+```
 
 - **Engine**: Unity 6000.3.4f1
 - **Open the project** in Unity Hub, then open the main scene: `Assets/Scenes/FriendSlopPrototype.unity`
 - **Play**: Click Play in the Unity Editor
 - **Multiplayer testing**:
   - Local: use "Local Host" button in-game, then join from another client via localhost
-  - Online: uses Unity Relay — host generates a join code, others enter it to connect
+  - Online: uses Unity Relay; host generates a join code, others enter it to connect
 
 ## Architecture
 
 ### Game Loop
 
-Phases are defined in `Scripts/Round/RoundPhase.cs`: `Lobby → Active → Success | Failed`.
+Phases are defined in `Scripts/Round/RoundPhase.cs`: `Lobby -> Active -> Success | Failed`.
 
-`RoundManager` (NetworkBehaviour) is the central orchestrator — it owns phase transitions, the countdown timer, quota tracking, ship part assembly state, and player boarding count. It is spawned server-side by `PrototypeNetworkBootstrapper` when the session starts.
+`RoundManager` (NetworkBehaviour) is the central orchestrator. It owns phase transitions, the countdown timer, quota tracking, ship part assembly state, and player boarding count. It is spawned server-side by `PrototypeNetworkBootstrapper` when the session starts.
 
 ### Spherical World & Physics
 
-`SphereWorld` (`Scripts/Core/`) defines the planet's center and radius. **All movement and physics must orient relative to the sphere surface** — gravity points inward toward `SphereWorld.Center`. The player controller, monsters, and physics objects all use this for orientation. Never assume world-up is Vector3.up.
+`SphereWorld` (`Scripts/Core/`) defines the planet's center and radius. **All movement and physics must orient relative to the sphere surface**; gravity points inward toward `SphereWorld.Center`. The player controller, monsters, and physics objects all use this for orientation. Never assume world-up is Vector3.up.
 
 ### Networking
 
@@ -51,7 +56,7 @@ Phases are defined in `Scripts/Round/RoundPhase.cs`: `Lobby → Active → Succe
 
 ### UI
 
-`FriendSlopUI` handles both menus (host/join/start/restart) and the HUD (timer, quota bar, stamina bar, carried item). Menus block gameplay input; Tab toggles menu pin.
+`FriendSlopUI` handles both menus (host/join/start/restart) and the HUD (timer, quota bar, stamina bar, carried item). Menus block gameplay input; Tab/Esc toggles the gameplay menu during active play.
 
 ## Namespace Map
 

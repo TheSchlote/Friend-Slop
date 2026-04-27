@@ -32,6 +32,30 @@ namespace FriendSlop.Tests.EditMode
             Assert.AreEqual(expected, RoundStateUtility.FormatPartStatus(installed, label));
         }
 
+        [TestCase(RoundPhase.Lobby, true)]
+        [TestCase(RoundPhase.Success, true)]
+        [TestCase(RoundPhase.Failed, true)]
+        [TestCase(RoundPhase.AllDead, true)]
+        [TestCase(RoundPhase.Active, false)]
+        [TestCase(RoundPhase.Loading, false)]
+        [TestCase(RoundPhase.Transitioning, false)]
+        public void IsShipPhase_IdentifiesLobbyAndBetweenPlanetStates(RoundPhase phase, bool expected)
+        {
+            Assert.AreEqual(expected, RoundStateUtility.IsShipPhase(phase));
+        }
+
+        [TestCase(RoundPhase.Lobby, true)]
+        [TestCase(RoundPhase.Active, true)]
+        [TestCase(RoundPhase.Success, true)]
+        [TestCase(RoundPhase.Failed, true)]
+        [TestCase(RoundPhase.AllDead, true)]
+        [TestCase(RoundPhase.Loading, false)]
+        [TestCase(RoundPhase.Transitioning, false)]
+        public void AllowsGameplayInput_DisablesOnlyBlockingTransitionStates(RoundPhase phase, bool expected)
+        {
+            Assert.AreEqual(expected, RoundStateUtility.AllowsGameplayInput(phase));
+        }
+
         [TestCase(3, 2, true, 2, 1)]
         [TestCase(2, 1, false, 1, 1)]
         [TestCase(1, 1, true, 0, 0)]

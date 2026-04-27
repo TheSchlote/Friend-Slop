@@ -1,8 +1,11 @@
 using System.Collections;
+using FriendSlop.Core;
 using FriendSlop.Hazards;
 using FriendSlop.Loot;
 using FriendSlop.Networking;
+using FriendSlop.Player;
 using FriendSlop.Round;
+using FriendSlop.Ship;
 using FriendSlop.UI;
 using NUnit.Framework;
 using Unity.Netcode;
@@ -26,15 +29,16 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsNotNull(Object.FindAnyObjectByType<PrototypeNetworkBootstrapper>(), "Prototype bootstrapper should exist in the prototype scene.");
             AssertLaunchpadLayout();
             AssertShipPartSpawnPointsAreNearLaunchpadHemisphere();
+            AssertShipInteriorLayout();
 
             yield return StartLocalHostAndWaitForRoundManager();
             yield return null;
 
             Assert.IsTrue(NetworkManager.Singleton.IsListening, "Local host should start during the smoke test.");
             Assert.IsNotNull(RoundManager.Instance, "RoundManager should spawn after the local host starts.");
-            Assert.AreEqual(CursorLockMode.None, Cursor.lockState, "The lobby menu should keep the cursor unlocked after host startup.");
-            Assert.IsTrue(Cursor.visible, "The lobby menu should keep the cursor visible after host startup.");
-            AssertConnectedMenuLayoutDoesNotOverlap();
+            Assert.AreEqual(RoundPhase.Lobby, RoundManager.Instance.Phase.Value, "Host startup should begin in the walkable ship lobby.");
+            AssertPlayerInsideShipInterior();
+            Assert.IsFalse(FriendSlopUI.BlocksGameplayInput, "The ship lobby should be walkable without opening the session menu.");
             Assert.AreEqual(1, Object.FindObjectsByType<RoundManager>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
                 "Only one RoundManager should exist while the host is running.");
 
@@ -45,6 +49,7 @@ namespace FriendSlop.Tests.PlayMode
             yield return StartRoundAndWaitForActive();
             Assert.IsFalse(FriendSlopUI.BlocksGameplayInput,
                 "Gameplay input should be enabled as soon as the active round begins.");
+            AssertPlayerOnPlanetSurface();
 
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -66,8 +71,7 @@ namespace FriendSlop.Tests.PlayMode
             yield return StartLocalHostAndWaitForRoundManager();
 
             Assert.IsTrue(NetworkManager.Singleton.IsListening, "The host should be able to restart in the same scene.");
-            Assert.AreEqual(CursorLockMode.None, Cursor.lockState, "The restarted lobby should keep the cursor unlocked.");
-            Assert.IsTrue(Cursor.visible, "The restarted lobby should keep the cursor visible.");
+            Assert.IsFalse(FriendSlopUI.BlocksGameplayInput, "The restarted ship lobby should stay walkable.");
             Assert.AreEqual(1, Object.FindObjectsByType<RoundManager>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
                 "Restarting the host should not duplicate the RoundManager.");
             Assert.AreEqual(firstLootCount, Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
@@ -208,6 +212,45 @@ namespace FriendSlop.Tests.PlayMode
             AssertSpawnPointInNorthernHemisphere("Cockpit Nosecone Spawn");
             AssertSpawnPointInNorthernHemisphere("Bent Rocket Wings Spawn");
             AssertSpawnPointInNorthernHemisphere("Coughing Engine Spawn");
+        }
+
+        private static void AssertShipInteriorLayout()
+        {
+            var ship = GameObject.Find("Bigger-On-The-Inside Ship Interior");
+            Assert.IsNotNull(ship, "A dev ship interior should exist in the prototype scene.");
+            Assert.IsNotNull(ship.GetComponent<FlatGravityVolume>(), "Ship interior should use flat gravity instead of planet snapping.");
+
+            var pilotConsole = GameObject.Find("Pilot Console");
+            Assert.IsNotNull(pilotConsole, "Ship should include a pilot console placeholder.");
+            var pilotStation = pilotConsole.GetComponent<ShipStation>();
+            Assert.IsNotNull(pilotStation, "Pilot console should be a reusable ship station interactable.");
+            Assert.AreEqual(ShipStationRole.Pilot, pilotStation.Role);
+
+            Assert.IsNotNull(GameObject.Find("Holographic Idea Board"), "Ship should include a board placeholder for future drawing/idea systems.");
+
+            var shipSpawns = GameObject.Find("Ship Spawn Points");
+            Assert.IsNotNull(shipSpawns, "Ship should have a spawn point root.");
+            Assert.GreaterOrEqual(shipSpawns.transform.childCount, 4, "Ship lobby should support the current max player count.");
+        }
+
+        private static void AssertPlayerInsideShipInterior()
+        {
+            var player = NetworkFirstPersonController.LocalPlayer;
+            Assert.IsNotNull(player, "Local player should exist after host startup.");
+            Assert.IsTrue(FlatGravityVolume.TryGetContaining(player.transform.position, out _),
+                "Local player should spawn inside the ship's flat gravity volume while waiting in the lobby.");
+        }
+
+        private static void AssertPlayerOnPlanetSurface()
+        {
+            var player = NetworkFirstPersonController.LocalPlayer;
+            Assert.IsNotNull(player, "Local player should exist after starting the round.");
+            Assert.IsFalse(FlatGravityVolume.TryGetContaining(player.transform.position, out _),
+                "Starting the round should move the player out of the ship interior.");
+            var world = SphereWorld.GetClosest(player.transform.position);
+            Assert.IsNotNull(world, "A planet SphereWorld should exist after starting the round.");
+            Assert.LessOrEqual(Mathf.Abs(world.GetSurfaceDistance(player.transform.position)), 0.5f,
+                "Starting the round should place the player on the planet surface.");
         }
 
         private static void AssertSpawnPointInNorthernHemisphere(string objectName)

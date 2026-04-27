@@ -45,6 +45,19 @@ namespace FriendSlop.Round
             return boardedPlayerCount >= connectedPlayerCount;
         }
 
+        public static bool IsShipPhase(RoundPhase phase)
+        {
+            return phase == RoundPhase.Lobby
+                || phase == RoundPhase.Success
+                || phase == RoundPhase.Failed
+                || phase == RoundPhase.AllDead;
+        }
+
+        public static bool AllowsGameplayInput(RoundPhase phase)
+        {
+            return phase == RoundPhase.Active || IsShipPhase(phase);
+        }
+
         public static string FormatPartStatus(bool installed, string label)
         {
             return installed ? $"{label} OK" : $"{label} missing";

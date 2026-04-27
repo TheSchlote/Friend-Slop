@@ -6,7 +6,6 @@ Unity prototype for a small co-op sphere-world salvage run. Players host or join
 
 - Unity project folder: `Space Game`
 - Unity version: `6000.3.4f1`
-- Local Unity install used for verification: `T:\Unity\6000.3.4f1`
 - Main scene: `Space Game/Assets/Scenes/FriendSlopPrototype.unity`
 - Render pipeline: Universal Render Pipeline
 - Multiplayer stack: Netcode for GameObjects, Unity Transport, Unity Relay/Lobby, Unity Authentication
@@ -93,22 +92,38 @@ Use these from the Unity editor when generated scene references or network prefa
 Local C# compile checks:
 
 ```powershell
-dotnet build 'T:\Repos\Friend-Slop\Space Game\FriendSlop.Runtime.csproj' /p:GenerateMSBuildEditorConfigFile=false
-dotnet build 'T:\Repos\Friend-Slop\Space Game\FriendSlop.EditModeTests.csproj' /p:GenerateMSBuildEditorConfigFile=false
-dotnet build 'T:\Repos\Friend-Slop\Space Game\FriendSlop.PlayModeTests.csproj' /p:GenerateMSBuildEditorConfigFile=false
+dotnet build '.\Space Game\FriendSlop.Runtime.csproj' /p:GenerateMSBuildEditorConfigFile=false
+dotnet build '.\Space Game\FriendSlop.EditModeTests.csproj' /p:GenerateMSBuildEditorConfigFile=false
+dotnet build '.\Space Game\FriendSlop.PlayModeTests.csproj' /p:GenerateMSBuildEditorConfigFile=false
 ```
 
 Unity batch tests:
 
 ```powershell
-$unity = 'T:\Unity\6000.3.4f1\Editor\Unity.exe'
-$project = 'T:\Repos\Friend-Slop\Space Game'
-
-& $unity -batchmode -projectPath "$project" -runTests -testPlatform EditMode -testResults "$env:TEMP\friend-slop-editmode-results.xml" -logFile "$env:TEMP\friend-slop-editmode.log"
-& $unity -batchmode -projectPath "$project" -runTests -testPlatform PlayMode -testResults "$env:TEMP\friend-slop-playmode-results.xml" -logFile "$env:TEMP\friend-slop-playmode.log"
+.\tools\Run-UnityTests.ps1 -TestPlatform All
+.\tools\Run-UnityTests.ps1 -TestPlatform EditMode
+.\tools\Run-UnityTests.ps1 -TestPlatform PlayMode
 ```
 
-Do not write Unity test results under `Space Game/Temp`; Unity treats that folder as disposable.
+The test script resolves Unity from `UNITY_EXE`, Unity Hub install paths, Unity Hub secondary install paths, then PATH as a fallback. If Unity is installed somewhere unusual, set a user-level override:
+
+```powershell
+[Environment]::SetEnvironmentVariable('UNITY_EXE', '<absolute-path-to-Unity.exe>', 'User')
+```
+
+The script writes test results and logs to `$env:TEMP\FriendSlopUnityTests` by default. Do not write Unity test results under `Space Game/Temp`; Unity treats that folder as disposable. This project's Unity Test Framework should not be run with `-quit`; the checked-in script intentionally omits it so TestRunner can exit Unity after the run.
+
+Unity version drift check:
+
+```powershell
+.\tools\Assert-UnityVersion.ps1 -ExpectedUnityVersion 6000.3.4f1
+```
+
+Unity YAML merge setup for this checkout:
+
+```powershell
+.\tools\Configure-UnityMerge.ps1
+```
 
 Current automated coverage:
 
