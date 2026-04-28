@@ -119,6 +119,13 @@ namespace FriendSlop.Player
                 return;
             }
 
+            // Boxing gloves replace the normal throw mechanic with a directional punch.
+            if (hasHeldItem && heldItem is BoxingGloves gloves)
+            {
+                HandleBoxingGlovesInput(gloves, mouse);
+                return;
+            }
+
             if (mouse == null) return;
 
             if (mouse.rightButton.wasPressedThisFrame)
@@ -140,6 +147,18 @@ namespace FriendSlop.Player
             {
                 _isCharging = false;
             }
+        }
+
+        private void HandleBoxingGlovesInput(BoxingGloves gloves, Mouse mouse)
+        {
+            _isCharging = false;
+            if (mouse == null || controller.PlayerCamera == null) return;
+            if (!mouse.leftButton.wasPressedThisFrame) return;
+            if (!gloves.CanPunchNow) return;
+
+            var cam = controller.PlayerCamera.transform;
+            gloves.StartLocalCooldown();
+            gloves.RequestPunchServerRpc(cam.position, cam.forward);
         }
 
         private void UpdateFocus()
@@ -219,6 +238,15 @@ namespace FriendSlop.Player
         private void UpdateCarryPrompt(bool hasHeldItem, bool hasHeldPlayer)
         {
             if (!hasHeldItem && !hasHeldPlayer) return;
+
+            if (hasHeldItem && controller.HeldItem is BoxingGloves gloves)
+            {
+                CurrentPrompt = gloves.CanPunchNow
+                    ? "Left-click punch  |  Q drop"
+                    : $"[{gloves.CooldownRemaining:F1}s] recharging  |  Q drop";
+                return;
+            }
+
             CurrentPrompt = _isCharging
                 ? $"[{Mathf.RoundToInt(ChargePercent * 100f)}%] release to throw  |  Q drop"
                 : "Q drop  |  Hold Right Mouse to charge throw";
@@ -262,17 +290,24 @@ namespace FriendSlop.Player
         private void UpdateHeldPlayerPose()
         {
             var cameraTransform = controller.PlayerCamera.transform;
-            var up = FlatGravityVolume.GetGravityUp(cameraTransform.position);
+            var carrierPosition = controller.transform.position;
+            var up = FlatGravityVolume.GetGravityUp(carrierPosition);
             var forward = Vector3.ProjectOnPlane(cameraTransform.forward, up);
             if (forward.sqrMagnitude < 0.001f) forward = Vector3.ProjectOnPlane(transform.forward, up);
             if (forward.sqrMagnitude < 0.001f) forward = Vector3.Cross(up, Vector3.right);
             if (forward.sqrMagnitude > 0.001f) forward.Normalize();
 
-            var targetPosition = controller.transform.position + forward * carryPlayerDistance;
-            var world = SphereWorld.GetClosest(targetPosition);
-            if (world != null)
-                targetPosition = world.GetSurfacePoint(world.GetUp(targetPosition), 0.1f);
+            // Park the held player in front of the carrier, lifted to ~3/4 of the carrier's
+            // current body height so they hover at chest/shoulder height instead of being
+            // dragged through the surface. Using CurrentBodyHeight lets crouching lower them
+            // proportionally too.
+            var carrierHeight = Mathf.Max(0.5f, controller.CurrentBodyHeight);
+            var liftOffset = up * (carrierHeight * 0.75f);
+            var targetPosition = carrierPosition + forward * carryPlayerDistance + liftOffset;
 
+            // Match the carrier's facing so the held player keeps the same relative pose as
+            // the carrier turns. We deliberately do NOT snap to the planet surface anymore -
+            // the held player is in the air, so a surface snap would just re-introduce drift.
             var targetRotation = Quaternion.LookRotation(forward, up);
             if (!CarrySyncUtility.ShouldSendPose(
                     _hasCarrySyncPose,

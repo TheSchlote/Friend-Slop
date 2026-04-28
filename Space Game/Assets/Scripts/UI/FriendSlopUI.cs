@@ -65,15 +65,36 @@ namespace FriendSlop.UI
         private RectTransform chargeFillRect;
         private Image chargeFillImage;
         private RectTransform inventoryPanelRect;
+        private RectTransform compassPanelRect;
+        private Text compassArrowText;
+        private RectTransform chatPanelRect;
+        private Image chatPanelBackdrop;
+        private Text chatLogText;
+        private InputField chatInput;
+        private bool _chatInputFocused;
+        private int _chatLastClosedFrame = -1;
+        private readonly System.Collections.Generic.List<ChatEntry> _chatMessages = new();
+        private const int MaxChatMessages = 8;
+        private const float ChatMessageVisibleSeconds = 10f;
+        private const float ChatMessageFadeSeconds = 2f;
+        private static readonly Color ChatSenderColor = new(0.95f, 0.78f, 0.18f, 1f);
+        private static readonly Color ChatMessageColor = new(0.96f, 0.96f, 0.96f, 1f);
+
+        private struct ChatEntry
+        {
+            public string Sender;
+            public string Message;
+            public float ReceivedTime;
+        }
         private Image[] inventorySlotBackgrounds;
         private Image[] inventorySlotBorders;
         private Text[] inventorySlotItemTexts;
         private Text[] inventorySlotValueTexts;
         private RawImage[] inventorySlotPreviews;
         private InventoryPreviewRig inventoryPreviewRig;
-        private static readonly Color InventorySlotEmptyColor = new(0.04f, 0.05f, 0.06f, 0.78f);
-        private static readonly Color InventorySlotFilledColor = new(0.10f, 0.13f, 0.16f, 0.86f);
-        private static readonly Color InventorySlotActiveColor = new(0.18f, 0.34f, 0.46f, 0.94f);
+        private static readonly Color InventorySlotEmptyColor = new(0f, 0f, 0f, 1f);
+        private static readonly Color InventorySlotFilledColor = new(0f, 0f, 0f, 1f);
+        private static readonly Color InventorySlotActiveColor = new(0f, 0f, 0f, 1f);
         private static readonly Color InventorySlotBorderIdleColor = new(0.18f, 0.20f, 0.22f, 0.85f);
         private static readonly Color InventorySlotBorderActiveColor = new(0.95f, 0.78f, 0.18f, 1f);
         private Image menuBackdropImage;
@@ -144,6 +165,9 @@ namespace FriendSlop.UI
         {
             HandleMenuHotkeys();
 
+            var nm = NetworkManager.Singleton;
+            HandleChatHotkeys(nm != null && nm.IsListening);
+
             DetectDisconnection();
 
             if (_lateJoinLoading && Time.time - _lateJoinLoadingStartTime >= LateJoinLoadingDuration)
@@ -174,6 +198,9 @@ namespace FriendSlop.UI
             {
                 return;
             }
+
+            // Chat owns Esc while typing - don't let it also pop the gameplay menu.
+            if (_chatInputFocused) return;
 
             var menuTogglePressed = Keyboard.current.tabKey.wasPressedThisFrame ||
                                     Keyboard.current.escapeKey.wasPressedThisFrame;
@@ -245,6 +272,8 @@ namespace FriendSlop.UI
 
         private bool IsBlockingGameplayInput()
         {
+            if (_chatInputFocused) return true;
+            if (chatInput != null && chatInput.isFocused) return true;
             if (playerNameInput != null && playerNameInput.isFocused) return true;
             if (joinInput != null && joinInput.isFocused) return true;
 
@@ -402,6 +431,8 @@ namespace FriendSlop.UI
             UpdateDeathOverlay(localPlayer, activeRound);
             UpdateChargeBar(localPlayer, gameplayPhase);
             UpdateInventoryHud(localPlayer, activeRound);
+            UpdateChatPanel(connected);
+            UpdateCompass(localPlayer, phase);
         }
 
         private void LayoutMenu(bool connected, bool isHost, RoundPhase phase)
@@ -658,6 +689,8 @@ namespace FriendSlop.UI
             chargePanelRect.gameObject.SetActive(false);
 
             BuildInventoryPanel(canvasObject);
+            BuildChatPanel(canvasObject);
+            BuildCompass(canvasObject);
 
             // Game over title - big red text above the menu, only shown on AllDead
             gameOverText = CreateText("GameOverTitle", canvasObject.transform, "GAME OVER",
@@ -897,6 +930,277 @@ namespace FriendSlop.UI
             inventoryPanelRect.gameObject.SetActive(false);
         }
 
+        private void BuildCompass(GameObject canvasObject)
+        {
+            const float size = 80f;
+            var panel = CreatePanel("CompassPanel", canvasObject.transform,
+                new Vector2(1f, 0f), new Vector2(1f, 0f),
+                new Vector2(-14f, 14f), new Vector2(size, size),
+                new Color(0.02f, 0.03f, 0.03f, 0.72f));
+            compassPanelRect = panel.GetComponent<RectTransform>();
+
+            var label = CreateText("CompassLabel", panel.transform, "LAUNCHPAD", 10,
+                TextAnchor.LowerCenter,
+                new Vector2(0f, 0f), new Vector2(1f, 0f),
+                new Vector2(0f, 4f), new Vector2(0f, 14f));
+            label.color = new Color(0.95f, 0.78f, 0.18f, 0.85f);
+
+            compassArrowText = CreateText("CompassArrow", panel.transform, "▲", 28,
+                TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 6f), new Vector2(40f, 40f));
+            var arrowOutline = compassArrowText.gameObject.AddComponent<Outline>();
+            arrowOutline.effectColor = Color.black;
+            arrowOutline.effectDistance = new Vector2(1f, -1f);
+
+            compassPanelRect.gameObject.SetActive(false);
+        }
+
+        private void UpdateCompass(NetworkFirstPersonController localPlayer, RoundPhase phase)
+        {
+            if (compassPanelRect == null) return;
+
+            var show = localPlayer != null
+                && localPlayer.PlayerCamera != null
+                && phase == RoundPhase.Active;
+
+            if (compassPanelRect.gameObject.activeSelf != show)
+                compassPanelRect.gameObject.SetActive(show);
+
+            if (!show || compassArrowText == null) return;
+
+            Vector3? launchpadPos = null;
+            for (var i = 0; i < PlanetEnvironment.ActiveEnvironments.Count; i++)
+            {
+                var env = PlanetEnvironment.ActiveEnvironments[i];
+                if (env != null && env.LaunchpadZone != null)
+                {
+                    launchpadPos = env.LaunchpadZone.transform.position;
+                    break;
+                }
+            }
+
+            if (launchpadPos == null)
+            {
+                compassArrowText.text = "?";
+                compassArrowText.rectTransform.localEulerAngles = Vector3.zero;
+                return;
+            }
+
+            compassArrowText.text = "▲";
+            var playerPos = localPlayer.transform.position;
+            var up = FlatGravityVolume.GetGravityUp(playerPos);
+            var toTargetFlat = Vector3.ProjectOnPlane(launchpadPos.Value - playerPos, up);
+            var forwardFlat = Vector3.ProjectOnPlane(localPlayer.PlayerCamera.transform.forward, up);
+
+            var angle = toTargetFlat.sqrMagnitude > 0.001f && forwardFlat.sqrMagnitude > 0.001f
+                ? Vector3.SignedAngle(forwardFlat, toTargetFlat, up)
+                : 0f;
+
+            compassArrowText.rectTransform.localEulerAngles = new Vector3(0f, 0f, -angle);
+        }
+
+        private void BuildChatPanel(GameObject canvasObject)
+        {
+            const float panelWidth = 440f;
+            const float panelHeight = 220f;
+            const float inputHeight = 30f;
+
+            var panel = CreatePanel("ChatPanel", canvasObject.transform,
+                new Vector2(0f, 0f), new Vector2(0f, 0f),
+                new Vector2(18f, 110f), new Vector2(panelWidth, panelHeight),
+                new Color(0f, 0f, 0f, 0f));
+            chatPanelRect = panel.GetComponent<RectTransform>();
+
+            // Backdrop only appears while typing, so the closed log doesn't block the world.
+            var backdrop = CreatePanel("ChatBackdrop", panel.transform,
+                Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero,
+                new Color(0f, 0f, 0f, 0.55f));
+            chatPanelBackdrop = backdrop.GetComponent<Image>();
+            chatPanelBackdrop.raycastTarget = false;
+            backdrop.SetActive(false);
+
+            chatLogText = CreateText("ChatLog", panel.transform, string.Empty, 14, TextAnchor.LowerLeft,
+                new Vector2(0f, 0f), new Vector2(1f, 1f),
+                new Vector2(0f, inputHeight * 0.5f + 2f), new Vector2(-12f, -inputHeight - 4f));
+            chatLogText.supportRichText = true;
+            chatLogText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            chatLogText.verticalOverflow = VerticalWrapMode.Truncate;
+            chatLogText.raycastTarget = false;
+            var logOutline = chatLogText.gameObject.AddComponent<Outline>();
+            logOutline.effectColor = new Color(0f, 0f, 0f, 0.9f);
+            logOutline.effectDistance = new Vector2(1f, -1f);
+
+            var inputBg = CreatePanel("ChatInputBg", panel.transform,
+                new Vector2(0f, 0f), new Vector2(1f, 0f),
+                new Vector2(0f, inputHeight * 0.5f), new Vector2(-12f, inputHeight),
+                new Color(0.05f, 0.06f, 0.08f, 0.92f));
+            chatInput = inputBg.AddComponent<InputField>();
+            chatInput.lineType = InputField.LineType.SingleLine;
+            chatInput.characterLimit = NetworkFirstPersonController.MaxChatMessageLength;
+            var chatInputText = CreateText("Text", inputBg.transform, string.Empty, 14, TextAnchor.MiddleLeft,
+                Vector2.zero, Vector2.one, new Vector2(10f, 0f), new Vector2(-20f, 0f));
+            var chatInputPlaceholder = CreateText("Placeholder", inputBg.transform,
+                "Press Enter to chat...", 13, TextAnchor.MiddleLeft,
+                Vector2.zero, Vector2.one, new Vector2(10f, 0f), new Vector2(-20f, 0f));
+            chatInputPlaceholder.color = new Color(1f, 1f, 1f, 0.42f);
+            chatInput.textComponent = chatInputText;
+            chatInput.placeholder = chatInputPlaceholder;
+            chatInput.onEndEdit.AddListener(OnChatInputEndEdit);
+            inputBg.SetActive(false);
+        }
+
+        private void OnEnable()
+        {
+            NetworkFirstPersonController.ChatMessageReceived += OnChatMessageReceived;
+        }
+
+        private void OnDisable()
+        {
+            NetworkFirstPersonController.ChatMessageReceived -= OnChatMessageReceived;
+            // If we go away mid-typing, drop the focus state so the next OnEnable starts clean.
+            _chatInputFocused = false;
+        }
+
+        private void OnChatMessageReceived(string sender, string message)
+        {
+            if (string.IsNullOrEmpty(message)) return;
+            _chatMessages.Add(new ChatEntry
+            {
+                Sender = sender ?? "Player",
+                Message = message,
+                ReceivedTime = Time.time,
+            });
+            // Cap the buffer so a flood doesn't grow forever; oldest entries fall off the bottom.
+            while (_chatMessages.Count > MaxChatMessages)
+                _chatMessages.RemoveAt(0);
+        }
+
+        private void HandleChatHotkeys(bool connected)
+        {
+            if (chatInput == null) return;
+            if (!connected)
+            {
+                if (_chatInputFocused) CloseChatInput(send: false);
+                return;
+            }
+            if (Keyboard.current == null) return;
+
+            // While typing, Escape cancels. Enter routes through onEndEdit (single-line input
+            // ends edit on Enter), so we don't need to handle it explicitly here. If something
+            // else opens the gameplay menu mid-type, close cleanly so the user isn't stuck.
+            if (_chatInputFocused)
+            {
+                if (Keyboard.current.escapeKey.wasPressedThisFrame || activeMenuOpen)
+                    CloseChatInput(send: false);
+                return;
+            }
+
+            // Closed: only react to Enter when no other input/menu is grabbing focus.
+            if (!Keyboard.current.enterKey.wasPressedThisFrame) return;
+            // The same Enter that closed chat (via onEndEdit) is still flagged as pressed this
+            // frame; ignore it so we don't immediately re-open the input.
+            if (Time.frameCount == _chatLastClosedFrame) return;
+            if (activeMenuOpen) return;
+            if (playerNameInput != null && playerNameInput.isFocused) return;
+            if (joinInput != null && joinInput.isFocused) return;
+
+            OpenChatInput();
+        }
+
+        private void OpenChatInput()
+        {
+            if (chatInput == null) return;
+            _chatInputFocused = true;
+            chatInput.gameObject.SetActive(true);
+            chatInput.text = string.Empty;
+            chatInput.ActivateInputField();
+            chatInput.Select();
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        // send=false means Escape/disconnect: clear without firing onEndEdit logic.
+        private void CloseChatInput(bool send)
+        {
+            if (chatInput == null) return;
+            // Clear focus flag first so the onEndEdit fired by DeactivateInputField below
+            // sees a closed state and skips re-sending.
+            _chatInputFocused = false;
+            _chatLastClosedFrame = Time.frameCount;
+            if (!send) chatInput.text = string.Empty;
+            chatInput.DeactivateInputField();
+            chatInput.gameObject.SetActive(false);
+
+            var round = RoundManager.Instance;
+            var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
+            if (!activeMenuOpen && RoundStateUtility.AllowsGameplayInput(phase))
+                LockGameplayCursor();
+        }
+
+        private void OnChatInputEndEdit(string value)
+        {
+            if (!_chatInputFocused) return;
+            var trimmed = (value ?? string.Empty).Trim();
+            if (!string.IsNullOrEmpty(trimmed))
+            {
+                var local = NetworkFirstPersonController.LocalPlayer;
+                if (local != null) local.SendChatMessageServerRpc(trimmed);
+            }
+            CloseChatInput(send: true);
+        }
+
+        private void UpdateChatPanel(bool connected)
+        {
+            if (chatPanelRect == null) return;
+            chatPanelRect.gameObject.SetActive(connected);
+            if (!connected)
+            {
+                if (_chatMessages.Count > 0) _chatMessages.Clear();
+                if (chatPanelBackdrop != null) chatPanelBackdrop.gameObject.SetActive(false);
+                return;
+            }
+
+            if (chatPanelBackdrop != null)
+                chatPanelBackdrop.gameObject.SetActive(_chatInputFocused);
+
+            if (chatLogText == null) return;
+
+            // Rebuild the log every frame: cheap, and keeps the alpha fade in step with Time.time.
+            var now = Time.time;
+            var sb = new System.Text.StringBuilder();
+            for (var i = 0; i < _chatMessages.Count; i++)
+            {
+                var entry = _chatMessages[i];
+                float alpha;
+                if (_chatInputFocused) alpha = 1f;
+                else
+                {
+                    var age = now - entry.ReceivedTime;
+                    if (age <= ChatMessageVisibleSeconds) alpha = 1f;
+                    else if (age < ChatMessageVisibleSeconds + ChatMessageFadeSeconds)
+                        alpha = 1f - (age - ChatMessageVisibleSeconds) / ChatMessageFadeSeconds;
+                    else continue;
+                }
+
+                if (sb.Length > 0) sb.Append('\n');
+                AppendChatLine(sb, entry.Sender, entry.Message, alpha);
+            }
+            chatLogText.text = sb.ToString();
+        }
+
+        private static void AppendChatLine(System.Text.StringBuilder sb, string sender, string message, float alpha)
+        {
+            var senderColor = ChatSenderColor;
+            senderColor.a = alpha;
+            var msgColor = ChatMessageColor;
+            msgColor.a = alpha;
+            sb.Append("<color=#").Append(ColorUtility.ToHtmlStringRGBA(senderColor)).Append('>')
+              .Append(sender).Append(":</color> ");
+            sb.Append("<color=#").Append(ColorUtility.ToHtmlStringRGBA(msgColor)).Append('>')
+              .Append(message).Append("</color>");
+        }
+
         private void UpdateInventoryHud(NetworkFirstPersonController localPlayer, bool activeRound)
         {
             if (inventoryPanelRect == null) return;
@@ -1038,7 +1342,7 @@ namespace FriendSlop.UI
             var rm = RoundManager.Instance;
             if (rm == null) return;
 
-            if (rm.Phase.Value == RoundPhase.Success && rm.GetNextTierCandidates().Count > 0 && !rm.HasReachedFinalTier)
+            if (rm.Phase.Value == RoundPhase.Success && rm.GetOfferedNextPlanetChoices().Count > 0 && !rm.HasReachedFinalTier)
                 rm.RequestTravelToNextPlanetServerRpc();
             else
                 rm.RequestRestartRoundServerRpc();
@@ -1050,12 +1354,13 @@ namespace FriendSlop.UI
         {
             var rm = RoundManager.Instance;
             if (rm == null || rm.Catalog == null) return;
-            var candidates = rm.GetNextTierCandidates();
-            if (candidates.Count <= 1) return;
+            // Cycle only between the offered random subset, not every same-tier planet.
+            var choices = rm.GetOfferedNextPlanetChoices();
+            if (choices.Count <= 1) return;
 
             var current = rm.SelectedNextPlanet;
-            var idx = current != null ? candidates.IndexOf(current) : -1;
-            var nextPlanet = candidates[(idx + 1) % candidates.Count];
+            var idx = current != null ? choices.IndexOf(current) : -1;
+            var nextPlanet = choices[(idx + 1) % choices.Count];
             var catalogIndex = rm.Catalog.IndexOf(nextPlanet);
             if (catalogIndex >= 0)
                 rm.RequestSelectNextPlanetServerRpc(catalogIndex);
@@ -1074,17 +1379,22 @@ namespace FriendSlop.UI
             if (round.HasReachedFinalTier)
                 return $"ROCKET ASSEMBLED on {current}.\nFinal tier reached - replay to keep grinding.";
 
-            var candidates = round.GetNextTierCandidates();
-            if (candidates.Count == 0)
+            var choices = round.GetOfferedNextPlanetChoices();
+            if (choices.Count == 0)
                 return $"ROCKET ASSEMBLED on {current}.\nNo tier {round.NextTier} planets registered yet - host can replay.";
 
             var next = round.SelectedNextPlanet;
-            if (next == null || next.Tier != round.NextTier)
-                next = candidates[0];
+            if (next == null || next.Tier != round.NextTier || !choices.Contains(next))
+                next = choices[0];
 
-            var optionsLine = candidates.Count > 1
-                ? $"\n{candidates.Count} tier {round.NextTier} options - host can cycle."
-                : string.Empty;
+            var totalForTier = round.Catalog != null ? round.Catalog.GetPlanetsForTier(round.NextTier).Count : choices.Count;
+            string optionsLine;
+            if (choices.Count <= 1)
+                optionsLine = string.Empty;
+            else if (totalForTier > choices.Count)
+                optionsLine = $"\n{choices.Count} of {totalForTier} tier {round.NextTier} planets rolled - host can cycle between them.";
+            else
+                optionsLine = $"\n{choices.Count} tier {round.NextTier} options - host can cycle.";
             return $"ROCKET ASSEMBLED on {current}.\nNext: {FormatPlanetLabel(next)}{optionsLine}";
         }
 
@@ -1093,11 +1403,12 @@ namespace FriendSlop.UI
             if (restartButtonLabel == null) return;
             if (round != null && phase == RoundPhase.Success && !round.HasReachedFinalTier)
             {
-                var candidates = round.GetNextTierCandidates();
-                if (candidates.Count > 0)
+                var choices = round.GetOfferedNextPlanetChoices();
+                if (choices.Count > 0)
                 {
                     var next = round.SelectedNextPlanet;
-                    if (next == null || next.Tier != round.NextTier) next = candidates[0];
+                    if (next == null || next.Tier != round.NextTier || !choices.Contains(next))
+                        next = choices[0];
                     restartButtonLabel.text = $"Travel: {FormatPlanetLabel(next)}";
                     return;
                 }
@@ -1108,8 +1419,9 @@ namespace FriendSlop.UI
         private void UpdateCyclePlanetButton(RoundManager round, RoundPhase phase, bool connected, bool isHost)
         {
             if (cyclePlanetButton == null) return;
+            // Only show cycle when the host has more than one rolled choice to flip between.
             var show = connected && isHost && round != null && phase == RoundPhase.Success
-                       && !round.HasReachedFinalTier && round.GetNextTierCandidates().Count > 1;
+                       && !round.HasReachedFinalTier && round.GetOfferedNextPlanetChoices().Count > 1;
             cyclePlanetButton.gameObject.SetActive(show);
             if (show && cyclePlanetButtonLabel != null)
                 cyclePlanetButtonLabel.text = $"Cycle Tier {round.NextTier} Planet";

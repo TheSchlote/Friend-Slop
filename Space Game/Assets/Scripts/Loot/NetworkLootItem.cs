@@ -115,7 +115,7 @@ namespace FriendSlop.Loot
             return !IsCarried.Value || IsHeldBy(player.OwnerClientId);
         }
 
-        public string GetPrompt(NetworkFirstPersonController player)
+        public virtual string GetPrompt(NetworkFirstPersonController player)
         {
             if (IsHeldBy(player.OwnerClientId))
             {

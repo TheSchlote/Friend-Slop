@@ -1287,6 +1287,7 @@ MonoBehaviour:
   - {fileID: 5489509810714505813, guid: ccd919710ab1e7e4187dde0218f7a201, type: 3}
   - {fileID: 5328511237959520248, guid: b7bb5a363acef5f4692d1f3284b60db5, type: 3}
   - {fileID: 2848648357313727042, guid: 857aa6c74b95418459241a5d8c50291c, type: 3}
+  - {fileID: 5678901234567890123, guid: c4f8a2b3d5e69087a8b9c0d1e2f3a4b5, type: 3}
   lootSpawnPoints:
   - {fileID: 1158700225}
   - {fileID: 2139682101}
@@ -1300,6 +1301,7 @@ MonoBehaviour:
   - {fileID: 809643514}
   - {fileID: 1345330128}
   - {fileID: 2130937187}
+  - {fileID: 1950000002}
   monsterPrefab: {fileID: 4378899253088933419, guid: 309aec3940f171845a9dd0c02a180331, type: 3}
   monsterSpawnPoints:
   - {fileID: 747526376}
@@ -3236,6 +3238,7 @@ Transform:
   - {fileID: 809643514}
   - {fileID: 1345330128}
   - {fileID: 2130937187}
+  - {fileID: 1950000002}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &809643513
@@ -8199,6 +8202,37 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0.20526904, y: -0.058099806, z: -0.26607376, w: 0.9400499}
   m_LocalPosition: {x: 17.2359, y: 28.00834, z: 15.081414}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 779176089}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1950000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1950000002}
+  m_Layer: 0
+  m_Name: Boxing Gloves Spawn
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1950000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1950000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0.089688644, y: -0.010145327, z: 0.11194157, w: 0.98960704}
+  m_LocalPosition: {x: -3.5, y: 34.2, z: 2.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

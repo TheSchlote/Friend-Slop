@@ -104,6 +104,13 @@ namespace FriendSlop.Player
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Owner);
 
+        // Replicated camera pitch so remote viewers can tilt the player's head meshes
+        // up/down to track the local player's look direction.
+        private readonly NetworkVariable<float> _headPitch = new(
+            0f,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner);
+
         public const int InventorySize = 4;
         public NetworkVariable<int> ActiveInventorySlot = new(
             0,
@@ -231,8 +238,30 @@ namespace FriendSlop.Player
             }
             if (cameraRoot != null) _baseCameraLocalPos = cameraRoot.localPosition;
 
+            ReparentHeadBonesToCameraRoot();
+
             if (GetComponent<PlayerNameplate>() == null)
                 gameObject.AddComponent<PlayerNameplate>();
+        }
+
+        // Move the prefab's "Remote Face *" meshes under cameraRoot so that pitching
+        // cameraRoot also tilts the visible head/eyes/mouth. Owner can't see them
+        // anyway (ShadowsOnly), so doing this on every client is safe.
+        private void ReparentHeadBonesToCameraRoot()
+        {
+            if (cameraRoot == null) return;
+            List<Transform> bones = null;
+            for (var i = 0; i < transform.childCount; i++)
+            {
+                var child = transform.GetChild(i);
+                if (child == null || child == cameraRoot) continue;
+                if (!child.name.StartsWith("Remote Face")) continue;
+                bones ??= new List<Transform>();
+                bones.Add(child);
+            }
+            if (bones == null) return;
+            foreach (var bone in bones)
+                bone.SetParent(cameraRoot, true);
         }
 
         public override void OnNetworkSpawn()
@@ -466,6 +495,17 @@ namespace FriendSlop.Player
 
             cameraPitch = Mathf.Clamp(cameraPitch - delta.y, -82f, 82f);
             cameraRoot.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f);
+
+            if (Mathf.Abs(_headPitch.Value - cameraPitch) > 0.5f)
+                _headPitch.Value = cameraPitch;
+        }
+
+        // Remote viewers don't run HandleLook, so mirror the replicated pitch onto
+        // cameraRoot here so the head/eyes/mouth track the owner's vertical look.
+        private void LateUpdate()
+        {
+            if (IsOwner || cameraRoot == null) return;
+            cameraRoot.localRotation = Quaternion.Euler(_headPitch.Value, 0f, 0f);
         }
 
         private void HandleMovement()
@@ -1205,6 +1245,37 @@ namespace FriendSlop.Player
             radialSpeed = 0f;
             _stunTimer = 0f;
             _currentTiltAngle = 0f;
+        }
+
+        // Fires on every client whenever the server broadcasts a chat message. The UI layer
+        // subscribes to this in OnEnable and renders the entries in the chat log. Kept as a
+        // static System.Action so the controller doesn't have to know about UI types.
+        public static System.Action<string, string> ChatMessageReceived;
+
+        public const int MaxChatMessageLength = 200;
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void SendChatMessageServerRpc(string message, RpcParams rpcParams = default)
+        {
+            // Only the player's actual owner can speak as them - drop spoofed RPCs from other clients.
+            if (rpcParams.Receive.SenderClientId != OwnerClientId) return;
+            if (string.IsNullOrWhiteSpace(message)) return;
+
+            // Strip rich-text delimiters so a malicious sender can't inject <color> tags or
+            // similar that the receiver's Text component would render.
+            message = message.Replace('<', ' ').Replace('>', ' ').Trim();
+            if (message.Length == 0) return;
+            if (message.Length > MaxChatMessageLength) message = message[..MaxChatMessageLength];
+
+            var sender = !string.IsNullOrEmpty(_displayName) ? _displayName : DisplayName;
+            sender = (sender ?? "Player").Replace('<', ' ').Replace('>', ' ');
+            BroadcastChatClientRpc(sender, message);
+        }
+
+        [ClientRpc]
+        private void BroadcastChatClientRpc(string sender, string message)
+        {
+            ChatMessageReceived?.Invoke(sender, message);
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]

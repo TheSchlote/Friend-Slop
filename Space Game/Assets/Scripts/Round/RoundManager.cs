@@ -42,6 +42,12 @@ namespace FriendSlop.Round
         public NetworkVariable<int> CurrentPlanetCatalogIndex = new(-1);
         public NetworkVariable<int> SelectedNextPlanetCatalogIndex = new(-1);
 
+        // Catalog indexes the host is currently offered as next-planet choices. The server
+        // re-rolls this on each Success. When the next tier has more than MaxNextPlanetChoices
+        // planets we randomly pick that many; otherwise the full tier is offered.
+        public NetworkList<int> NextPlanetChoiceIndices;
+        public const int MaxNextPlanetChoices = 2;
+
         private readonly List<NetworkLootItem> lootItems = new();
         private readonly HashSet<ulong> boardedPlayerIds = new();
         private readonly HashSet<ulong> _readyPlayerIds = new();
@@ -64,6 +70,8 @@ namespace FriendSlop.Round
         private void Awake()
         {
             Instance = this;
+            // NetworkList must exist before OnNetworkSpawn so the server's first writes replicate.
+            NextPlanetChoiceIndices = new NetworkList<int>();
         }
 
         public override void OnDestroy()
@@ -134,6 +142,22 @@ namespace FriendSlop.Round
             {
                 var env = PlanetEnvironment.AllEnvironments[i];
                 if (env != null && env.Planet == planet) { activeEnv = env; break; }
+            }
+
+            // Fallback: planets defined in the catalog without a dedicated scene environment
+            // (e.g. newly authored variants) reuse any environment for the same tier so they
+            // are playable while real environments are being built.
+            if (activeEnv == null && planet != null)
+            {
+                for (var i = 0; i < PlanetEnvironment.AllEnvironments.Count; i++)
+                {
+                    var env = PlanetEnvironment.AllEnvironments[i];
+                    if (env != null && env.Planet != null && env.Planet.Tier == planet.Tier)
+                    {
+                        activeEnv = env;
+                        break;
+                    }
+                }
             }
 
             // Toggle planet roots. For planets whose visual content lives in a separate
@@ -244,6 +268,8 @@ namespace FriendSlop.Round
             var planet = GetCatalogPlanet(catalogIndex);
             if (planet == null) return;
             if (planet.Tier != NextTier) return;
+            // Only allow picking from the offered choices when the server has rolled them.
+            if (!IsOfferedNextPlanetIndex(catalogIndex)) return;
             SelectedNextPlanetCatalogIndex.Value = catalogIndex;
         }
 
@@ -286,6 +312,65 @@ namespace FriendSlop.Round
                 : new List<PlanetDefinition>();
         }
 
+        // Returns the random subset offered to the host on the current Success screen. When
+        // the server hasn't rolled choices yet (e.g. before any round has ended) this returns
+        // the full tier list so menus stay populated.
+        public List<PlanetDefinition> GetOfferedNextPlanetChoices()
+        {
+            var result = new List<PlanetDefinition>();
+            if (NextPlanetChoiceIndices != null && NextPlanetChoiceIndices.Count > 0)
+            {
+                for (var i = 0; i < NextPlanetChoiceIndices.Count; i++)
+                {
+                    var planet = GetCatalogPlanet(NextPlanetChoiceIndices[i]);
+                    if (planet != null && planet.Tier == NextTier) result.Add(planet);
+                }
+            }
+            if (result.Count == 0) return GetNextTierCandidates();
+            return result;
+        }
+
+        private bool IsOfferedNextPlanetIndex(int catalogIndex)
+        {
+            // No rolled offer yet (pre-Success or final tier): allow any same-tier pick so
+            // host-side flows that select up-front still work.
+            if (NextPlanetChoiceIndices == null || NextPlanetChoiceIndices.Count == 0) return true;
+            for (var i = 0; i < NextPlanetChoiceIndices.Count; i++)
+                if (NextPlanetChoiceIndices[i] == catalogIndex) return true;
+            return false;
+        }
+
+        private void ServerRollNextPlanetChoices()
+        {
+            if (!IsServer || NextPlanetChoiceIndices == null) return;
+            NextPlanetChoiceIndices.Clear();
+            if (planetCatalog == null || HasReachedFinalTier) return;
+
+            var pool = GetNextTierCandidates();
+            if (pool.Count == 0) return;
+
+            // <= MaxNextPlanetChoices candidates: show the whole tier so players still have
+            // a path forward. Above that, randomly sample MaxNextPlanetChoices distinct planets.
+            if (pool.Count <= MaxNextPlanetChoices)
+            {
+                for (var i = 0; i < pool.Count; i++)
+                {
+                    var idx = planetCatalog.IndexOf(pool[i]);
+                    if (idx >= 0) NextPlanetChoiceIndices.Add(idx);
+                }
+                return;
+            }
+
+            for (var i = 0; i < MaxNextPlanetChoices && pool.Count > 0; i++)
+            {
+                var pickIndex = Random.Range(0, pool.Count);
+                var planet = pool[pickIndex];
+                pool.RemoveAt(pickIndex);
+                var idx = planetCatalog.IndexOf(planet);
+                if (idx >= 0) NextPlanetChoiceIndices.Add(idx);
+            }
+        }
+
         private PlanetDefinition GetCatalogPlanet(int index)
         {
             return planetCatalog != null ? planetCatalog.GetByIndex(index) : null;
@@ -304,8 +389,10 @@ namespace FriendSlop.Round
             var next = SelectedNextPlanet;
             if (next == null || next.Tier != NextTier)
             {
-                var candidates = GetNextTierCandidates();
-                next = candidates.Count > 0 ? candidates[0] : null;
+                // Default to the first option the host was actually offered, not the first
+                // catalog match - the offered list is what the menus showed them.
+                var offered = GetOfferedNextPlanetChoices();
+                next = offered.Count > 0 ? offered[0] : null;
             }
 
             if (next == null)
@@ -596,6 +683,20 @@ namespace FriendSlop.Round
                 return;
 
             Phase.Value = phase;
+
+            // Roll the offered next-planet picks the moment the round resolves, before the
+            // host sees the success screen. Doing it here keeps the menu and the cycle button
+            // in sync with whichever subset was rolled.
+            if (phase == RoundPhase.Success)
+            {
+                ServerRollNextPlanetChoices();
+                // Pre-select the first offered planet so the Travel button has a sensible
+                // default even if the host doesn't touch the cycle button.
+                if (NextPlanetChoiceIndices != null && NextPlanetChoiceIndices.Count > 0)
+                    SelectedNextPlanetCatalogIndex.Value = NextPlanetChoiceIndices[0];
+                else
+                    SelectedNextPlanetCatalogIndex.Value = -1;
+            }
 
             if (returnToShipOnRoundEnd && RoundStateUtility.IsShipPhase(phase))
             {
