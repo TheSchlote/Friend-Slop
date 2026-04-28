@@ -1,4 +1,5 @@
 using FriendSlop.Core;
+using FriendSlop.Hazards;
 using FriendSlop.Interaction;
 using FriendSlop.Player;
 using FriendSlop.Round;
@@ -25,6 +26,7 @@ namespace FriendSlop.Loot
         private Renderer[] renderers;
         private Vector3 spawnPosition;
         private Quaternion spawnRotation;
+        private float _monsterHitCooldown;
 
         // Declaration order matters: NGO deserializes NetworkVariables in this order, and
         // OnCarrierChanged reads SlotIndex.Value when wiring the carrier's inventory cache.
@@ -290,7 +292,7 @@ namespace FriendSlop.Loot
             carrier?.ServerCycleToNonEmptySlotIfActiveCleared();
         }
 
-        public void ServerReset()
+        public virtual void ServerReset()
         {
             if (!IsServer)
             {
@@ -361,6 +363,19 @@ namespace FriendSlop.Loot
             if (subscribedCarrier == null) return;
             subscribedCarrier.ActiveInventorySlot.OnValueChanged -= OnCarrierActiveSlotChanged;
             subscribedCarrier = null;
+        }
+
+        private void OnCollisionEnter(Collision collision)
+        {
+            if (!IsServer || IsCarried.Value || IsDeposited.Value) return;
+            if (Time.time < _monsterHitCooldown) return;
+            if (body == null || body.linearVelocity.magnitude < 3f) return;
+
+            var monster = collision.collider.GetComponentInParent<RoamingMonster>();
+            if (monster == null) return;
+
+            monster.ServerTakeDamage(20);
+            _monsterHitCooldown = Time.time + 0.5f;
         }
 
         // Snap stowed items to the carrier each frame on the server so they follow as the

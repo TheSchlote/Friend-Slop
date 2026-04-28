@@ -1173,6 +1173,12 @@ namespace FriendSlop.Player
                 FriendSlopUI.Instance?.ShowDamageFlash();
         }
 
+        public void ServerHeal(int amount)
+        {
+            if (!IsServer || _health.Value <= 0) return;
+            _health.Value = Mathf.Min(maxHealth, _health.Value + amount);
+        }
+
         public void ServerTakeDamage(int damage)
         {
             if (!IsServer || _health.Value <= 0) return;

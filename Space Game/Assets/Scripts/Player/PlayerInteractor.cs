@@ -126,6 +126,13 @@ namespace FriendSlop.Player
                 return;
             }
 
+            // Laser gun replaces the throw mechanic with hitscan fire.
+            if (hasHeldItem && heldItem is LaserGun laserGun)
+            {
+                HandleLaserGunInput(laserGun, mouse);
+                return;
+            }
+
             if (mouse == null) return;
 
             if (mouse.rightButton.wasPressedThisFrame)
@@ -159,6 +166,18 @@ namespace FriendSlop.Player
             var cam = controller.PlayerCamera.transform;
             gloves.StartLocalCooldown();
             gloves.RequestPunchServerRpc(cam.position, cam.forward);
+        }
+
+        private void HandleLaserGunInput(LaserGun laserGun, Mouse mouse)
+        {
+            _isCharging = false;
+            if (mouse == null || controller.PlayerCamera == null) return;
+            if (!mouse.leftButton.isPressed) return;
+            if (!laserGun.CanFireNow) return;
+
+            var cam = controller.PlayerCamera.transform;
+            laserGun.StartLocalCooldown();
+            laserGun.RequestFireServerRpc(cam.position, cam.forward);
         }
 
         private void UpdateFocus()
@@ -244,6 +263,17 @@ namespace FriendSlop.Player
                 CurrentPrompt = gloves.CanPunchNow
                     ? "Left-click punch  |  Q drop"
                     : $"[{gloves.CooldownRemaining:F1}s] recharging  |  Q drop";
+                return;
+            }
+
+            if (hasHeldItem && controller.HeldItem is LaserGun laserGun)
+            {
+                if (laserGun.Ammo <= 0)
+                    CurrentPrompt = "Laser Gun [EMPTY]  |  Q drop";
+                else if (!laserGun.CanFireNow)
+                    CurrentPrompt = $"[{laserGun.CooldownRemaining:F1}s] Laser Gun [{laserGun.Ammo}/{laserGun.MaxAmmo}]  |  Q drop";
+                else
+                    CurrentPrompt = $"Laser Gun [{laserGun.Ammo}/{laserGun.MaxAmmo}]: Hold Left-click fire  |  Q drop";
                 return;
             }
 

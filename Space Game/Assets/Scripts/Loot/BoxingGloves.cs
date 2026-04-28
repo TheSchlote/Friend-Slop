@@ -1,4 +1,5 @@
 using FriendSlop.Core;
+using FriendSlop.Hazards;
 using FriendSlop.Player;
 using FriendSlop.Round;
 using Unity.Netcode;
@@ -14,6 +15,7 @@ namespace FriendSlop.Loot
         [SerializeField] private float punchUpwardBias = 4f;
         [SerializeField] private float punchStunDuration = 7f;
         [SerializeField] private float punchCooldown = 0.9f;
+        [SerializeField] private int punchMonsterDamage = 25;
         [SerializeField] private LayerMask punchMask = ~0;
 
         // Per-client cooldown — not networked, applied immediately on the owner
@@ -62,7 +64,12 @@ namespace FriendSlop.Loot
 
             if (hit.collider == null) return;
             var target = hit.collider.GetComponentInParent<NetworkFirstPersonController>();
-            if (target == null || target == attacker || target.IsDead) return;
+            if (target == null || target == attacker || target.IsDead)
+            {
+                var monster = hit.collider.GetComponentInParent<RoamingMonster>();
+                if (monster != null) monster.ServerTakeDamage(punchMonsterDamage);
+                return;
+            }
 
             var up = FlatGravityVolume.GetGravityUp(target.transform.position);
             var horizontal = Vector3.ProjectOnPlane(direction, up);

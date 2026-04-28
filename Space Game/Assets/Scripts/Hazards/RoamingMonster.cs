@@ -30,10 +30,17 @@ namespace FriendSlop.Hazards
         [SerializeField] private float targetSwitchRange = 5f;
         [SerializeField] private float stunDuration = 1.5f;
         [SerializeField] private int attackDamage = 20;
+        [SerializeField] private int maxHealth = 100;
+
+        private NetworkVariable<int> _health = new(100);
 
         private enum State { Roaming, Chasing, Investigating }
 
         private static readonly float[] BodySampleHeights = { 0.25f, 0.5f, 0.75f, 0.95f };
+
+        private bool _isDead;
+        private Renderer[] _renderers;
+        private CapsuleCollider _capsuleCollider;
 
         private Vector3 spawnPosition;
         private Vector3 roamTarget;
@@ -49,8 +56,17 @@ namespace FriendSlop.Hazards
         private float _stunnedPlayerUntil;
         private bool _roundActive;
 
+        public override void OnNetworkSpawn()
+        {
+            if (_health.Value <= 0)
+                ApplyDeadState();
+        }
+
         private void Awake()
         {
+            _renderers = GetComponentsInChildren<Renderer>();
+            _capsuleCollider = GetComponent<CapsuleCollider>();
+
             var world = SphereWorld.GetClosest(transform.position);
             if (world != null)
             {
@@ -68,7 +84,7 @@ namespace FriendSlop.Hazards
 
         private void Update()
         {
-            if (!IsServer || RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active)
+            if (!IsServer || _isDead || RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active)
             {
                 _roundActive = false;
                 return;
@@ -170,12 +186,55 @@ namespace FriendSlop.Hazards
             }
         }
 
+        public void ServerTakeDamage(int damage)
+        {
+            if (!IsServer || _isDead) return;
+            _health.Value = Mathf.Max(0, _health.Value - damage);
+            if (_health.Value <= 0)
+            {
+                _isDead = true;
+                DieClientRpc();
+            }
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        private void DieClientRpc()
+        {
+            _isDead = true;
+            ApplyDeadState();
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        private void ReviveClientRpc()
+        {
+            _isDead = false;
+            ApplyAliveState();
+        }
+
+        private void ApplyDeadState()
+        {
+            foreach (var r in _renderers)
+                if (r != null) r.enabled = false;
+            if (_capsuleCollider != null) _capsuleCollider.enabled = false;
+        }
+
+        private void ApplyAliveState()
+        {
+            foreach (var r in _renderers)
+                if (r != null) r.enabled = true;
+            if (_capsuleCollider != null) _capsuleCollider.enabled = true;
+        }
+
         public void ServerReset()
         {
             if (!IsServer)
             {
                 return;
             }
+
+            _health.Value = maxHealth;
+            _isDead = false;
+            ReviveClientRpc();
 
             transform.position = spawnPosition;
             nextAttackTime = 0f;
