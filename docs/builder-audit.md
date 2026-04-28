@@ -85,15 +85,25 @@ For our current commit (top-level references only):
 | Rename a loot spec | Orphans the old prefab. Manual cleanup required. |
 | Add a new ScriptableObject `.asset` | Independent of these builders. Safe. |
 
-## Recommendations
+## Recommendations and current state
 
-These are deferred to a later step (the "carve `FriendSlopSceneBuilder` into per-system builders" milestone). Capturing them here so they aren't lost.
+### Implemented
 
-1. **Make every `BuildXPrefab` load-or-create.** Match the pattern used by `CreateMaterial`: try `LoadAssetAtPath` first; if found, mutate fields on the existing prefab instance via `PrefabUtility.LoadPrefabContents` + `SavePrefabAsset`. Only construct from scratch when the file is missing.
-2. **Make `BuildPrototypeScene` open the existing scene** instead of `NewScene(EmptyScene)`. Then the in-scene FileIDs are preserved across rebuilds.
-3. **Detect orphaned loot.** When generating loot prefabs, scan `Assets/Prefabs/Loot` for files that don't correspond to any current spec name and warn (or auto-delete with confirmation).
-4. **Block `Rebuild` from running in CI/headless without an explicit flag.** The auto-build marker file is the right primitive; tighten it so a `Repair` is the default headless behavior.
-5. **Long term, split the monolith.** `PlayerPrefabBuilder.cs`, `LaunchpadPrefabBuilder.cs`, `PlanetSceneBuilder.cs`, `UICanvasBuilder.cs`. Each file has a clear single responsibility and its own load-or-create flow.
+1. **Per-prefab idempotency.** Each `Build*Prefab` (player, round manager, monster, loot) now starts with a `LoadAssetAtPath` early-return. If the prefab exists, the method returns it untouched and the in-prefab FileIDs are preserved. Existing prefabs become source-of-truth once created; manual edits stick. To deliberately reset a prefab to code defaults, delete its `.prefab` file and run `Repair`.
+
+   *Trade-off vs. the originally-suggested "match `CreateMaterial`" pattern (load + mutate via `PrefabUtility.LoadPrefabContents`):* the simpler early-return is chosen because (a) prefabs are asset-authoritative per architecture decision D-001, (b) mutating an existing prefab with hard-coded code defaults could clobber user values, and (c) the audit's stated win — preserving sub-object FileIDs and avoiding YAML churn — is achieved either way. If a future need to bulk-update existing prefabs from code emerges, switch to the `LoadPrefabContents` pattern at that point.
+
+2. **Orphan loot detection.** `BuildLootPrefabs` now logs a warning for any `.prefab` under `Assets/Prefabs/Loot` whose filename doesn't match a current `LootSpec`. Renaming a spec without manually deleting the old prefab no longer fails silently.
+
+### Deliberately not changed
+
+3. **`BuildPrototypeScene` (the `Rebuild` path) still calls `NewScene(EmptyScene)`.** All the in-scene `Create*` helpers (`CreateLighting`, `CreateLevel`, `CreateLaunchpad`, etc.) unconditionally `new GameObject(...)`, so opening the existing scene would duplicate every prop. The destructive scene-recreation is intentional for the `Rebuild` semantic. In-scene FileIDs do regenerate on `Rebuild`, which is why `CLAUDE.md` and this doc both restrict `Rebuild` to explicit human request. Routine maintenance uses `Repair`, which never calls `NewScene`.
+
+### Future work (deferred until per-system carve)
+
+4. **Block `Rebuild` from running in CI/headless without an explicit flag.** The auto-build marker file is the right primitive; tighten it so `Repair` is the default headless behavior.
+5. **Split the monolith.** `PlayerPrefabBuilder.cs`, `MonsterPrefabBuilder.cs`, `LootPrefabBuilder.cs`, `LaunchpadSceneBuilder.cs`, `ShipInteriorSceneBuilder.cs`, `UICanvasBuilder.cs`. Each file has a clear single responsibility and its own load-or-create flow. Tracked as step 4b in the architecture roadmap.
+6. **Make in-scene `Create*` helpers idempotent.** Once they support load-or-create themselves, `BuildPrototypeScene` can open the existing scene without duplicating content, and the `Rebuild`/`Repair` distinction becomes purely informational.
 
 ## How to verify locally
 

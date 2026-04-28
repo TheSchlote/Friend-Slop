@@ -56,6 +56,12 @@ namespace FriendSlop.Editor
             var monsterPrefab = BuildMonsterPrefab(materials);
             var networkPrefabsList = BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab.gameObject, monsterPrefab.gameObject, lootPrefabs);
 
+            // Rebuild is intentionally destructive for the scene contents. The CreateLighting/
+            // CreateLevel/CreateLaunchpad/etc. helpers below all unconditionally instantiate
+            // GameObjects, so we must start from an empty scene to avoid duplicates. This
+            // regenerates every in-scene FileID, which is why CLAUDE.md and
+            // docs/builder-audit.md restrict Rebuild to explicit human request.
+            // For routine fixes use Tools/Friend Slop/Repair Prototype Scene instead.
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             SceneManager.SetActiveScene(SceneManager.GetSceneAt(0));
 
@@ -239,6 +245,17 @@ namespace FriendSlop.Editor
 
         private static GameObject BuildPlayerPrefab(IReadOnlyDictionary<string, Material> materials)
         {
+            // Idempotent: if the prefab already exists, return it untouched. Recreating
+            // every call would regenerate every child GameObject's FileID and break any
+            // sub-object references (and produce noisy YAML diffs). To deliberately reset
+            // the prefab to defaults, delete the .prefab file and re-run Repair. See
+            // docs/builder-audit.md.
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
             var root = new GameObject("FriendSlopPlayer");
             root.tag = "Player";
             root.AddComponent<NetworkObject>();
@@ -342,6 +359,13 @@ namespace FriendSlop.Editor
 
         private static RoundManager BuildRoundManagerPrefab()
         {
+            // Idempotent. See note on BuildPlayerPrefab.
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(RoundManagerPrefabPath);
+            if (existing != null)
+            {
+                return existing.GetComponent<RoundManager>();
+            }
+
             var root = new GameObject("Round Manager");
             root.AddComponent<NetworkObject>();
             var round = root.AddComponent<RoundManager>();
@@ -360,9 +384,20 @@ namespace FriendSlop.Editor
             var specs = GetLootSpecs();
             var prefabs = new NetworkLootItem[specs.Length];
 
+            // Per-spec idempotency. See note on BuildPlayerPrefab. Renaming a spec without
+            // also deleting its old .prefab orphans the old asset; WarnAboutOrphanedLootPrefabs
+            // logs those for cleanup.
             for (var i = 0; i < specs.Length; i++)
             {
                 var spec = specs[i];
+                var prefabPath = $"{LootPrefabFolderPath}/{SanitizeAssetName(spec.Name)}.prefab";
+                var existing = AssetDatabase.LoadAssetAtPath<NetworkLootItem>(prefabPath);
+                if (existing != null)
+                {
+                    prefabs[i] = existing;
+                    continue;
+                }
+
                 var lootObject = GameObject.CreatePrimitive(spec.Shape);
                 lootObject.name = spec.Name;
                 lootObject.transform.localScale = spec.Scale;
@@ -385,17 +420,47 @@ namespace FriendSlop.Editor
                 serializedLoot.FindProperty("shipPartType").enumValueIndex = (int)spec.PartType;
                 serializedLoot.ApplyModifiedPropertiesWithoutUndo();
 
-                var prefabPath = $"{LootPrefabFolderPath}/{SanitizeAssetName(spec.Name)}.prefab";
                 var prefab = PrefabUtility.SaveAsPrefabAsset(lootObject, prefabPath);
                 Object.DestroyImmediate(lootObject);
                 prefabs[i] = prefab.GetComponent<NetworkLootItem>();
             }
 
+            WarnAboutOrphanedLootPrefabs(specs);
             return prefabs;
+        }
+
+        // Logs a warning for any .prefab in the loot folder whose filename doesn't match
+        // a current LootSpec. Detects renamed-without-cleanup specs that would otherwise
+        // leave stale prefabs in the NetworkPrefabsList until manually pruned.
+        private static void WarnAboutOrphanedLootPrefabs(LootSpec[] specs)
+        {
+            var expectedNames = new HashSet<string>();
+            for (var i = 0; i < specs.Length; i++)
+            {
+                expectedNames.Add(SanitizeAssetName(specs[i].Name));
+            }
+
+            var guids = AssetDatabase.FindAssets("t:Prefab", new[] { LootPrefabFolderPath });
+            for (var i = 0; i < guids.Length; i++)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                var fileName = System.IO.Path.GetFileNameWithoutExtension(path);
+                if (!expectedNames.Contains(fileName))
+                {
+                    Debug.LogWarning($"Friend Slop: orphaned loot prefab at {path} - no matching LootSpec. Delete it manually if it's no longer used.");
+                }
+            }
         }
 
         private static RoamingMonster BuildMonsterPrefab(IReadOnlyDictionary<string, Material> materials)
         {
+            // Idempotent. See note on BuildPlayerPrefab.
+            var existing = AssetDatabase.LoadAssetAtPath<RoamingMonster>(MonsterPrefabPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
             var root = new GameObject("RoamingMonster");
             root.AddComponent<NetworkObject>();
             root.AddComponent<NetworkTransform>();
