@@ -130,6 +130,46 @@ namespace FriendSlop.UI
             BuildUi();
         }
 
+        private void OnEnable()
+        {
+            // Register the input-block predicate so Gameplay code can ask "should I ignore
+            // input?" without depending on FriendSlop.UI. See FriendSlop.Core.GameplayInputState.
+            GameplayInputState.RegisterBlockProvider(IsBlockingGameplayInput);
+
+            NetworkSessionManager.SessionEnded += HandleSessionEnded;
+            NetworkFirstPersonController.LocalPlayerDamaged += HandleLocalPlayerDamaged;
+            NetworkFirstPersonController.LocalPlayerJoinedActiveRound += HandleLocalPlayerJoinedActiveRound;
+        }
+
+        private void OnDisable()
+        {
+            NetworkSessionManager.SessionEnded -= HandleSessionEnded;
+            NetworkFirstPersonController.LocalPlayerDamaged -= HandleLocalPlayerDamaged;
+            NetworkFirstPersonController.LocalPlayerJoinedActiveRound -= HandleLocalPlayerJoinedActiveRound;
+
+            // Only clear if we're the registered provider; if a fresh UI instance has already
+            // taken over (e.g. scene reload during a host restart) leave its provider in place.
+            if (Instance == this)
+            {
+                GameplayInputState.ClearBlockProvider();
+            }
+        }
+
+        private void HandleSessionEnded()
+        {
+            UnlockMenuCursor();
+        }
+
+        private void HandleLocalPlayerDamaged()
+        {
+            ShowDamageFlash();
+        }
+
+        private void HandleLocalPlayerJoinedActiveRound()
+        {
+            ShowLateJoinLoading();
+        }
+
         private void BuildInventoryPreviewRig()
         {
             // Lives outside the canvas so it can hold real 3D objects. Parented to this

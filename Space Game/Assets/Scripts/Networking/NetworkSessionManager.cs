@@ -11,13 +11,18 @@ using Unity.Services.Lobbies.Models;
 using Unity.Services.Relay;
 using Unity.Services.Relay.Models;
 using UnityEngine;
-using FriendSlop.UI;
 
 namespace FriendSlop.Networking
 {
     public class NetworkSessionManager : MonoBehaviour
     {
         public static NetworkSessionManager Instance { get; private set; }
+
+        // Raised when the local client/host session has ended (disconnect, shutdown,
+        // transport failure). UI subscribes to release the gameplay cursor lock so the
+        // menu is interactable again. Kept as an event so this class never reaches
+        // upward into FriendSlop.UI.
+        public static event Action SessionEnded;
 
         [SerializeField] private int maxPlayers = 4;
         [SerializeField] private ushort localPort = 7777;
@@ -549,7 +554,7 @@ namespace FriendSlop.Networking
 
             Status = BuildDisconnectStatus(subscribedNetworkManager);
             sessionOperationInProgress = false;
-            FriendSlopUI.Instance?.UnlockMenuCursor();
+            SessionEnded?.Invoke();
         }
 
         private void HandleClientStopped(bool wasHost)
@@ -604,7 +609,7 @@ namespace FriendSlop.Networking
             }
 
             Status = string.IsNullOrWhiteSpace(status) ? "Not connected." : status;
-            FriendSlopUI.Instance?.UnlockMenuCursor();
+            SessionEnded?.Invoke();
         }
 
         private string BuildDisconnectStatus(NetworkManager networkManager)

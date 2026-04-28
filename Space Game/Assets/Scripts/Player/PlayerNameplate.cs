@@ -1,5 +1,4 @@
 using FriendSlop.Core;
-using FriendSlop.UI;
 using UnityEngine;
 
 namespace FriendSlop.Player
@@ -76,7 +75,7 @@ namespace FriendSlop.Player
             var cam = localPlayer.PlayerCamera;
             if (cam != null)
             {
-                if (WorldTextBillboard.TryGetReadableTextRotation(
+                if (WorldTextOrientation.TryGetReadableTextRotation(
                         nameplateRoot.transform.position,
                         cam.transform.position,
                         cam.transform.up,

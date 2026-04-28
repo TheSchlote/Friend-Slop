@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System;
 using FriendSlop.Core;
 using FriendSlop.Effects;
 using FriendSlop.Loot;
 using FriendSlop.Round;
-using FriendSlop.UI;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -19,6 +19,15 @@ namespace FriendSlop.Player
     {
         public static readonly List<NetworkFirstPersonController> ActivePlayers = new();
         public static NetworkFirstPersonController LocalPlayer { get; private set; }
+
+        // Raised on the local owner's machine when the local player takes non-fatal damage.
+        // UI subscribes to drive the damage flash without this class reaching into FriendSlop.UI.
+        public static event Action LocalPlayerDamaged;
+
+        // Raised on the local owner's machine when the local player joins a round mid-flight
+        // (round phase is Active when the player spawns). UI subscribes to show the late-join
+        // loading overlay.
+        public static event Action LocalPlayerJoinedActiveRound;
 
         [Header("References")]
         [SerializeField] private Camera playerCamera;
@@ -281,7 +290,7 @@ namespace FriendSlop.Player
                     if (rm.Phase.Value == RoundPhase.Loading)
                         StartCoroutine(WaitAndReportReady());
                     else if (rm.Phase.Value == RoundPhase.Active)
-                        FriendSlopUI.Instance?.ShowLateJoinLoading();
+                        LocalPlayerJoinedActiveRound?.Invoke();
                 }
             }
             else
@@ -368,7 +377,7 @@ namespace FriendSlop.Player
 
             HandleDiagnosticHotkeys();
 
-            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && !FriendSlopUI.BlocksGameplayInput)
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && !GameplayInputState.IsBlocked)
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
@@ -390,7 +399,7 @@ namespace FriendSlop.Player
             if (_stunTimer > 0f) _stunTimer -= Time.deltaTime;
             if (_currentTiltAngle > 0.01f) _currentTiltAngle = Mathf.MoveTowards(_currentTiltAngle, 0f, stunTiltRecoverSpeed * Time.deltaTime);
 
-            lastBlockedGameplayInput = FriendSlopUI.BlocksGameplayInput;
+            lastBlockedGameplayInput = GameplayInputState.IsBlocked;
             if (lastBlockedGameplayInput)
             {
                 AlignToSphereSurface();
@@ -414,7 +423,7 @@ namespace FriendSlop.Player
             if (characterController == null) return;
 
             var wantsCrouch = false;
-            if (_stunTimer <= 0f && Keyboard.current != null && !FriendSlopUI.BlocksGameplayInput)
+            if (_stunTimer <= 0f && Keyboard.current != null && !GameplayInputState.IsBlocked)
             {
                 wantsCrouch = Keyboard.current.leftCtrlKey.isPressed
                     || Keyboard.current.rightCtrlKey.isPressed
@@ -1109,13 +1118,11 @@ namespace FriendSlop.Player
             if (!IsOwner) return;
             if (next == RoundPhase.Loading)
             {
-                FriendSlopUI.Instance?.EnterGameplayMode();
                 StartCoroutine(WaitAndReportReady());
             }
-            else if (next == RoundPhase.Active)
-            {
-                FriendSlopUI.Instance?.EnterGameplayMode();
-            }
+            // UI cursor + menu state for Loading/Active transitions is owned by FriendSlopUI,
+            // which subscribes to RoundManager.Phase.OnValueChanged itself. This class no
+            // longer reaches into the UI layer.
         }
 
         private IEnumerator WaitAndReportReady()
@@ -1130,7 +1137,7 @@ namespace FriendSlop.Player
         private void OnHealthChanged(int previous, int current)
         {
             if (current < previous && current > 0)
-                FriendSlopUI.Instance?.ShowDamageFlash();
+                LocalPlayerDamaged?.Invoke();
         }
 
         public void ServerTakeDamage(int damage)
@@ -1359,7 +1366,7 @@ namespace FriendSlop.Player
                 return;
             }
 
-            if (Keyboard.current != null && !FriendSlopUI.BlocksGameplayInput)
+            if (Keyboard.current != null && !GameplayInputState.IsBlocked)
             {
                 if (Keyboard.current.eKey.wasPressedThisFrame) CycleSpectateTarget(1);
                 if (Keyboard.current.qKey.wasPressedThisFrame) CycleSpectateTarget(-1);
