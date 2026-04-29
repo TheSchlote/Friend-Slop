@@ -176,16 +176,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aa11bb22cc33dd44ee55ff6677889900, type: 3}
   m_Name:
   m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Hazards.AnomalyOrb
-  anomalyType: 1
-  hoverHeight: 1.8
-  bobAmplitude: 0.2
-  bobFrequency: 1.6
+  movement: 0
   moveSpeed: 5.5
   detectionRange: 25
-  friendlyStopDistance: 3
-  hostileContactRange: 1
-  hostileDamage: 15
-  hostileAttackCooldown: 1.5
   wanderRadius: 12
   wanderPauseMin: 3
   wanderPauseMax: 8
+  contactRange: 1
+  damageOnContact: 1
+  contactDamage: 15
+  healOnContact: 0
+  healAmount: 0
+  stunOnContact: 0
+  stunDuration: 0
+  hoverHeight: 1.8
+  bobAmplitude: 0.2
+  bobFrequency: 1.6
+  orbColor: {r: 1, g: 0.1, b: 0.1, a: 1}
+  glowPulseSpeed: 1.8
+  minAlpha: 0.3
+  maxAlpha: 0.6
+  minGlow: 0.5
+  maxGlow: 2.2

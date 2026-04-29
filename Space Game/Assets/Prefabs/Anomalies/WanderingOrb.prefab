@@ -105,7 +105,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name:
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4444444444
+  GlobalObjectIdHash: 1444444444
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -176,16 +176,25 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: aa11bb22cc33dd44ee55ff6677889900, type: 3}
   m_Name:
   m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Hazards.AnomalyOrb
-  anomalyType: 3
-  hoverHeight: 1.8
-  bobAmplitude: 0.2
-  bobFrequency: 0.9
+  movement: 3
   moveSpeed: 3
   detectionRange: 22
-  friendlyStopDistance: 3
-  hostileContactRange: 1
-  hostileDamage: 15
-  hostileAttackCooldown: 1.5
   wanderRadius: 12
   wanderPauseMin: 3
   wanderPauseMax: 8
+  contactRange: 1
+  damageOnContact: 0
+  contactDamage: 0
+  healOnContact: 0
+  healAmount: 0
+  stunOnContact: 0
+  stunDuration: 0
+  hoverHeight: 1.8
+  bobAmplitude: 0.2
+  bobFrequency: 0.9
+  orbColor: {r: 1, g: 0.6, b: 0.1, a: 1}
+  glowPulseSpeed: 1.1
+  minAlpha: 0.25
+  maxAlpha: 0.5
+  minGlow: 0.3
+  maxGlow: 1.5

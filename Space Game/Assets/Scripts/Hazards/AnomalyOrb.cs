@@ -6,36 +6,122 @@ using UnityEngine;
 
 namespace FriendSlop.Hazards
 {
-    public enum AnomalyType { Friendly, Hostile, NeutralStationary, NeutralWandering, ElectricHostile }
+    public enum AnomalyMovement { ChaseHostile, ChaseFriendly, Stationary, Wander }
 
     [RequireComponent(typeof(NetworkObject))]
     public class AnomalyOrb : NetworkBehaviour
     {
-        [SerializeField] private AnomalyType anomalyType = AnomalyType.NeutralStationary;
-        [SerializeField] private float hoverHeight = 1.8f;
-        [SerializeField] private float bobAmplitude = 0.25f;
-        [SerializeField] private float bobFrequency = 1.1f;
-        [SerializeField] private float moveSpeed = 4.5f;
+        [Header("Movement")]
+        [SerializeField] private AnomalyMovement movement = AnomalyMovement.Stationary;
+        [SerializeField] private float moveSpeed = 4f;
         [SerializeField] private float detectionRange = 22f;
-        [SerializeField] private float friendlyStopDistance = 3f;
-        [SerializeField] private float hostileContactRange = 1.0f;
-        [SerializeField] private int hostileDamage = 15;
-        [SerializeField] private float hostileAttackCooldown = 1.5f;
         [SerializeField] private float wanderRadius = 12f;
         [SerializeField] private float wanderPauseMin = 3f;
         [SerializeField] private float wanderPauseMax = 8f;
+
+        [Header("Contact")]
+        [SerializeField] private float contactRange = 1f;
+        [SerializeField] private bool damageOnContact = false;
+        [SerializeField] private int contactDamage = 15;
+        [SerializeField] private bool healOnContact = false;
         [SerializeField] private int healAmount = 50;
-        [SerializeField] private int shockDamage = 20;
-        [SerializeField] private float shockStunDuration = 2f;
-        [SerializeField] private float shockCooldown = 4f;
+        [SerializeField] private bool stunOnContact = false;
+        [SerializeField] private float stunDuration = 2f;
+
+        [Header("Hover")]
+        [SerializeField] private float hoverHeight = 1f;
+        [SerializeField] private float bobAmplitude = 0.75f;
+        [SerializeField] private float bobFrequency = 2f;
+
+        [Header("Visuals")]
+        [SerializeField] private Color orbColor = Color.white;
+        [SerializeField] private float glowPulseSpeed = 1.8f;
+        [SerializeField] private float minAlpha = 0.1f;
+        [SerializeField] private float maxAlpha = 0.3f;
+        [SerializeField] private float minGlow = 0.6f;
+        [SerializeField] private float maxGlow = 1.8f;
+
+        // Cached shader property IDs — string lookups are dictionary hits per call.
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+        private static readonly int SurfaceId = Shader.PropertyToID("_Surface");
+        private static readonly int BlendId = Shader.PropertyToID("_Blend");
+        private static readonly int SrcBlendId = Shader.PropertyToID("_SrcBlend");
+        private static readonly int DstBlendId = Shader.PropertyToID("_DstBlend");
+        private static readonly int ZWriteId = Shader.PropertyToID("_ZWrite");
+        private static readonly int ModeId = Shader.PropertyToID("_Mode");
+        private static readonly int SmoothnessId = Shader.PropertyToID("_Smoothness");
+
+        // Shader.Find is a registry string lookup — cache once across all orbs.
+        private static Shader _cachedOrbShader;
+        private static bool _orbShaderIsUrp;
+
+        // Target acquisition is throttled — players don't teleport; 10Hz is invisible.
+        private const float TargetSearchInterval = 0.1f;
 
         private Vector3 _spawnPosition;
         private Vector3 _wanderTarget;
         private float _wanderPauseTimer;
-        private float _nextAttackTime;
         private float _bobPhaseOffset;
         private bool _initialized;
         private bool _wasRoundActive;
+        private Material _orbMaterial;
+        private NetworkFirstPersonController _cachedTarget;
+        private float _nextTargetSearchTime;
+
+        private void Awake()
+        {
+            _bobPhaseOffset = Random.Range(0f, Mathf.PI * 2f);
+        }
+
+        private void Start()
+        {
+            SetupVisuals();
+        }
+
+        private static Shader GetOrbShader()
+        {
+            if (_cachedOrbShader != null) return _cachedOrbShader;
+            var s = Shader.Find("Universal Render Pipeline/Lit");
+            if (s != null) { _cachedOrbShader = s; _orbShaderIsUrp = true; return s; }
+            s = Shader.Find("Standard");
+            _cachedOrbShader = s;
+            _orbShaderIsUrp = false;
+            return s;
+        }
+
+        private void SetupVisuals()
+        {
+            var rend = GetComponent<Renderer>();
+            if (rend == null) return;
+
+            var shader = GetOrbShader();
+            _orbMaterial = new Material(shader);
+
+            if (_orbShaderIsUrp)
+            {
+                _orbMaterial.SetFloat(SurfaceId, 1f);
+                _orbMaterial.SetFloat(BlendId, 0f);
+                _orbMaterial.SetFloat(SrcBlendId, 5f);
+                _orbMaterial.SetFloat(DstBlendId, 10f);
+                _orbMaterial.SetFloat(ZWriteId, 0f);
+                _orbMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            }
+            else
+            {
+                _orbMaterial.SetFloat(ModeId, 3f);
+                _orbMaterial.SetInt(SrcBlendId, 5);
+                _orbMaterial.SetInt(DstBlendId, 10);
+                _orbMaterial.SetInt(ZWriteId, 0);
+                _orbMaterial.EnableKeyword("_ALPHABLEND_ON");
+            }
+
+            _orbMaterial.renderQueue = 3000;
+            _orbMaterial.SetFloat(SmoothnessId, 0.8f);
+            _orbMaterial.EnableKeyword("_EMISSION");
+            rend.material = _orbMaterial;
+        }
 
         public void ServerInitialize(Vector3 spawnPosition)
         {
@@ -53,7 +139,6 @@ namespace FriendSlop.Hazards
         public void ServerReset()
         {
             if (!IsServer || !_initialized) return;
-            _nextAttackTime = 0f;
             _wanderPauseTimer = Random.Range(wanderPauseMin, wanderPauseMax);
             var world = SphereWorld.GetClosest(_spawnPosition);
             if (world != null)
@@ -62,6 +147,8 @@ namespace FriendSlop.Hazards
 
         private void Update()
         {
+            UpdateVisuals();
+
             if (!IsServer || !_initialized) return;
 
             var world = SphereWorld.GetClosest(transform.position);
@@ -79,28 +166,26 @@ namespace FriendSlop.Hazards
 
             if (roundActive)
             {
-                switch (anomalyType)
+                switch (movement)
                 {
-                    case AnomalyType.Friendly:
-                        UpdateFriendly(world);
+                    case AnomalyMovement.ChaseHostile:
+                        UpdateChaseHostile(world);
                         break;
-                    case AnomalyType.Hostile:
-                        UpdateHostile(world);
+                    case AnomalyMovement.ChaseFriendly:
+                        UpdateChaseFriendly(world);
                         break;
-                    case AnomalyType.NeutralWandering:
+                    case AnomalyMovement.Wander:
                         UpdateWander(world);
                         break;
-                    case AnomalyType.ElectricHostile:
-                        UpdateElectric(world);
-                        break;
-                    // NeutralStationary: no movement, only hover
+                    // Stationary: hover only
                 }
 
-                var contacted = CheckPlayerContact();
+                var contacted = CheckPlayerContact(world);
                 if (contacted != null)
                 {
-                    if (anomalyType == AnomalyType.Friendly)
-                        contacted.ServerHeal(healAmount);
+                    if (healOnContact)   contacted.ServerHeal(healAmount);
+                    if (damageOnContact) contacted.ServerTakeDamage(contactDamage);
+                    if (stunOnContact)   contacted.StunClientRpc(stunDuration, Vector3.zero);
                     NetworkObject.Despawn();
                     return;
                 }
@@ -109,44 +194,47 @@ namespace FriendSlop.Hazards
             ApplyHover(world);
         }
 
-        private void UpdateFriendly(SphereWorld world)
+        private void UpdateVisuals()
         {
-            var target = FindNearestVisiblePlayer();
+            if (_orbMaterial == null) return;
+            var pulse = (Mathf.Sin(Time.time * glowPulseSpeed + _bobPhaseOffset) + 1f) * 0.5f;
+            var alpha = Mathf.Lerp(minAlpha, maxAlpha, pulse);
+            var glow  = Mathf.Lerp(minGlow, maxGlow, pulse);
+            var c = new Color(orbColor.r, orbColor.g, orbColor.b, alpha);
+            _orbMaterial.SetColor(BaseColorId, c);
+            _orbMaterial.SetColor(ColorId, c);
+            _orbMaterial.SetColor(EmissionColorId, orbColor * glow);
+        }
+
+        // Throttled target lookup. Re-uses last result for ~100ms; gameplay-imperceptible
+        // but cuts the linecast-per-player cost from 60Hz to 10Hz.
+        private NetworkFirstPersonController GetChaseTarget()
+        {
+            if (Time.time >= _nextTargetSearchTime
+                || _cachedTarget == null
+                || !_cachedTarget.IsSpawned
+                || _cachedTarget.IsDead)
+            {
+                _nextTargetSearchTime = Time.time + TargetSearchInterval;
+                _cachedTarget = FindNearestVisiblePlayer();
+            }
+            return _cachedTarget;
+        }
+
+        private void UpdateChaseHostile(SphereWorld world)
+        {
+            var target = GetChaseTarget();
+            if (target == null) return;
+            MoveHorizontallyToward(world, target.transform.position);
+        }
+
+        private void UpdateChaseFriendly(SphereWorld world)
+        {
+            var target = GetChaseTarget();
             if (target == null) return;
             var dist = Vector3.Distance(transform.position, target.transform.position);
-            if (dist > friendlyStopDistance + 0.3f)
+            if (dist > contactRange + 0.3f)
                 MoveHorizontallyToward(world, target.transform.position);
-        }
-
-        private void UpdateHostile(SphereWorld world)
-        {
-            var target = FindNearestVisiblePlayer();
-            if (target == null) return;
-
-            MoveHorizontallyToward(world, target.transform.position);
-
-            var dist = Vector3.Distance(transform.position, target.transform.position);
-            if (dist <= hostileContactRange && Time.time >= _nextAttackTime && !target.IsDead)
-            {
-                _nextAttackTime = Time.time + hostileAttackCooldown;
-                target.ServerTakeDamage(hostileDamage);
-            }
-        }
-
-        private void UpdateElectric(SphereWorld world)
-        {
-            var target = FindNearestVisiblePlayer();
-            if (target == null) return;
-
-            MoveHorizontallyToward(world, target.transform.position);
-
-            var dist = Vector3.Distance(transform.position, target.transform.position);
-            if (dist <= hostileContactRange && Time.time >= _nextAttackTime && !target.IsDead)
-            {
-                _nextAttackTime = Time.time + shockCooldown;
-                target.ServerTakeDamage(shockDamage);
-                target.StunClientRpc(shockStunDuration, Vector3.zero);
-            }
         }
 
         private void UpdateWander(SphereWorld world)
@@ -183,18 +271,19 @@ namespace FriendSlop.Hazards
             transform.position = world.GetSurfacePoint(up, hoverHeight + bob);
         }
 
-        private NetworkFirstPersonController CheckPlayerContact()
+        private NetworkFirstPersonController CheckPlayerContact(SphereWorld world)
         {
-            var range = anomalyType == AnomalyType.Friendly ? friendlyStopDistance : hostileContactRange;
+            var up = world != null ? world.GetUp(transform.position) : Vector3.up;
             NetworkFirstPersonController closest = null;
             var closestDist = float.MaxValue;
+            var contactSqr = contactRange * contactRange;
             foreach (var player in NetworkFirstPersonController.ActivePlayers)
             {
                 if (player == null || !player.IsSpawned || player.IsDead) continue;
-                var dist = Vector3.Distance(transform.position, player.transform.position);
-                if (dist <= range && dist < closestDist)
+                var horizontalSqr = Vector3.ProjectOnPlane(player.transform.position - transform.position, up).sqrMagnitude;
+                if (horizontalSqr <= contactSqr && horizontalSqr < closestDist)
                 {
-                    closestDist = dist;
+                    closestDist = horizontalSqr;
                     closest = player;
                 }
             }
@@ -205,7 +294,6 @@ namespace FriendSlop.Hazards
         {
             NetworkFirstPersonController best = null;
             var bestDistSq = detectionRange * detectionRange;
-
             foreach (var player in NetworkFirstPersonController.ActivePlayers)
             {
                 if (player == null || !player.IsSpawned || player.IsDead) continue;
@@ -215,7 +303,6 @@ namespace FriendSlop.Hazards
                 bestDistSq = distSq;
                 best = player;
             }
-
             return best;
         }
 

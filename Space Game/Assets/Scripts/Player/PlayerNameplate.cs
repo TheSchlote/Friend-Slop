@@ -60,12 +60,16 @@ namespace FriendSlop.Player
                 return;
             }
 
-            var distance = Vector3.Distance(transform.position, localPlayer.transform.position);
-            if (distance > visibilityDistance)
+            var sqrDist = (transform.position - localPlayer.transform.position).sqrMagnitude;
+            var visibilityDistanceSqr = visibilityDistance * visibilityDistance;
+            if (sqrDist > visibilityDistanceSqr)
             {
                 nameplateRoot.SetActive(false);
                 return;
             }
+
+            // Distant nameplates short-circuited above; only pay sqrt when actually visible.
+            var distance = Mathf.Sqrt(sqrDist);
 
             nameplateRoot.SetActive(true);
 

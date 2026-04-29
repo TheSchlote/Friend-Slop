@@ -120,6 +120,7 @@ namespace FriendSlop.Player
         private float _currentBodyHeight;
         private Vector3 _baseCameraLocalPos;
         private NetworkFirstPersonController _heldPlayer;
+        private int _heldPlayerCacheFrame = -1;
         private string _displayName = string.Empty;
         private bool _subscribedToRoundPhase;
 
@@ -160,6 +161,13 @@ namespace FriendSlop.Player
 
         private NetworkFirstPersonController ResolveHeldPlayer()
         {
+            // Cached for one frame: HasHeldPlayer + HeldPlayer get hit multiple times per
+            // frame from different sites (interactor focus, carry pose, etc.) and the slow
+            // path here scans every active player.
+            if (_heldPlayerCacheFrame == Time.frameCount)
+                return _heldPlayer;
+            _heldPlayerCacheFrame = Time.frameCount;
+
             if (_heldPlayer != null
                 && _heldPlayer.IsSpawned
                 && _heldPlayer.IsBeingCarried.Value

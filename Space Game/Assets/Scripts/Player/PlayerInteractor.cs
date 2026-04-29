@@ -285,19 +285,37 @@ namespace FriendSlop.Player
         private void UpdateHeldItemPose(NetworkLootItem heldItem)
         {
             var cameraTransform = controller.PlayerCamera.transform;
-            var distance = heldItem.CarryDistance;
             var up = FlatGravityVolume.GetGravityUp(cameraTransform.position);
-            var targetPosition = cameraTransform.position + cameraTransform.forward * distance + (-up) * 0.15f;
-            var carriedForward = Vector3.ProjectOnPlane(cameraTransform.forward, up);
-            if (carriedForward.sqrMagnitude < 0.001f)
-                carriedForward = Vector3.ProjectOnPlane(cameraTransform.up, up);
-            if (carriedForward.sqrMagnitude < 0.001f)
-                carriedForward = Vector3.ProjectOnPlane(transform.forward, up);
-            if (carriedForward.sqrMagnitude < 0.001f)
-                carriedForward = Vector3.Cross(up, Vector3.right);
-            if (carriedForward.sqrMagnitude < 0.001f)
-                carriedForward = Vector3.Cross(up, Vector3.forward);
-            var targetRotation = Quaternion.LookRotation(carriedForward.normalized, up);
+            Vector3 targetPosition;
+            Quaternion targetRotation;
+
+            if (heldItem is LaserGun)
+            {
+                // Lower-right gun hold; Euler(90) around X rotates the capsule's Y-axis (long axis)
+                // to point forward, so the barrel faces where the player is looking.
+                targetPosition = cameraTransform.position
+                    + cameraTransform.forward * 1.2f
+                    + cameraTransform.right * 0.3f
+                    - cameraTransform.up * 0.25f;
+                targetRotation = Quaternion.LookRotation(cameraTransform.forward, up)
+                    * Quaternion.Euler(90f, 0f, 0f);
+            }
+            else
+            {
+                var distance = heldItem.CarryDistance;
+                targetPosition = cameraTransform.position + cameraTransform.forward * distance + (-up) * 0.15f;
+                var carriedForward = Vector3.ProjectOnPlane(cameraTransform.forward, up);
+                if (carriedForward.sqrMagnitude < 0.001f)
+                    carriedForward = Vector3.ProjectOnPlane(cameraTransform.up, up);
+                if (carriedForward.sqrMagnitude < 0.001f)
+                    carriedForward = Vector3.ProjectOnPlane(transform.forward, up);
+                if (carriedForward.sqrMagnitude < 0.001f)
+                    carriedForward = Vector3.Cross(up, Vector3.right);
+                if (carriedForward.sqrMagnitude < 0.001f)
+                    carriedForward = Vector3.Cross(up, Vector3.forward);
+                targetRotation = Quaternion.LookRotation(carriedForward.normalized, up);
+            }
+
             heldItem.PreviewCarriedPose(targetPosition, targetRotation);
             if (!CarrySyncUtility.ShouldSendPose(
                     _hasCarrySyncPose,

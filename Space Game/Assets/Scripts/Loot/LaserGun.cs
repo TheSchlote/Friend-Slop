@@ -1,4 +1,4 @@
-using FriendSlop.Core;
+using System.Collections;
 using FriendSlop.Hazards;
 using FriendSlop.Player;
 using FriendSlop.Round;
@@ -18,11 +18,32 @@ namespace FriendSlop.Loot
 
         private NetworkVariable<int> _ammo = new(0);
         private float _nextFireTime;
+        private LineRenderer _laserLine;
+        private Coroutine _hideLaserCoroutine;
+
+        // Shader.Find is a registry string lookup — cache once across all guns.
+        private static Shader _cachedLaserShader;
 
         public bool CanFireNow => Time.time >= _nextFireTime && _ammo.Value > 0;
         public float CooldownRemaining => Mathf.Max(0f, _nextFireTime - Time.time);
         public int Ammo => _ammo.Value;
         public int MaxAmmo => maxAmmo;
+
+        private void Start()
+        {
+            _laserLine = gameObject.AddComponent<LineRenderer>();
+            _laserLine.positionCount = 2;
+            _laserLine.startWidth = 0.04f;
+            _laserLine.endWidth = 0.01f;
+            _laserLine.useWorldSpace = true;
+            _laserLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _laserLine.receiveShadows = false;
+            _laserLine.startColor = Color.red;
+            _laserLine.endColor = new Color(1f, 0.2f, 0.2f, 0f);
+            if (_cachedLaserShader == null) _cachedLaserShader = Shader.Find("Sprites/Default");
+            _laserLine.material = new Material(_cachedLaserShader);
+            _laserLine.enabled = false;
+        }
 
         public override void OnNetworkSpawn()
         {
@@ -73,21 +94,42 @@ namespace FriendSlop.Loot
 
             _ammo.Value--;
 
-            if (!Physics.Raycast(origin, direction, out var hit, range, fireMask, QueryTriggerInteraction.Ignore))
-                return;
-
-            if (hit.collider == null) return;
-
-            var targetPlayer = hit.collider.GetComponentInParent<NetworkFirstPersonController>();
-            if (targetPlayer != null && targetPlayer != shooter && !targetPlayer.IsDead)
+            var endpoint = origin + direction * range;
+            if (Physics.Raycast(origin, direction, out var hit, range, fireMask, QueryTriggerInteraction.Ignore) && hit.collider != null)
             {
-                targetPlayer.ServerTakeDamage(damage);
-                return;
+                endpoint = hit.point;
+
+                var targetPlayer = hit.collider.GetComponentInParent<NetworkFirstPersonController>();
+                if (targetPlayer != null && targetPlayer != shooter && !targetPlayer.IsDead)
+                {
+                    targetPlayer.ServerTakeDamage(damage);
+                }
+                else
+                {
+                    var monster = hit.collider.GetComponentInParent<RoamingMonster>();
+                    if (monster != null)
+                        monster.ServerTakeDamage(monsterDamage);
+                }
             }
 
-            var monster = hit.collider.GetComponentInParent<RoamingMonster>();
-            if (monster != null)
-                monster.ServerTakeDamage(monsterDamage);
+            ShowLaserClientRpc(origin, endpoint);
+        }
+
+        [Rpc(SendTo.Everyone)]
+        private void ShowLaserClientRpc(Vector3 from, Vector3 to)
+        {
+            if (_laserLine == null) return;
+            _laserLine.SetPosition(0, from);
+            _laserLine.SetPosition(1, to);
+            _laserLine.enabled = true;
+            if (_hideLaserCoroutine != null) StopCoroutine(_hideLaserCoroutine);
+            _hideLaserCoroutine = StartCoroutine(HideLaserAfterDelay());
+        }
+
+        private IEnumerator HideLaserAfterDelay()
+        {
+            yield return new WaitForSeconds(0.12f);
+            if (_laserLine != null) _laserLine.enabled = false;
         }
     }
 }

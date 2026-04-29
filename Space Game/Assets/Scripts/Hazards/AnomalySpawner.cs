@@ -44,9 +44,9 @@ namespace FriendSlop.Hazards
             if (anomalyPrefabs.Length == 0) return;
 
             var liveCount = 0;
-            foreach (var orb in _activeOrbs)
+            foreach (var active in _activeOrbs)
             {
-                if (orb != null && orb.IsSpawned) liveCount++;
+                if (active != null && active.IsSpawned) liveCount++;
             }
             if (liveCount >= maxOrbs) return;
 
