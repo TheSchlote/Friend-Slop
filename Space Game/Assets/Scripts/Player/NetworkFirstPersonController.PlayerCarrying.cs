@@ -1,3 +1,4 @@
+using FriendSlop.Round;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -12,6 +13,7 @@ namespace FriendSlop.Player
     {
         [Header("Player Carrying")]
         [SerializeField] private float carryPlayerSpeedMultiplier = 0.7f;
+        private const float ServerPlayerPickupMaxDistance = 4.5f;
 
         public NetworkVariable<bool> IsBeingCarried = new(false);
         public NetworkVariable<ulong> CarriedByClientId = new(ulong.MaxValue);
@@ -57,14 +59,57 @@ namespace FriendSlop.Player
         {
             var carrierId = rpcParams.Receive.SenderClientId;
             var carrier = FindByClientId(carrierId);
-            if (carrier == null || carrier.HeldItem != null || carrier.HasHeldPlayer) return;
-            if (IsBeingCarried.Value || carrier.IsDead) return;
+            if (carrier == null || carrier == this || !carrier.IsSpawned || !IsSpawned) return;
+            if (carrier.HeldItem != null || carrier.HasHeldPlayer) return;
+            if (IsBeingCarried.Value || carrier.IsBeingCarried.Value || carrier.IsDead) return;
+            var round = RoundManager.Instance;
+            if (round == null || round.Phase.Value != RoundPhase.Active) return;
+            if (!CanServerReachForPickup(carrier, this, ServerPlayerPickupMaxDistance)) return;
             if (IsAncestorInCarrierChain(carrier)) return;
 
             IsBeingCarried.Value = true;
             CarriedByClientId.Value = carrierId;
             carrier.SetHeldPlayer(this);
             BeginCarriedClientRpc();
+        }
+
+        private static bool CanServerReachForPickup(
+            NetworkFirstPersonController carrier,
+            NetworkFirstPersonController target,
+            float maxDistance)
+        {
+            var origin = GetServerInteractionPoint(carrier);
+            var targetPoint = GetServerInteractionPoint(target);
+            if ((targetPoint - origin).sqrMagnitude > maxDistance * maxDistance)
+                return false;
+
+            return HasClearInteractionLine(carrier.transform.root, origin, target.transform.root, targetPoint);
+        }
+
+        private static Vector3 GetServerInteractionPoint(NetworkFirstPersonController player)
+        {
+            if (player.PlayerCamera != null)
+                return player.PlayerCamera.transform.position;
+            return player.transform.position + player.transform.up * 1.1f;
+        }
+
+        private static bool HasClearInteractionLine(Transform sourceRoot, Vector3 origin, Transform targetRoot, Vector3 target)
+        {
+            var offset = target - origin;
+            var distance = offset.magnitude;
+            if (distance <= 0.01f) return true;
+
+            var hits = Physics.RaycastAll(origin, offset / distance, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (var i = 0; i < hits.Length; i++)
+            {
+                var hitTransform = hits[i].collider != null ? hits[i].collider.transform : null;
+                if (hitTransform == null) continue;
+                var hitRoot = hitTransform.root;
+                if (hitRoot == sourceRoot || hitRoot == targetRoot) continue;
+                return false;
+            }
+
+            return true;
         }
 
         // Returns true if 'this' is somewhere above 'picker' in the carrier chain,

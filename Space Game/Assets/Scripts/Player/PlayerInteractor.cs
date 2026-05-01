@@ -37,6 +37,22 @@ namespace FriendSlop.Player
         public float ChargePercent => _isCharging ? Mathf.Clamp01((Time.time - _chargeStartTime) / maxChargeDuration) : 0f;
         public bool IsCharging => _isCharging;
 
+        // Deposit-hold state. Players press F to deposit the active item; for non-objective
+        // items the hold has to last DepositHoldSeconds before the RPC fires. Cancel
+        // conditions: F released, player leaves the zone, item swapped, dropped, or carried.
+        private float _depositHoldStartTime = -1f;
+        private NetworkLootItem _depositHoldItem;
+        public float DepositHoldPercent
+        {
+            get
+            {
+                if (_depositHoldItem == null || _depositHoldItem.DepositHoldSeconds <= 0f) return 0f;
+                if (_depositHoldStartTime < 0f) return 0f;
+                return Mathf.Clamp01((Time.time - _depositHoldStartTime) / _depositHoldItem.DepositHoldSeconds);
+            }
+        }
+        public bool IsDepositHolding => _depositHoldStartTime >= 0f && _depositHoldItem != null;
+
         private void Awake()
         {
             controller = GetComponent<NetworkFirstPersonController>();
@@ -68,6 +84,7 @@ namespace FriendSlop.Player
 
             HandleCarryInput(keyboard, mouse);
             HandleInventorySlotInput(keyboard);
+            HandleDepositInput(keyboard);
 
             if (keyboard.eKey.wasPressedThisFrame)
             {
@@ -76,6 +93,67 @@ namespace FriendSlop.Player
                 else if (focusedPlayer != null)
                     focusedPlayer.RequestPickupByPlayerServerRpc();
             }
+        }
+
+        private void HandleDepositInput(Keyboard keyboard)
+        {
+            var activeItem = controller.HeldItem;
+            var hasActiveItem = activeItem != null && activeItem.IsHeldBy(OwnerClientId);
+
+            if (!hasActiveItem)
+            {
+                CancelDepositHold();
+                return;
+            }
+
+            // Re-evaluate the surface every frame so walking out of the zone cancels
+            // the hold immediately, no matter the cause (player teleport, zone disable).
+            var surface = ItemDepositSurface.FindFor(controller, activeItem);
+            if (surface == null)
+            {
+                CancelDepositHold();
+                return;
+            }
+
+            // Item swap mid-hold: treat as a new deposit attempt instead of awarding the
+            // old item's progress to the new one.
+            if (_depositHoldItem != null && _depositHoldItem != activeItem)
+                CancelDepositHold();
+
+            var holdSeconds = activeItem.DepositHoldSeconds;
+
+            if (keyboard.fKey.wasPressedThisFrame)
+            {
+                if (holdSeconds <= 0f)
+                {
+                    activeItem.RequestDepositServerRpc();
+                    CancelDepositHold();
+                    return;
+                }
+
+                _depositHoldStartTime = Time.time;
+                _depositHoldItem = activeItem;
+                return;
+            }
+
+            if (!keyboard.fKey.isPressed)
+            {
+                CancelDepositHold();
+                return;
+            }
+
+            // F is held: tick the timer and fire when complete.
+            if (_depositHoldItem == null) return;
+            if (Time.time - _depositHoldStartTime < holdSeconds) return;
+
+            activeItem.RequestDepositServerRpc();
+            CancelDepositHold();
+        }
+
+        private void CancelDepositHold()
+        {
+            _depositHoldStartTime = -1f;
+            _depositHoldItem = null;
         }
 
         private void HandleInventorySlotInput(Keyboard keyboard)
@@ -258,6 +336,14 @@ namespace FriendSlop.Player
         {
             if (!hasHeldItem && !hasHeldPlayer) return;
 
+            // Standing in a matching deposit surface trumps the default carry prompt -
+            // the deposit action is the most useful thing the player can do in that moment.
+            if (hasHeldItem && TryBuildDepositPrompt(out var depositPrompt))
+            {
+                CurrentPrompt = depositPrompt;
+                return;
+            }
+
             if (hasHeldItem && controller.HeldItem is BoxingGloves gloves)
             {
                 CurrentPrompt = gloves.CanPunchNow
@@ -280,6 +366,34 @@ namespace FriendSlop.Player
             CurrentPrompt = _isCharging
                 ? $"[{Mathf.RoundToInt(ChargePercent * 100f)}%] release to throw  |  Q drop"
                 : "Q drop  |  Hold Right Mouse to charge throw";
+        }
+
+        private bool TryBuildDepositPrompt(out string prompt)
+        {
+            prompt = string.Empty;
+            var item = controller.HeldItem;
+            if (item == null || !item.IsHeldBy(OwnerClientId)) return false;
+
+            var surface = ItemDepositSurface.FindFor(controller, item);
+            if (surface == null) return false;
+
+            var holdSeconds = item.DepositHoldSeconds;
+            var label = string.IsNullOrEmpty(surface.DepositLabel) ? "deposit" : surface.DepositLabel;
+
+            if (holdSeconds <= 0f)
+            {
+                prompt = $"F {label} {item.ItemName}  |  Q drop";
+                return true;
+            }
+
+            if (IsDepositHolding && _depositHoldItem == item)
+            {
+                prompt = $"[{Mathf.RoundToInt(DepositHoldPercent * 100f)}%] hold F to {label}  |  Q drop";
+                return true;
+            }
+
+            prompt = $"Hold F to {label} {item.ItemName} ({holdSeconds:0.#}s)  |  Q drop";
+            return true;
         }
 
         private void UpdateHeldItemPose(NetworkLootItem heldItem)

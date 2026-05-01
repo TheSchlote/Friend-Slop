@@ -20,10 +20,11 @@ namespace FriendSlop.Loot
 
         // Per-client cooldown — not networked, applied immediately on the owner
         // when they fire a punch so the button can't be spammed before the RPC round-trips.
-        private float _nextPunchTime;
+        private float _nextLocalPunchTime;
+        private float _nextServerPunchTime;
 
-        public bool CanPunchNow => Time.time >= _nextPunchTime;
-        public float CooldownRemaining => Mathf.Max(0f, _nextPunchTime - Time.time);
+        public bool CanPunchNow => Time.time >= _nextLocalPunchTime;
+        public float CooldownRemaining => Mathf.Max(0f, _nextLocalPunchTime - Time.time);
 
         public override string GetPrompt(NetworkFirstPersonController player)
         {
@@ -40,7 +41,7 @@ namespace FriendSlop.Loot
         // button feel is instant without waiting for a server round-trip.
         public void StartLocalCooldown()
         {
-            _nextPunchTime = Time.time + punchCooldown;
+            _nextLocalPunchTime = Time.time + punchCooldown;
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -50,6 +51,7 @@ namespace FriendSlop.Loot
             var attacker = NetworkFirstPersonController.FindByClientId(attackerId);
             if (attacker == null || attacker.IsDead || !IsHeldBy(attackerId)) return;
             if (RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active) return;
+            if (Time.time < _nextServerPunchTime) return;
 
             // Clamp the RPC origin so a modified client can't reach across the map.
             if (Vector3.SqrMagnitude(origin - attacker.transform.position) > 9f)
@@ -58,6 +60,7 @@ namespace FriendSlop.Loot
             direction = direction.normalized;
             if (direction.sqrMagnitude < 0.5f) return;
 
+            _nextServerPunchTime = Time.time + punchCooldown;
             if (!Physics.SphereCast(origin, punchRadius, direction, out var hit,
                     punchRange, punchMask, QueryTriggerInteraction.Ignore))
                 return;

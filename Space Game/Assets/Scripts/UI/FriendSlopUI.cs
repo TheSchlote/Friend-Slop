@@ -75,6 +75,10 @@ namespace FriendSlop.UI
         private Image _fadeOverlayImage;
         private float _fadeAlpha;
         private const float FadeSpeed = 2.2f;
+        private float _teleporterFlashStartTime = -1f;
+        private const float TeleporterFlashAttackSeconds = 0.06f;
+        private const float TeleporterFlashHoldSeconds = 0.05f;
+        private const float TeleporterFlashReleaseSeconds = 0.32f;
 
         // ── Charge bar ────────────────────────────────────────────────────────
         private RectTransform chargePanelRect;
@@ -160,6 +164,7 @@ namespace FriendSlop.UI
             NetworkFirstPersonController.LocalPlayerDamaged += HandleLocalPlayerDamaged;
             NetworkFirstPersonController.LocalPlayerJoinedActiveRound += HandleLocalPlayerJoinedActiveRound;
             NetworkFirstPersonController.ChatMessageReceived += OnChatMessageReceived;
+            RoundManager.LocalTeleporterFlashRequested += HandleTeleporterFlashRequested;
         }
 
         private void OnDisable()
@@ -168,6 +173,7 @@ namespace FriendSlop.UI
             NetworkFirstPersonController.LocalPlayerDamaged -= HandleLocalPlayerDamaged;
             NetworkFirstPersonController.LocalPlayerJoinedActiveRound -= HandleLocalPlayerJoinedActiveRound;
             NetworkFirstPersonController.ChatMessageReceived -= OnChatMessageReceived;
+            RoundManager.LocalTeleporterFlashRequested -= HandleTeleporterFlashRequested;
             _chatInputFocused = false;
 
             // Only clear if we're the registered provider; if a fresh UI instance has already
@@ -179,6 +185,7 @@ namespace FriendSlop.UI
         private void HandleSessionEnded() => UnlockMenuCursor();
         private void HandleLocalPlayerDamaged() => ShowDamageFlash();
         private void HandleLocalPlayerJoinedActiveRound() => ShowLateJoinLoading();
+        private void HandleTeleporterFlashRequested() => RequestTeleporterFlash();
 
         // ── Update ────────────────────────────────────────────────────────────
 

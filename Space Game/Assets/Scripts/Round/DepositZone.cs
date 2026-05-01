@@ -1,39 +1,64 @@
+using System.Collections.Generic;
 using FriendSlop.Loot;
+using FriendSlop.Player;
 using Unity.Netcode;
 using UnityEngine;
 
 namespace FriendSlop.Round
 {
     [RequireComponent(typeof(Collider))]
-    public class DepositZone : NetworkBehaviour
+    public class DepositZone : NetworkBehaviour, IItemDepositSurface
     {
+        // Tracks which players are currently standing in the trigger so PlayerInteractor
+        // can offer the F-deposit prompt without re-querying physics overlap each frame.
+        private readonly HashSet<ulong> playersInside = new();
+
+        public string DepositLabel => "deposit";
+
         private void Reset()
         {
             GetComponent<Collider>().isTrigger = true;
         }
 
+        private void OnEnable()
+        {
+            ItemDepositSurface.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            ItemDepositSurface.Unregister(this);
+            playersInside.Clear();
+        }
+
         private void OnTriggerEnter(Collider other)
         {
-            TryDeposit(other);
+            var player = other.GetComponentInParent<NetworkFirstPersonController>();
+            if (player != null) playersInside.Add(player.OwnerClientId);
         }
 
-        private void OnTriggerStay(Collider other)
+        private void OnTriggerExit(Collider other)
         {
-            TryDeposit(other);
+            var player = other.GetComponentInParent<NetworkFirstPersonController>();
+            if (player != null) playersInside.Remove(player.OwnerClientId);
         }
 
-        private void TryDeposit(Collider other)
+        public bool ContainsPlayer(NetworkFirstPersonController player)
         {
-            if (!IsServer || RoundManager.Instance == null)
-            {
-                return;
-            }
+            return player != null && playersInside.Contains(player.OwnerClientId);
+        }
 
-            var loot = other.GetComponentInParent<NetworkLootItem>();
-            if (loot != null)
-            {
-                RoundManager.Instance.ServerDepositLoot(loot);
-            }
+        public bool Accepts(NetworkLootItem item)
+        {
+            // Junk loot only - ship parts have to go to the launchpad to satisfy the
+            // assembly objective.
+            return item != null && !item.IsShipPart;
+        }
+
+        public void ServerSubmit(NetworkLootItem item)
+        {
+            if (!IsServer || RoundManager.Instance == null) return;
+            RoundManager.Instance.ServerDepositLoot(item);
         }
     }
 }

@@ -133,7 +133,14 @@ namespace FriendSlop.Hazards
 
             var world = SphereWorld.GetClosest(spawnPosition);
             if (world != null)
+            {
                 transform.position = world.GetSurfacePoint(world.GetUp(spawnPosition), hoverHeight);
+                PickWanderTarget(world);
+            }
+            else
+            {
+                _wanderTarget = _spawnPosition;
+            }
         }
 
         public void ServerReset()
@@ -142,7 +149,14 @@ namespace FriendSlop.Hazards
             _wanderPauseTimer = Random.Range(wanderPauseMin, wanderPauseMax);
             var world = SphereWorld.GetClosest(_spawnPosition);
             if (world != null)
+            {
                 transform.position = world.GetSurfacePoint(world.GetUp(_spawnPosition), hoverHeight);
+                PickWanderTarget(world);
+            }
+            else
+            {
+                _wanderTarget = _spawnPosition;
+            }
         }
 
         private void Update()

@@ -27,8 +27,9 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsNotNull(NetworkSessionManager.Instance, "NetworkSessionManager should exist in the prototype scene.");
             Assert.IsNotNull(FriendSlopUI.Instance, "FriendSlopUI should exist in the prototype scene.");
             Assert.IsNotNull(Object.FindAnyObjectByType<PrototypeNetworkBootstrapper>(), "Prototype bootstrapper should exist in the prototype scene.");
-            AssertLaunchpadLayout();
-            AssertShipPartSpawnPointsAreNearLaunchpadHemisphere();
+            // Tier 1 launchpad / ship-part assertions used to live here, but the planet now
+            // ships in its own additively-loaded scene. They run after host start, once the
+            // server has triggered the Planet_StarterJunk additive load.
             AssertShipInteriorLayout();
 
             yield return StartLocalHostAndWaitForRoundManager();
@@ -41,6 +42,16 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsFalse(FriendSlopUI.BlocksGameplayInput, "The ship lobby should be walkable without opening the session menu.");
             Assert.AreEqual(1, Object.FindObjectsByType<RoundManager>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
                 "Only one RoundManager should exist while the host is running.");
+
+            // Active planet scene loads asynchronously after RoundManager spawns, and the
+            // bootstrapper waits for that env before placing loot/monsters. Both must
+            // complete before the legacy Tier-1 layout assertions below have something to
+            // find.
+            yield return WaitForActivePlanetSceneLoaded();
+            yield return WaitForActivePlanetSpawnsPopulated();
+
+            AssertLaunchpadLayout();
+            AssertShipPartSpawnPointsAreNearLaunchpadHemisphere();
 
             var firstLootCount = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
             var firstMonsterCount = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
@@ -69,6 +80,8 @@ namespace FriendSlop.Tests.PlayMode
             yield return StartLocalClientAndCancel();
 
             yield return StartLocalHostAndWaitForRoundManager();
+            yield return WaitForActivePlanetSceneLoaded();
+            yield return WaitForActivePlanetSpawnsPopulated();
 
             Assert.IsTrue(NetworkManager.Singleton.IsListening, "The host should be able to restart in the same scene.");
             Assert.IsFalse(FriendSlopUI.BlocksGameplayInput, "The restarted ship lobby should stay walkable.");
@@ -80,6 +93,45 @@ namespace FriendSlop.Tests.PlayMode
                 "Restarting the host should respawn the same amount of monsters without duplicates.");
 
             yield return ShutdownAndWaitForSessionCleanup();
+        }
+
+        // Polls until the active planet's PlanetEnvironment is registered. Pre-split this
+        // would already be sitting in the prototype scene at scene load time, so the wait
+        // returns on frame 0; post-split it covers the additive load Netcode kicks off when
+        // RoundManager spawns.
+        private static IEnumerator WaitForActivePlanetSceneLoaded()
+        {
+            for (var frame = 0; frame < 600; frame++)
+            {
+                if (HasActivePlanetEnvironment()) yield break;
+                yield return null;
+            }
+            Assert.Fail("Active planet PlanetEnvironment should register within a few seconds of host start.");
+        }
+
+        // Bootstrapper defers loot/monster spawn until the active planet's env carries
+        // anchors. With additive scene loads the env appears a frame or two after the
+        // scene loads, so we poll for a non-zero count rather than asserting immediately.
+        private static IEnumerator WaitForActivePlanetSpawnsPopulated()
+        {
+            for (var frame = 0; frame < 600; frame++)
+            {
+                var lootCount = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+                var monsterCount = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+                if (lootCount > 0 && monsterCount > 0) yield break;
+                yield return null;
+            }
+            Assert.Fail("Bootstrapper should spawn loot and monsters once the active planet env registers.");
+        }
+
+        private static bool HasActivePlanetEnvironment()
+        {
+            var rm = RoundManager.Instance;
+            if (rm == null) return false;
+            var planet = rm.CurrentPlanet;
+            if (planet == null) return false;
+            var env = PlanetEnvironment.FindFor(planet);
+            return env != null && env.gameObject.activeInHierarchy;
         }
 
         private static IEnumerator LoadPrototypeScene()

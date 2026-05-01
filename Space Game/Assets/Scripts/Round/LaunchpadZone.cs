@@ -6,24 +6,30 @@ using UnityEngine;
 
 namespace FriendSlop.Round
 {
-    public class LaunchpadZone : MonoBehaviour
+    public class LaunchpadZone : MonoBehaviour, IItemDepositSurface
     {
         [SerializeField] private float submitRadius = 3f;
         [SerializeField] private float submitHeight = 4f;
 
         private readonly HashSet<ulong> playersInsideSubmitArea = new();
         private readonly List<ulong> stalePlayerIds = new();
-        private NetworkLootItem[] cachedLootItems;
-        private float nextLootCacheTime;
         private RoundManager _subscribedRoundManager;
+
+        public string DepositLabel => "deposit at launchpad";
 
         private void Awake()
         {
             RemoveOwnCollider();
         }
 
-        private void OnDestroy()
+        private void OnEnable()
         {
+            ItemDepositSurface.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            ItemDepositSurface.Unregister(this);
             UnsubscribeFromRoundManager();
         }
 
@@ -43,10 +49,9 @@ namespace FriendSlop.Round
             _subscribedRoundManager = null;
         }
 
-        // When a new round begins the server clears its boardedPlayerIds set (RoundManager.ServerStartRound).
-        // Players who stayed on the pad across round transitions were already in our local
-        // playersInsideSubmitArea, so Add() returns false and ServerPlayerBoarded is never
-        // re-called for them. Clearing here forces a full re-sync on the next FixedUpdate.
+        // RoundManager clears its boarded set when loading a new round. Players can stay
+        // physically on the pad across that transition, so clear our cache and let the next
+        // server tick report them again.
         private void OnRoundPhaseChanged(RoundPhase previous, RoundPhase current)
         {
             if (current == RoundPhase.Loading)
@@ -103,10 +108,11 @@ namespace FriendSlop.Round
                 return;
             }
 
+            // Auto-submission was removed - players now press F to deposit. Only the
+            // boarding-presence sync still needs server-side polling, since the launch
+            // condition depends on knowing which players are standing on the pad.
             TrySubscribeToRoundManager();
             SyncBoardedPlayers();
-            TrySubmitLooseItems();
-            TrySubmitHeldItems();
         }
 
         private void SyncBoardedPlayers()
@@ -151,41 +157,23 @@ namespace FriendSlop.Round
             }
         }
 
-        private void TrySubmitLooseItems()
+        public bool ContainsPlayer(NetworkFirstPersonController player)
         {
-            if (Time.time >= nextLootCacheTime || cachedLootItems == null)
-            {
-                cachedLootItems = FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-                nextLootCacheTime = Time.time + 0.5f;
-            }
-
-            foreach (var loot in cachedLootItems)
-            {
-                if (loot == null || loot.IsDeposited.Value || loot.IsCarried.Value || !IsPointInsideSubmitArea(loot.transform.position))
-                {
-                    continue;
-                }
-
-                RoundManager.Instance.ServerSubmitToLaunchpad(loot);
-            }
+            return player != null && IsPointInsideSubmitArea(player.transform.position);
         }
 
-        private void TrySubmitHeldItems()
+        public bool Accepts(NetworkLootItem item)
         {
-            foreach (var player in NetworkFirstPersonController.ActivePlayers)
-            {
-                if (player == null || !IsPointInsideSubmitArea(player.transform.position))
-                {
-                    continue;
-                }
+            // Launchpad is the catch-all: ship parts are required here, but it also
+            // accepts junk loot so players can hand-deliver in either zone.
+            return item != null;
+        }
 
-                for (var slot = 0; slot < NetworkFirstPersonController.InventorySize; slot++)
-                {
-                    var item = player.GetInventoryItem(slot);
-                    if (item != null)
-                        RoundManager.Instance.ServerSubmitToLaunchpad(item);
-                }
-            }
+        public void ServerSubmit(NetworkLootItem item)
+        {
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsServer || RoundManager.Instance == null) return;
+            RoundManager.Instance.ServerSubmitToLaunchpad(item);
         }
 
         private bool IsPointInsideSubmitArea(Vector3 position)

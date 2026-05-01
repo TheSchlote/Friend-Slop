@@ -17,15 +17,16 @@ namespace FriendSlop.Loot
         [SerializeField] private LayerMask fireMask = ~0;
 
         private NetworkVariable<int> _ammo = new(0);
-        private float _nextFireTime;
+        private float _nextLocalFireTime;
+        private float _nextServerFireTime;
         private LineRenderer _laserLine;
         private Coroutine _hideLaserCoroutine;
 
         // Shader.Find is a registry string lookup — cache once across all guns.
         private static Shader _cachedLaserShader;
 
-        public bool CanFireNow => Time.time >= _nextFireTime && _ammo.Value > 0;
-        public float CooldownRemaining => Mathf.Max(0f, _nextFireTime - Time.time);
+        public bool CanFireNow => Time.time >= _nextLocalFireTime && _ammo.Value > 0;
+        public float CooldownRemaining => Mathf.Max(0f, _nextLocalFireTime - Time.time);
         public int Ammo => _ammo.Value;
         public int MaxAmmo => maxAmmo;
 
@@ -67,14 +68,17 @@ namespace FriendSlop.Loot
 
         public void StartLocalCooldown()
         {
-            _nextFireTime = Time.time + fireCooldown;
+            _nextLocalFireTime = Time.time + fireCooldown;
         }
 
         public override void ServerReset()
         {
             base.ServerReset();
             if (IsServer)
+            {
                 _ammo.Value = maxAmmo;
+                _nextServerFireTime = 0f;
+            }
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -85,6 +89,7 @@ namespace FriendSlop.Loot
             if (shooter == null || shooter.IsDead || !IsHeldBy(shooterId)) return;
             if (RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active) return;
             if (_ammo.Value <= 0) return;
+            if (Time.time < _nextServerFireTime) return;
 
             if (Vector3.SqrMagnitude(origin - shooter.transform.position) > 16f)
                 origin = shooter.transform.position + shooter.transform.forward * 1.5f;
@@ -92,6 +97,7 @@ namespace FriendSlop.Loot
             direction = direction.normalized;
             if (direction.sqrMagnitude < 0.5f) return;
 
+            _nextServerFireTime = Time.time + fireCooldown;
             _ammo.Value--;
 
             var endpoint = origin + direction * range;

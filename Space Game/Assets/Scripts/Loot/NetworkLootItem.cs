@@ -13,12 +13,17 @@ namespace FriendSlop.Loot
     public class NetworkLootItem : NetworkBehaviour, IFriendSlopInteractable
     {
         private const ulong NoCarrier = ulong.MaxValue;
+        private const float ServerPickupMaxDistance = 4.25f;
 
         [SerializeField] private string itemName = "Weird Junk";
         [SerializeField] private int value = 50;
         [SerializeField] private float carrySpeedMultiplier = 0.85f;
         [SerializeField] private float carryDistance = 2.1f;
         [SerializeField] private ShipPartType shipPartType = ShipPartType.None;
+        // How long the player has to hold F to deposit this item. 0 = instant tap.
+        // Ship parts override this to 0 in the property below since the assembly is
+        // the round objective and shouldn't be gated by a hold timer.
+        [SerializeField, Min(0f)] private float depositHoldSeconds = 1f;
 
         private Rigidbody body;
         private SphericalRigidbodyGravity sphericalGravity;
@@ -46,6 +51,7 @@ namespace FriendSlop.Loot
         public float CarryDistance => carryDistance;
         public ShipPartType ShipPartType => shipPartType;
         public bool IsShipPart => shipPartType != ShipPartType.None;
+        public float DepositHoldSeconds => IsShipPart ? 0f : Mathf.Max(0f, depositHoldSeconds);
 
         public void ServerSetSpawnPose(Vector3 position, Quaternion rotation)
         {
@@ -197,6 +203,10 @@ namespace FriendSlop.Loot
             {
                 return;
             }
+            if (!CanServerReachForPickup(player))
+            {
+                return;
+            }
 
             // Multi-slot inventory: take the first empty slot, or refuse pickup if full.
             if (!player.TryGetFreeInventorySlot(out var slot))
@@ -218,6 +228,62 @@ namespace FriendSlop.Loot
             {
                 player.ServerSetActiveSlot(slot);
             }
+        }
+
+        private bool CanServerReachForPickup(NetworkFirstPersonController player)
+        {
+            var origin = player.PlayerCamera != null
+                ? player.PlayerCamera.transform.position
+                : player.transform.position + player.transform.up * 1.1f;
+            var target = GetServerPickupTargetPoint();
+            if ((target - origin).sqrMagnitude > ServerPickupMaxDistance * ServerPickupMaxDistance)
+                return false;
+
+            return HasClearPickupLine(player.transform.root, origin, transform.root, target);
+        }
+
+        private Vector3 GetServerPickupTargetPoint()
+        {
+            var hasBounds = false;
+            var bounds = default(Bounds);
+            if (colliders != null)
+            {
+                for (var i = 0; i < colliders.Length; i++)
+                {
+                    var itemCollider = colliders[i];
+                    if (itemCollider == null || !itemCollider.enabled) continue;
+                    if (!hasBounds)
+                    {
+                        bounds = itemCollider.bounds;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(itemCollider.bounds);
+                    }
+                }
+            }
+
+            return hasBounds ? bounds.center : transform.position;
+        }
+
+        private static bool HasClearPickupLine(Transform playerRoot, Vector3 origin, Transform itemRoot, Vector3 target)
+        {
+            var offset = target - origin;
+            var distance = offset.magnitude;
+            if (distance <= 0.01f) return true;
+
+            var hits = Physics.RaycastAll(origin, offset / distance, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            for (var i = 0; i < hits.Length; i++)
+            {
+                var hitTransform = hits[i].collider != null ? hits[i].collider.transform : null;
+                if (hitTransform == null) continue;
+                var hitRoot = hitTransform.root;
+                if (hitRoot == playerRoot || hitRoot == itemRoot) continue;
+                return false;
+            }
+
+            return true;
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -254,6 +320,27 @@ namespace FriendSlop.Loot
                 ? impulse.normalized * MaxDropImpulseMagnitude
                 : impulse;
             ServerDrop(clampedImpulse);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void RequestDepositServerRpc(RpcParams rpcParams = default)
+        {
+            // Re-validate everything server-side: a modded client can't shortcut the
+            // hold by sending the RPC early, because we still require the carrier to be
+            // standing inside an accepting deposit surface at the moment of submission.
+            var senderId = rpcParams.Receive.SenderClientId;
+            if (!IsHeldBy(senderId) || IsDeposited.Value) return;
+
+            var round = RoundManager.Instance;
+            if (round == null || round.Phase.Value != RoundPhase.Active) return;
+
+            var carrier = NetworkFirstPersonController.FindByClientId(senderId);
+            if (carrier == null) return;
+
+            var surface = ItemDepositSurface.FindFor(carrier, this);
+            if (surface == null) return;
+
+            surface.ServerSubmit(this);
         }
 
         public void ServerDrop(Vector3 impulse)
@@ -304,20 +391,37 @@ namespace FriendSlop.Loot
                 return;
             }
 
+            // Ship-resting items keep their dropped position across round restarts so the
+            // crew can build a hoard. Carried items and deposited items always reset back
+            // to their planet spawn so the next round is winnable.
+            var preservePosition = ShouldPreserveShipPosition();
+
             IsCarried.Value = false;
             CarrierClientId.Value = NoCarrier;
             SlotIndex.Value = -1;
             IsDeposited.Value = false;
 
             body.isKinematic = true;
-            transform.SetPositionAndRotation(spawnPosition, spawnRotation);
-            body.position = spawnPosition;
-            body.rotation = spawnRotation;
+            if (!preservePosition)
+            {
+                transform.SetPositionAndRotation(spawnPosition, spawnRotation);
+                body.position = spawnPosition;
+                body.rotation = spawnRotation;
+            }
             body.isKinematic = false;
             ClearDynamicVelocity();
 
             ApplyPhysicsState();
             ApplyVisibilityState();
+        }
+
+        // True when the item is sitting (uncarried, undeposited) inside a flat-gravity
+        // volume - i.e. on the ship deck. Planet loot uses sphere gravity, so it never
+        // matches and always teleports back to its spawn anchor.
+        private bool ShouldPreserveShipPosition()
+        {
+            if (IsCarried.Value || IsDeposited.Value) return false;
+            return FlatGravityVolume.TryGetContaining(transform.position, out _);
         }
 
         private void OnCarrierChanged(ulong previousCarrier, ulong currentCarrier)

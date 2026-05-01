@@ -220,7 +220,32 @@ namespace FriendSlop.UI
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var targetAlpha = phase == RoundPhase.Transitioning ? 1f : 0f;
             _fadeAlpha = Mathf.MoveTowards(_fadeAlpha, targetAlpha, FadeSpeed * Time.deltaTime);
-            _fadeOverlayImage.color = new Color(0f, 0f, 0f, _fadeAlpha);
+            var combinedAlpha = Mathf.Max(_fadeAlpha, ComputeTeleporterFlashAlpha());
+            _fadeOverlayImage.color = new Color(0f, 0f, 0f, combinedAlpha);
+        }
+
+        public static void RequestTeleporterFlash()
+        {
+            if (Instance == null) return;
+            Instance._teleporterFlashStartTime = Time.time;
+        }
+
+        private float ComputeTeleporterFlashAlpha()
+        {
+            if (_teleporterFlashStartTime < 0f) return 0f;
+            var elapsed = Time.time - _teleporterFlashStartTime;
+            if (elapsed <= TeleporterFlashAttackSeconds)
+                return Mathf.Clamp01(elapsed / TeleporterFlashAttackSeconds);
+
+            var holdEnd = TeleporterFlashAttackSeconds + TeleporterFlashHoldSeconds;
+            if (elapsed <= holdEnd) return 1f;
+
+            var releaseProgress = (elapsed - holdEnd) / TeleporterFlashReleaseSeconds;
+            if (releaseProgress < 1f)
+                return 1f - releaseProgress;
+
+            _teleporterFlashStartTime = -1f;
+            return 0f;
         }
 
         private void UpdateStaminaBar(NetworkFirstPersonController localPlayer, bool activeRound)
