@@ -17,6 +17,7 @@ namespace FriendSlop.Player
         public NetworkVariable<ulong> CarriedByClientId = new(ulong.MaxValue);
 
         private NetworkFirstPersonController _heldPlayer;
+        private int _heldPlayerCacheFrame = -1;
 
         public NetworkFirstPersonController HeldPlayer => ResolveHeldPlayer();
         public bool HasHeldPlayer => ResolveHeldPlayer() != null;
@@ -24,6 +25,10 @@ namespace FriendSlop.Player
 
         private NetworkFirstPersonController ResolveHeldPlayer()
         {
+            if (_heldPlayerCacheFrame == Time.frameCount)
+                return _heldPlayer;
+            _heldPlayerCacheFrame = Time.frameCount;
+
             if (_heldPlayer != null
                 && _heldPlayer.IsSpawned
                 && _heldPlayer.IsBeingCarried.Value
@@ -152,11 +157,17 @@ namespace FriendSlop.Player
             }
         }
 
-        public void SetHeldPlayer(NetworkFirstPersonController player) => _heldPlayer = player;
+        public void SetHeldPlayer(NetworkFirstPersonController player)
+        {
+            _heldPlayer = player;
+            _heldPlayerCacheFrame = Time.frameCount;
+        }
 
         public void ClearHeldPlayer(NetworkFirstPersonController player)
         {
-            if (_heldPlayer == player) _heldPlayer = null;
+            if (_heldPlayer != player) return;
+            _heldPlayer = null;
+            _heldPlayerCacheFrame = Time.frameCount;
         }
     }
 }

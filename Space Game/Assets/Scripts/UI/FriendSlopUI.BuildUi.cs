@@ -147,6 +147,8 @@ namespace FriendSlop.UI
             chargePanelRect.gameObject.SetActive(false);
 
             BuildInventoryPanel(canvasObject);
+            BuildChatPanel(canvasObject);
+            BuildCompass(canvasObject);
 
             // Game over title — big red text above the menu, only shown on AllDead.
             gameOverText = CreateText("GameOverTitle", canvasObject.transform, "GAME OVER",

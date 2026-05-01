@@ -30,10 +30,17 @@ namespace FriendSlop.Hazards
         [SerializeField] private float targetSwitchRange = 5f;
         [SerializeField] private float stunDuration = 1.5f;
         [SerializeField] private int attackDamage = 20;
+        [SerializeField] private int maxHealth = 100;
+
+        private NetworkVariable<int> _health = new(100);
 
         private enum State { Roaming, Chasing, Investigating }
 
         private static readonly float[] BodySampleHeights = { 0.25f, 0.5f, 0.75f, 0.95f };
+
+        private bool _isDead;
+        private Renderer[] _renderers;
+        private CapsuleCollider _capsuleCollider;
 
         private Vector3 spawnPosition;
         private Vector3 roamTarget;
@@ -49,8 +56,22 @@ namespace FriendSlop.Hazards
         private float _stunnedPlayerUntil;
         private bool _roundActive;
 
+        // Cached per-frame so FindNearestPlayer/CanDetectPlayer/IsOccluded don't each
+        // recompute the same surface basis.
+        private Vector3 _frameUp;
+        private Vector3 _frameSurfaceForward;
+
+        public override void OnNetworkSpawn()
+        {
+            if (_health.Value <= 0)
+                ApplyDeadState();
+        }
+
         private void Awake()
         {
+            _renderers = GetComponentsInChildren<Renderer>();
+            _capsuleCollider = GetComponent<CapsuleCollider>();
+
             var world = SphereWorld.GetClosest(transform.position);
             if (world != null)
             {
@@ -68,7 +89,7 @@ namespace FriendSlop.Hazards
 
         private void Update()
         {
-            if (!IsServer || RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active)
+            if (!IsServer || _isDead || RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active)
             {
                 _roundActive = false;
                 return;
@@ -90,6 +111,13 @@ namespace FriendSlop.Hazards
                 _roamPauseTimer = Mathf.Max(0f, roundStartGraceSeconds);
                 PickRoamTarget(world);
             }
+
+            _frameUp = world.GetUp(transform.position);
+            _frameSurfaceForward = Vector3.ProjectOnPlane(transform.forward, _frameUp);
+            if (_frameSurfaceForward.sqrMagnitude < 0.001f)
+                _frameSurfaceForward = transform.forward;
+            else
+                _frameSurfaceForward.Normalize();
 
             var nearest = FindNearestPlayer(world);
 
@@ -170,12 +198,55 @@ namespace FriendSlop.Hazards
             }
         }
 
+        public void ServerTakeDamage(int damage)
+        {
+            if (!IsServer || _isDead) return;
+            _health.Value = Mathf.Max(0, _health.Value - damage);
+            if (_health.Value <= 0)
+            {
+                _isDead = true;
+                DieClientRpc();
+            }
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        private void DieClientRpc()
+        {
+            _isDead = true;
+            ApplyDeadState();
+        }
+
+        [Rpc(SendTo.ClientsAndHost)]
+        private void ReviveClientRpc()
+        {
+            _isDead = false;
+            ApplyAliveState();
+        }
+
+        private void ApplyDeadState()
+        {
+            foreach (var r in _renderers)
+                if (r != null) r.enabled = false;
+            if (_capsuleCollider != null) _capsuleCollider.enabled = false;
+        }
+
+        private void ApplyAliveState()
+        {
+            foreach (var r in _renderers)
+                if (r != null) r.enabled = true;
+            if (_capsuleCollider != null) _capsuleCollider.enabled = true;
+        }
+
         public void ServerReset()
         {
             if (!IsServer)
             {
                 return;
             }
+
+            _health.Value = maxHealth;
+            _isDead = false;
+            ReviveClientRpc();
 
             transform.position = spawnPosition;
             nextAttackTime = 0f;
@@ -196,12 +267,8 @@ namespace FriendSlop.Hazards
             NetworkFirstPersonController bestPlayer = null;
             var bestDistance = detectionRange;
 
-            var up = world.GetUp(transform.position);
-            var surfaceForward = Vector3.ProjectOnPlane(transform.forward, up);
-            if (surfaceForward.sqrMagnitude < 0.001f)
-                surfaceForward = transform.forward;
-            else
-                surfaceForward.Normalize();
+            var up = _frameUp;
+            var surfaceForward = _frameSurfaceForward;
 
             foreach (var player in NetworkFirstPersonController.ActivePlayers)
             {
@@ -254,7 +321,7 @@ namespace FriendSlop.Hazards
         {
             if (player == null || world == null) return 0f;
 
-            var origin = transform.position + world.GetUp(transform.position) * visionOriginHeight;
+            var origin = transform.position + _frameUp * visionOriginHeight;
             var up = world.GetUp(player.transform.position);
             var bodyHeight = Mathf.Max(0.1f, player.CurrentBodyHeight);
             var visible = 0;
@@ -294,12 +361,8 @@ namespace FriendSlop.Hazards
             if (distance >= detectionRange)
                 return false;
 
-            var up = world.GetUp(transform.position);
-            var surfaceForward = Vector3.ProjectOnPlane(transform.forward, up);
-            if (surfaceForward.sqrMagnitude < 0.001f)
-                surfaceForward = transform.forward;
-            else
-                surfaceForward.Normalize();
+            var up = _frameUp;
+            var surfaceForward = _frameSurfaceForward;
 
             var toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, up);
             if (toPlayer.sqrMagnitude < 0.001f)
@@ -313,7 +376,7 @@ namespace FriendSlop.Hazards
 
         private bool IsOccluded(SphereWorld world, NetworkFirstPersonController player)
         {
-            var origin      = transform.position              + world.GetUp(transform.position)              * visionOriginHeight;
+            var origin      = transform.position        + _frameUp                                           * visionOriginHeight;
             var destination = player.transform.position + world.GetUp(player.transform.position) * visionOriginHeight;
 
             if (!Physics.Linecast(origin, destination, out var hit))

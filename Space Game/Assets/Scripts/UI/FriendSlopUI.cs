@@ -159,6 +159,7 @@ namespace FriendSlop.UI
             NetworkSessionManager.SessionEnded += HandleSessionEnded;
             NetworkFirstPersonController.LocalPlayerDamaged += HandleLocalPlayerDamaged;
             NetworkFirstPersonController.LocalPlayerJoinedActiveRound += HandleLocalPlayerJoinedActiveRound;
+            NetworkFirstPersonController.ChatMessageReceived += OnChatMessageReceived;
         }
 
         private void OnDisable()
@@ -166,6 +167,8 @@ namespace FriendSlop.UI
             NetworkSessionManager.SessionEnded -= HandleSessionEnded;
             NetworkFirstPersonController.LocalPlayerDamaged -= HandleLocalPlayerDamaged;
             NetworkFirstPersonController.LocalPlayerJoinedActiveRound -= HandleLocalPlayerJoinedActiveRound;
+            NetworkFirstPersonController.ChatMessageReceived -= OnChatMessageReceived;
+            _chatInputFocused = false;
 
             // Only clear if we're the registered provider; if a fresh UI instance has already
             // taken over (e.g. scene reload during a host restart) leave its provider in place.
@@ -182,6 +185,8 @@ namespace FriendSlop.UI
         private void Update()
         {
             HandleMenuHotkeys();
+            var nm = NetworkManager.Singleton;
+            HandleChatHotkeys(nm != null && nm.IsListening);
             DetectDisconnection();
 
             if (_lateJoinLoading && Time.time - _lateJoinLoadingStartTime >= LateJoinLoadingDuration)
@@ -207,6 +212,7 @@ namespace FriendSlop.UI
         private void HandleMenuHotkeys()
         {
             if (Keyboard.current == null) return;
+            if (_chatInputFocused) return;
 
             var menuTogglePressed = Keyboard.current.tabKey.wasPressedThisFrame ||
                                     Keyboard.current.escapeKey.wasPressedThisFrame;
@@ -270,6 +276,8 @@ namespace FriendSlop.UI
 
         private bool IsBlockingGameplayInput()
         {
+            if (_chatInputFocused) return true;
+            if (chatInput != null && chatInput.isFocused) return true;
             if (playerNameInput != null && playerNameInput.isFocused) return true;
             if (joinInput != null && joinInput.isFocused) return true;
 
@@ -423,6 +431,8 @@ namespace FriendSlop.UI
             UpdateDeathOverlay(localPlayer, activeRound);
             UpdateChargeBar(localPlayer, gameplayPhase);
             UpdateInventoryHud(localPlayer, activeRound);
+            UpdateChatPanel(connected);
+            UpdateCompass(localPlayer, phase);
         }
 
         // ── Cursor / menu-state helpers ───────────────────────────────────────

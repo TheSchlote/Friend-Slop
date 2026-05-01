@@ -173,16 +173,62 @@ namespace FriendSlop.Core
         private List<ExclusionZone> BuildExclusionList()
         {
             var list = new List<ExclusionZone>();
+            var planetRoot = ResolvePlanetRoot();
 
-            var launchpad = GameObject.Find("Part Launchpad");
-            if (launchpad != null)
-                list.Add(new ExclusionZone(_world.GetUp(launchpad.transform.position), launchpadExclusionDeg));
+            // Per-planet lookups instead of global GameObject.Find: in multi-planet builds
+            // Find returns whichever active planet Unity reaches first, so two clients with
+            // the same seed could otherwise place trees against different exclusion zones.
+            var launchpadTransform = ResolveLaunchpadTransform(planetRoot);
+            if (launchpadTransform != null)
+                list.Add(new ExclusionZone(_world.GetUp(launchpadTransform.position), launchpadExclusionDeg));
 
-            var crash = GameObject.Find("Crash Dirt Patch");
-            if (crash != null)
-                list.Add(new ExclusionZone(_world.GetUp(crash.transform.position), spawnAreaExclusionDeg));
+            var crashTransform = ResolveCrashTransform(planetRoot);
+            if (crashTransform != null)
+                list.Add(new ExclusionZone(_world.GetUp(crashTransform.position), spawnAreaExclusionDeg));
 
             return list;
+        }
+
+        private Transform ResolvePlanetRoot()
+        {
+            var env = GetComponentInParent<PlanetEnvironment>(true);
+            return env != null ? env.transform : transform.root;
+        }
+
+        private Transform ResolveLaunchpadTransform(Transform planetRoot)
+        {
+            if (planetRoot != null)
+            {
+                var env = planetRoot.GetComponent<PlanetEnvironment>();
+                if (env != null && env.LaunchpadZone != null) return env.LaunchpadZone.transform;
+                var local = planetRoot.GetComponentInChildren<LaunchpadZone>(true);
+                if (local != null) return local.transform;
+            }
+            var global = GameObject.Find("Part Launchpad");
+            return global != null ? global.transform : null;
+        }
+
+        private static Transform ResolveCrashTransform(Transform planetRoot)
+        {
+            if (planetRoot != null)
+            {
+                var local = FindByName(planetRoot, "Crash Dirt Patch");
+                if (local != null) return local;
+            }
+            var global = GameObject.Find("Crash Dirt Patch");
+            return global != null ? global.transform : null;
+        }
+
+        private static Transform FindByName(Transform root, string targetName)
+        {
+            if (root == null) return null;
+            if (root.name == targetName) return root;
+            for (var i = 0; i < root.childCount; i++)
+            {
+                var found = FindByName(root.GetChild(i), targetName);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         private static bool IsExcluded(Vector3 up, List<ExclusionZone> zones)

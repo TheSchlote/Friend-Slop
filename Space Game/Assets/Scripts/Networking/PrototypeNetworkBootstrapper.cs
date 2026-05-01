@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FriendSlop.Core;
 using FriendSlop.Hazards;
 using FriendSlop.Loot;
 using FriendSlop.Round;
@@ -16,6 +17,14 @@ namespace FriendSlop.Networking
         [SerializeField] private Transform[] lootSpawnPoints;
         [SerializeField] private RoamingMonster monsterPrefab;
         [SerializeField] private Transform[] monsterSpawnPoints;
+
+        [Header("Tier 1 Ship Part Placement")]
+        // Ship parts are placed within an angular cone around the launchpad (in degrees of
+        // arc on the planet surface). Capped at 89 to guarantee same-hemisphere placement.
+        [SerializeField, Range(1f, 89f)] private float shipPartMaxLaunchpadAngleDeg = 70f;
+        // Inner ring keeps parts off the launchpad itself so players still have to fetch them.
+        [SerializeField, Range(0f, 88f)] private float shipPartMinLaunchpadAngleDeg = 20f;
+        [SerializeField, Min(0f)] private float shipPartSurfaceLift = 0.2f;
 
         private readonly List<NetworkObject> spawnedObjects = new();
         private NetworkManager subscribedManager;
@@ -105,6 +114,12 @@ namespace FriendSlop.Networking
                 return;
             }
 
+            // Resolve once - all ship parts roll positions relative to the same launchpad.
+            var launchpadTransform = FindLaunchpadTransform();
+            var launchpadWorld = launchpadTransform != null
+                ? SphereWorld.GetClosest(launchpadTransform.position)
+                : null;
+
             var count = Mathf.Min(lootPrefabs.Length, lootSpawnPoints.Length);
             for (var i = 0; i < count; i++)
             {
@@ -115,10 +130,58 @@ namespace FriendSlop.Networking
                     continue;
                 }
 
-                var loot = Instantiate(prefab, spawnPoint.position, spawnPoint.rotation);
-                loot.ServerSetSpawnPose(spawnPoint.position, spawnPoint.rotation);
+                Vector3 pos;
+                Quaternion rot;
+                // Ship parts ignore their authored spawn point and instead drop within an
+                // angular cone around the launchpad on the same hemisphere - keeps the rocket
+                // assembly fetch quest tight on the first planet.
+                if (prefab.IsShipPart && launchpadTransform != null && launchpadWorld != null)
+                {
+                    ResolveShipPartSpawnPose(launchpadTransform.position, launchpadWorld, out pos, out rot);
+                }
+                else
+                {
+                    pos = spawnPoint.position;
+                    rot = spawnPoint.rotation;
+                }
+
+                var loot = Instantiate(prefab, pos, rot);
+                loot.ServerSetSpawnPose(pos, rot);
                 SpawnNetworkObject(loot.NetworkObject);
             }
+        }
+
+        private static Transform FindLaunchpadTransform()
+        {
+            var named = GameObject.Find("Part Launchpad");
+            if (named != null) return named.transform;
+            // Fallback for renamed/relocated launchpads: any LaunchpadZone in the scene.
+            var zone = FindFirstObjectByType<LaunchpadZone>();
+            return zone != null ? zone.transform : null;
+        }
+
+        private void ResolveShipPartSpawnPose(Vector3 launchpadPos, SphereWorld world, out Vector3 pos, out Quaternion rot)
+        {
+            // Clamp angles so we always stay strictly inside the launchpad's hemisphere.
+            var maxAngle = Mathf.Clamp(shipPartMaxLaunchpadAngleDeg, 1f, 89f);
+            var minAngle = Mathf.Clamp(Mathf.Min(shipPartMinLaunchpadAngleDeg, maxAngle - 1f), 0f, 89f);
+            var launchpadDir = world.GetUp(launchpadPos);
+
+            // Build a tangent perpendicular to launchpadDir to use as the cone tilt axis.
+            // onUnitSphere can land near-parallel; fall back to fixed axes when it does.
+            var tangent = Vector3.Cross(launchpadDir, Random.onUnitSphere);
+            if (tangent.sqrMagnitude < 0.001f) tangent = Vector3.Cross(launchpadDir, Vector3.right);
+            if (tangent.sqrMagnitude < 0.001f) tangent = Vector3.Cross(launchpadDir, Vector3.forward);
+            tangent.Normalize();
+
+            var angle = Random.Range(minAngle, maxAngle);
+            var dir = (Quaternion.AngleAxis(angle, tangent) * launchpadDir).normalized;
+            pos = world.GetSurfacePoint(dir, shipPartSurfaceLift);
+
+            // Face roughly back toward the launchpad so dropped parts read well from the path.
+            var forwardHint = Vector3.ProjectOnPlane(launchpadPos - pos, dir);
+            if (forwardHint.sqrMagnitude < 0.001f) forwardHint = Vector3.Cross(dir, Vector3.right);
+            rot = world.GetSurfaceRotation(dir, forwardHint);
         }
 
         private void SpawnMonsters()

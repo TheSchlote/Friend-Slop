@@ -158,6 +158,8 @@ namespace FriendSlop.Player
             }
             if (cameraRoot != null) _baseCameraLocalPos = cameraRoot.localPosition;
 
+            ReparentHeadBonesToCameraRoot();
+
             if (GetComponent<PlayerNameplate>() == null)
                 gameObject.AddComponent<PlayerNameplate>();
         }
@@ -394,6 +396,9 @@ namespace FriendSlop.Player
 
             cameraPitch = Mathf.Clamp(cameraPitch - delta.y, -82f, 82f);
             cameraRoot.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f);
+
+            if (Mathf.Abs(_headPitch.Value - cameraPitch) > 0.5f)
+                _headPitch.Value = cameraPitch;
         }
 
         private void HandleMovement()

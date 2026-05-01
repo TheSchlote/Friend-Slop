@@ -130,7 +130,7 @@ namespace FriendSlop.UI
             var rm = RoundManager.Instance;
             if (rm == null) return;
 
-            if (rm.Phase.Value == RoundPhase.Success && rm.GetNextTierCandidates().Count > 0 && !rm.HasReachedFinalTier)
+            if (rm.Phase.Value == RoundPhase.Success && rm.GetOfferedNextPlanetChoices().Count > 0 && !rm.HasReachedFinalTier)
                 rm.RequestTravelToNextPlanetServerRpc();
             else
                 rm.RequestRestartRoundServerRpc();
@@ -142,12 +142,12 @@ namespace FriendSlop.UI
         {
             var rm = RoundManager.Instance;
             if (rm == null || rm.Catalog == null) return;
-            var candidates = rm.GetNextTierCandidates();
-            if (candidates.Count <= 1) return;
+            var choices = rm.GetOfferedNextPlanetChoices();
+            if (choices.Count <= 1) return;
 
             var current = rm.SelectedNextPlanet;
-            var idx = current != null ? candidates.IndexOf(current) : -1;
-            var nextPlanet = candidates[(idx + 1) % candidates.Count];
+            var idx = current != null ? choices.IndexOf(current) : -1;
+            var nextPlanet = choices[(idx + 1) % choices.Count];
             var catalogIndex = rm.Catalog.IndexOf(nextPlanet);
             if (catalogIndex >= 0)
                 rm.RequestSelectNextPlanetServerRpc(catalogIndex);
@@ -160,11 +160,12 @@ namespace FriendSlop.UI
             if (restartButtonLabel == null) return;
             if (round != null && phase == RoundPhase.Success && !round.HasReachedFinalTier)
             {
-                var candidates = round.GetNextTierCandidates();
-                if (candidates.Count > 0)
+                var choices = round.GetOfferedNextPlanetChoices();
+                if (choices.Count > 0)
                 {
                     var next = round.SelectedNextPlanet;
-                    if (next == null || next.Tier != round.NextTier) next = candidates[0];
+                    if (next == null || next.Tier != round.NextTier || !choices.Contains(next))
+                        next = choices[0];
                     restartButtonLabel.text = $"Travel: {FormatPlanetLabel(next)}";
                     return;
                 }
@@ -176,7 +177,7 @@ namespace FriendSlop.UI
         {
             if (cyclePlanetButton == null) return;
             var show = connected && isHost && round != null && phase == RoundPhase.Success
-                       && !round.HasReachedFinalTier && round.GetNextTierCandidates().Count > 1;
+                       && !round.HasReachedFinalTier && round.GetOfferedNextPlanetChoices().Count > 1;
             cyclePlanetButton.gameObject.SetActive(show);
             if (show && cyclePlanetButtonLabel != null)
                 cyclePlanetButtonLabel.text = $"Cycle Tier {round.NextTier} Planet";
@@ -311,17 +312,22 @@ namespace FriendSlop.UI
             if (round.HasReachedFinalTier)
                 return $"ROCKET ASSEMBLED on {current}.\nFinal tier reached - replay to keep grinding.";
 
-            var candidates = round.GetNextTierCandidates();
-            if (candidates.Count == 0)
+            var choices = round.GetOfferedNextPlanetChoices();
+            if (choices.Count == 0)
                 return $"ROCKET ASSEMBLED on {current}.\nNo tier {round.NextTier} planets registered yet - host can replay.";
 
             var next = round.SelectedNextPlanet;
-            if (next == null || next.Tier != round.NextTier)
-                next = candidates[0];
+            if (next == null || next.Tier != round.NextTier || !choices.Contains(next))
+                next = choices[0];
 
-            var optionsLine = candidates.Count > 1
-                ? $"\n{candidates.Count} tier {round.NextTier} options - host can cycle."
-                : string.Empty;
+            var totalForTier = round.Catalog != null ? round.Catalog.GetPlanetsForTier(round.NextTier).Count : choices.Count;
+            string optionsLine;
+            if (choices.Count <= 1)
+                optionsLine = string.Empty;
+            else if (totalForTier > choices.Count)
+                optionsLine = $"\n{choices.Count} of {totalForTier} tier {round.NextTier} planets rolled - host can cycle between them.";
+            else
+                optionsLine = $"\n{choices.Count} tier {round.NextTier} options - host can cycle.";
             return $"ROCKET ASSEMBLED on {current}.\nNext: {FormatPlanetLabel(next)}{optionsLine}";
         }
 

@@ -468,6 +468,7 @@ GameObject:
   - component: {fileID: 6451144268055353748}
   - component: {fileID: 7947597204887406937}
   - component: {fileID: 6258250201483511312}
+  - component: {fileID: 8765432109876543211}
   - component: {fileID: 4378899253088933419}
   m_Layer: 0
   m_Name: RoamingMonster
@@ -567,6 +568,28 @@ MonoBehaviour:
   SwitchTransformSpaceWhenParented: 0
   Interpolate: 1
   SlerpPosition: 0
+--- !u!136 &8765432109876543211
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5832261220694240432}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  m_Radius: 0.5
+  m_Height: 2.3
+  m_Direction: 1
+  m_Center: {x: 0, y: 1, z: 0}
 --- !u!114 &4378899253088933419
 MonoBehaviour:
   m_ObjectHideFlags: 0
