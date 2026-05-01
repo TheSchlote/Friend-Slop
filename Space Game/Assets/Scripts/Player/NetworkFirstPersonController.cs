@@ -251,8 +251,9 @@ namespace FriendSlop.Player
             }
         }
 
-        private new void OnDestroy()
+        public override void OnDestroy()
         {
+            base.OnDestroy();
             ActivePlayers.Remove(this);
         }
 

@@ -87,11 +87,18 @@ namespace FriendSlop.Player
             _heldPlayer.ServerMoveAsCarried(position, rotation);
         }
 
+        // Max legitimate throw impulse = throwImpulse(8) * chargeThrowMultiplier(3.5) ≈ 28.
+        // Clamp at 30 to reject obviously spoofed magnitudes while allowing real throws.
+        private const float MaxDropImpulseMagnitude = 30f;
+
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void RequestDropHeldPlayerServerRpc(Vector3 impulse, RpcParams rpcParams = default)
         {
             if (rpcParams.Receive.SenderClientId != OwnerClientId || _heldPlayer == null) return;
-            ServerDropHeldPlayer(impulse);
+            var clampedImpulse = impulse.sqrMagnitude > MaxDropImpulseMagnitude * MaxDropImpulseMagnitude
+                ? impulse.normalized * MaxDropImpulseMagnitude
+                : impulse;
+            ServerDropHeldPlayer(clampedImpulse);
         }
 
         public void ServerDropHeldPlayer(Vector3 impulse)

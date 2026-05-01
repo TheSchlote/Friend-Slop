@@ -15,10 +15,42 @@ namespace FriendSlop.Round
         private readonly List<ulong> stalePlayerIds = new();
         private NetworkLootItem[] cachedLootItems;
         private float nextLootCacheTime;
+        private RoundManager _subscribedRoundManager;
 
         private void Awake()
         {
             RemoveOwnCollider();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromRoundManager();
+        }
+
+        private void TrySubscribeToRoundManager()
+        {
+            var rm = RoundManager.Instance;
+            if (rm == null || rm == _subscribedRoundManager) return;
+            UnsubscribeFromRoundManager();
+            rm.Phase.OnValueChanged += OnRoundPhaseChanged;
+            _subscribedRoundManager = rm;
+        }
+
+        private void UnsubscribeFromRoundManager()
+        {
+            if (_subscribedRoundManager == null) return;
+            _subscribedRoundManager.Phase.OnValueChanged -= OnRoundPhaseChanged;
+            _subscribedRoundManager = null;
+        }
+
+        // When a new round begins the server clears its boardedPlayerIds set (RoundManager.ServerStartRound).
+        // Players who stayed on the pad across round transitions were already in our local
+        // playersInsideSubmitArea, so Add() returns false and ServerPlayerBoarded is never
+        // re-called for them. Clearing here forces a full re-sync on the next FixedUpdate.
+        private void OnRoundPhaseChanged(RoundPhase previous, RoundPhase current)
+        {
+            if (current == RoundPhase.Loading)
+                playersInsideSubmitArea.Clear();
         }
 
 #if UNITY_EDITOR
@@ -71,6 +103,7 @@ namespace FriendSlop.Round
                 return;
             }
 
+            TrySubscribeToRoundManager();
             SyncBoardedPlayers();
             TrySubmitLooseItems();
             TrySubmitHeldItems();
