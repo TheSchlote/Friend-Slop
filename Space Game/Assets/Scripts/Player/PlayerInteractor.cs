@@ -55,7 +55,7 @@ namespace FriendSlop.Player
 
             UpdateFocus();
 
-            if (FriendSlop.UI.FriendSlopUI.BlocksGameplayInput)
+            if (GameplayInputState.IsBlocked)
             {
                 _isCharging = false;
                 return;

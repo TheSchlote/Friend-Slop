@@ -20,7 +20,7 @@ using UnityEngine.SceneManagement;
 namespace FriendSlop.Editor
 {
     [InitializeOnLoad]
-    public static class FriendSlopSceneBuilder
+    public static partial class FriendSlopSceneBuilder
     {
         private const string ScenePath = "Assets/Scenes/FriendSlopPrototype.unity";
         private const string PlayerPrefabPath = "Assets/Prefabs/FriendSlopPlayer.prefab";
@@ -56,6 +56,12 @@ namespace FriendSlop.Editor
             var monsterPrefab = BuildMonsterPrefab(materials);
             var networkPrefabsList = BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab.gameObject, monsterPrefab.gameObject, lootPrefabs);
 
+            // Rebuild is intentionally destructive for the scene contents. The CreateLighting/
+            // CreateLevel/CreateLaunchpad/etc. helpers below all unconditionally instantiate
+            // GameObjects, so we must start from an empty scene to avoid duplicates. This
+            // regenerates every in-scene FileID, which is why CLAUDE.md and
+            // docs/builder-audit.md restrict Rebuild to explicit human request.
+            // For routine fixes use Tools/Friend Slop/Repair Prototype Scene instead.
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             SceneManager.SetActiveScene(SceneManager.GetSceneAt(0));
 
@@ -205,246 +211,6 @@ namespace FriendSlop.Editor
             CreateFolder("Assets/Prefabs", "Loot");
             CreateFolder("Assets", "Materials");
             CreateFolder("Assets", "Scenes");
-        }
-
-        private static Dictionary<string, Material> CreateMaterials()
-        {
-            var materials = new Dictionary<string, Material>
-            {
-                ["Concrete"] = CreateMaterial("Concrete", new Color(0.45f, 0.47f, 0.45f)),
-                ["DarkWall"] = CreateMaterial("DarkWall", new Color(0.18f, 0.2f, 0.2f)),
-                ["SafetyYellow"] = CreateMaterial("SafetyYellow", new Color(0.95f, 0.78f, 0.12f)),
-                ["Extraction"] = CreateMaterial("Extraction", new Color(0.1f, 0.8f, 0.35f)),
-                ["PlanetGrass"] = CreateMaterial("PlanetGrass", new Color(0.18f, 0.62f, 0.34f)),
-                ["PlanetDirt"] = CreateMaterial("PlanetDirt", new Color(0.38f, 0.28f, 0.2f)),
-                ["Launchpad"] = CreateMaterial("Launchpad", new Color(0.18f, 0.18f, 0.2f)),
-                ["ShipFloor"] = CreateMaterial("ShipFloor", new Color(0.33f, 0.36f, 0.34f)),
-                ["ShipWall"] = CreateMaterial("ShipWall", new Color(0.12f, 0.15f, 0.16f)),
-                ["Console"] = CreateMaterial("Console", new Color(0.08f, 0.28f, 0.38f)),
-                ["Hologram"] = CreateMaterial("Hologram", new Color(0.16f, 0.92f, 0.98f)),
-                ["Window"] = CreateMaterial("Window", new Color(0.04f, 0.08f, 0.12f)),
-                ["WarningRed"] = CreateMaterial("WarningRed", new Color(0.82f, 0.14f, 0.1f)),
-                ["ShipPart"] = CreateMaterial("ShipPart", new Color(0.92f, 0.92f, 0.88f)),
-                ["Player"] = CreateMaterial("Player", new Color(0.1f, 0.55f, 0.9f)),
-                ["Monster"] = CreateMaterial("Monster", new Color(0.85f, 0.08f, 0.06f)),
-                ["LootBlue"] = CreateMaterial("LootBlue", new Color(0.15f, 0.35f, 0.95f)),
-                ["LootGreen"] = CreateMaterial("LootGreen", new Color(0.15f, 0.75f, 0.45f)),
-                ["LootPink"] = CreateMaterial("LootPink", new Color(0.95f, 0.22f, 0.55f)),
-                ["LootMetal"] = CreateMaterial("LootMetal", new Color(0.55f, 0.58f, 0.6f)),
-                ["GlowCube"] = CreateMaterial("GlowCube", new Color(0.3f, 1f, 0.95f))
-            };
-
-            return materials;
-        }
-
-        private static GameObject BuildPlayerPrefab(IReadOnlyDictionary<string, Material> materials)
-        {
-            var root = new GameObject("FriendSlopPlayer");
-            root.tag = "Player";
-            root.AddComponent<NetworkObject>();
-            root.AddComponent<ClientNetworkTransform>();
-
-            var characterController = root.AddComponent<CharacterController>();
-            characterController.height = 1.78f;
-            characterController.radius = 0.34f;
-            characterController.center = new Vector3(0f, 0.89f, 0f);
-            characterController.stepOffset = 0.32f;
-
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "Remote Body";
-            body.transform.SetParent(root.transform, false);
-            body.transform.localPosition = new Vector3(0f, 0.9f, 0f);
-            body.transform.localScale = new Vector3(0.7f, 0.85f, 0.7f);
-            Object.DestroyImmediate(body.GetComponent<Collider>());
-            SetMaterial(body, materials["Player"]);
-            var bodyRenderer = body.GetComponent<Renderer>();
-
-            var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            head.name = "Remote Face Head";
-            head.transform.SetParent(root.transform, false);
-            head.transform.localPosition = new Vector3(0f, 1.55f, 0.16f);
-            head.transform.localScale = new Vector3(0.58f, 0.48f, 0.58f);
-            Object.DestroyImmediate(head.GetComponent<Collider>());
-            SetMaterial(head, materials["Player"]);
-            var headRenderer = head.GetComponent<Renderer>();
-
-            var eyeLeft = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            eyeLeft.name = "Remote Face Eye Left";
-            eyeLeft.transform.SetParent(root.transform, false);
-            eyeLeft.transform.localPosition = new Vector3(-0.16f, 1.64f, 0.44f);
-            eyeLeft.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
-            Object.DestroyImmediate(eyeLeft.GetComponent<Collider>());
-            SetMaterial(eyeLeft, materials["ShipPart"]);
-            var eyeLeftRenderer = eyeLeft.GetComponent<Renderer>();
-
-            var eyeRight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            eyeRight.name = "Remote Face Eye Right";
-            eyeRight.transform.SetParent(root.transform, false);
-            eyeRight.transform.localPosition = new Vector3(0.16f, 1.64f, 0.44f);
-            eyeRight.transform.localScale = new Vector3(0.1f, 0.1f, 0.1f);
-            Object.DestroyImmediate(eyeRight.GetComponent<Collider>());
-            SetMaterial(eyeRight, materials["ShipPart"]);
-            var eyeRightRenderer = eyeRight.GetComponent<Renderer>();
-
-            var mouth = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            mouth.name = "Remote Face Mouth";
-            mouth.transform.SetParent(root.transform, false);
-            mouth.transform.localPosition = new Vector3(0f, 1.43f, 0.48f);
-            mouth.transform.localScale = new Vector3(0.28f, 0.06f, 0.04f);
-            Object.DestroyImmediate(mouth.GetComponent<Collider>());
-            SetMaterial(mouth, materials["DarkWall"]);
-            var mouthRenderer = mouth.GetComponent<Renderer>();
-
-            var cameraRoot = new GameObject("Camera Root");
-            cameraRoot.transform.SetParent(root.transform, false);
-            cameraRoot.transform.localPosition = new Vector3(0f, 1.6f, 0f);
-
-            var cameraObject = new GameObject("First Person Camera");
-            cameraObject.transform.SetParent(cameraRoot.transform, false);
-            var camera = cameraObject.AddComponent<Camera>();
-            camera.fieldOfView = 76f;
-            camera.nearClipPlane = 0.04f;
-            cameraObject.AddComponent<AudioListener>();
-
-            var carryAnchor = new GameObject("Carry Anchor");
-            carryAnchor.transform.SetParent(cameraRoot.transform, false);
-            carryAnchor.transform.localPosition = new Vector3(0f, -0.15f, 2.1f);
-
-            var controller = root.AddComponent<NetworkFirstPersonController>();
-            var interactor = root.AddComponent<PlayerInteractor>();
-
-            var controllerSo = new SerializedObject(controller);
-            controllerSo.FindProperty("playerCamera").objectReferenceValue = camera;
-            controllerSo.FindProperty("cameraRoot").objectReferenceValue = cameraRoot.transform;
-            controllerSo.FindProperty("carryAnchor").objectReferenceValue = carryAnchor.transform;
-            controllerSo.FindProperty("jumpVelocity").floatValue = PlayerJumpVelocity;
-            controllerSo.FindProperty("gravity").floatValue = PlayerGravity;
-            controllerSo.FindProperty("surfaceAlignSpeed").floatValue = PlayerSurfaceAlignSpeed;
-            controllerSo.FindProperty("groundProbeDistance").floatValue = PlayerGroundProbeDistance;
-            controllerSo.FindProperty("terminalFallSpeed").floatValue = PlayerTerminalFallSpeed;
-            var hideArray = controllerSo.FindProperty("hideForOwner");
-            hideArray.arraySize = 5;
-            hideArray.GetArrayElementAtIndex(0).objectReferenceValue = bodyRenderer;
-            hideArray.GetArrayElementAtIndex(1).objectReferenceValue = headRenderer;
-            hideArray.GetArrayElementAtIndex(2).objectReferenceValue = eyeLeftRenderer;
-            hideArray.GetArrayElementAtIndex(3).objectReferenceValue = eyeRightRenderer;
-            hideArray.GetArrayElementAtIndex(4).objectReferenceValue = mouthRenderer;
-            controllerSo.ApplyModifiedPropertiesWithoutUndo();
-
-            var interactorSo = new SerializedObject(interactor);
-            interactorSo.FindProperty("interactDistance").floatValue = 3.2f;
-            interactorSo.ApplyModifiedPropertiesWithoutUndo();
-
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
-            Object.DestroyImmediate(root);
-            return prefab;
-        }
-
-        private static RoundManager BuildRoundManagerPrefab()
-        {
-            var root = new GameObject("Round Manager");
-            root.AddComponent<NetworkObject>();
-            var round = root.AddComponent<RoundManager>();
-            var serializedRound = new SerializedObject(round);
-            serializedRound.FindProperty("quota").intValue = 0;
-            serializedRound.FindProperty("roundLengthSeconds").floatValue = 0f;
-            serializedRound.ApplyModifiedPropertiesWithoutUndo();
-
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, RoundManagerPrefabPath);
-            Object.DestroyImmediate(root);
-            return prefab.GetComponent<RoundManager>();
-        }
-
-        private static NetworkLootItem[] BuildLootPrefabs(IReadOnlyDictionary<string, Material> materials)
-        {
-            var specs = GetLootSpecs();
-            var prefabs = new NetworkLootItem[specs.Length];
-
-            for (var i = 0; i < specs.Length; i++)
-            {
-                var spec = specs[i];
-                var lootObject = GameObject.CreatePrimitive(spec.Shape);
-                lootObject.name = spec.Name;
-                lootObject.transform.localScale = spec.Scale;
-                SetMaterial(lootObject, materials[spec.MaterialName]);
-
-                var body = lootObject.AddComponent<Rigidbody>();
-                body.mass = Mathf.Lerp(1.2f, 8f, 1f - spec.SpeedMultiplier);
-                body.angularDamping = 0.15f;
-                body.useGravity = false;
-
-                lootObject.AddComponent<SphericalRigidbodyGravity>();
-                lootObject.AddComponent<NetworkObject>();
-                lootObject.AddComponent<NetworkTransform>();
-                var loot = lootObject.AddComponent<NetworkLootItem>();
-                var serializedLoot = new SerializedObject(loot);
-                serializedLoot.FindProperty("itemName").stringValue = spec.Name;
-                serializedLoot.FindProperty("value").intValue = spec.Value;
-                serializedLoot.FindProperty("carrySpeedMultiplier").floatValue = spec.SpeedMultiplier;
-                serializedLoot.FindProperty("carryDistance").floatValue = Mathf.Lerp(2.35f, 1.7f, 1f - spec.SpeedMultiplier);
-                serializedLoot.FindProperty("shipPartType").enumValueIndex = (int)spec.PartType;
-                serializedLoot.ApplyModifiedPropertiesWithoutUndo();
-
-                var prefabPath = $"{LootPrefabFolderPath}/{SanitizeAssetName(spec.Name)}.prefab";
-                var prefab = PrefabUtility.SaveAsPrefabAsset(lootObject, prefabPath);
-                Object.DestroyImmediate(lootObject);
-                prefabs[i] = prefab.GetComponent<NetworkLootItem>();
-            }
-
-            return prefabs;
-        }
-
-        private static RoamingMonster BuildMonsterPrefab(IReadOnlyDictionary<string, Material> materials)
-        {
-            var root = new GameObject("RoamingMonster");
-            root.AddComponent<NetworkObject>();
-            root.AddComponent<NetworkTransform>();
-            var monster = root.AddComponent<RoamingMonster>();
-
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "Body";
-            body.transform.SetParent(root.transform, false);
-            body.transform.localPosition = new Vector3(0f, 1f, 0f);
-            body.transform.localScale = new Vector3(1f, 1.2f, 1f);
-            Object.DestroyImmediate(body.GetComponent<Collider>());
-            SetMaterial(body, materials["Monster"]);
-
-            var head = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            head.name = "Head";
-            head.transform.SetParent(root.transform, false);
-            head.transform.localPosition = new Vector3(0f, 1.85f, 0.2f);
-            head.transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
-            Object.DestroyImmediate(head.GetComponent<Collider>());
-            SetMaterial(head, materials["Monster"]);
-
-            var eyeLeft = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            eyeLeft.name = "Eye Left";
-            eyeLeft.transform.SetParent(root.transform, false);
-            eyeLeft.transform.localPosition = new Vector3(-0.18f, 1.92f, 0.48f);
-            eyeLeft.transform.localScale = new Vector3(0.12f, 0.12f, 0.12f);
-            Object.DestroyImmediate(eyeLeft.GetComponent<Collider>());
-            SetMaterial(eyeLeft, materials["ShipPart"]);
-
-            var eyeRight = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            eyeRight.name = "Eye Right";
-            eyeRight.transform.SetParent(root.transform, false);
-            eyeRight.transform.localPosition = new Vector3(0.18f, 1.92f, 0.48f);
-            eyeRight.transform.localScale = new Vector3(0.12f, 0.12f, 0.12f);
-            Object.DestroyImmediate(eyeRight.GetComponent<Collider>());
-            SetMaterial(eyeRight, materials["ShipPart"]);
-
-            var lightObject = new GameObject("Panic Light");
-            lightObject.transform.SetParent(root.transform, false);
-            lightObject.transform.localPosition = new Vector3(0f, 1.6f, 0f);
-            var light = lightObject.AddComponent<Light>();
-            light.type = LightType.Point;
-            light.color = new Color(1f, 0.18f, 0.12f);
-            light.range = 8f;
-            light.intensity = 3f;
-
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, MonsterPrefabPath);
-            Object.DestroyImmediate(root);
-            return prefab.GetComponent<RoamingMonster>();
         }
 
         private static NetworkPrefabsList BuildNetworkPrefabsList(GameObject playerPrefab, GameObject roundManagerPrefab, GameObject monsterPrefab, IReadOnlyList<NetworkLootItem> lootPrefabs)
@@ -1276,79 +1042,6 @@ namespace FriendSlop.Editor
             }
         }
 
-        private static NetworkLootItem[] LoadLootPrefabs()
-        {
-            var guids = AssetDatabase.FindAssets("t:Prefab", new[] { LootPrefabFolderPath });
-            var prefabs = new List<NetworkLootItem>();
-            foreach (var guid in guids)
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                var lootPrefab = AssetDatabase.LoadAssetAtPath<NetworkLootItem>(path);
-                if (lootPrefab != null)
-                {
-                    prefabs.Add(lootPrefab);
-                }
-            }
-
-            return prefabs.ToArray();
-        }
-
-        private static Material CreateMaterial(string name, Color color)
-        {
-            var path = $"Assets/Materials/{name}.mat";
-            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (material == null)
-            {
-                var shader = Shader.Find("Universal Render Pipeline/Lit");
-                if (shader == null)
-                {
-                    shader = Shader.Find("Standard");
-                }
-
-                material = new Material(shader);
-                AssetDatabase.CreateAsset(material, path);
-            }
-
-            var changed = false;
-            if (material.color != color)
-            {
-                material.color = color;
-                changed = true;
-            }
-
-            if (name == "GlowCube")
-            {
-                if (!material.IsKeywordEnabled("_EMISSION"))
-                {
-                    material.EnableKeyword("_EMISSION");
-                    changed = true;
-                }
-
-                var emissionColor = color * 1.4f;
-                if (material.HasProperty("_EmissionColor") && material.GetColor("_EmissionColor") != emissionColor)
-                {
-                    material.SetColor("_EmissionColor", emissionColor);
-                    changed = true;
-                }
-            }
-
-            if (changed)
-            {
-                EditorUtility.SetDirty(material);
-            }
-
-            return material;
-        }
-
-        private static void SetMaterial(GameObject gameObject, Material material)
-        {
-            var renderer = gameObject.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                renderer.sharedMaterial = material;
-            }
-        }
-
         private static void DisableCollider(GameObject gameObject)
         {
             if (gameObject == null)
@@ -1394,70 +1087,6 @@ namespace FriendSlop.Editor
             }
         }
 
-        private static LootSpec[] GetLootSpecs()
-        {
-            return new[]
-            {
-                new LootSpec("Cockpit Nosecone", 0, 0.72f, PrimitiveType.Capsule, new Vector3(-0.42f, 0.82f, 0.38f), new Vector3(0.95f, 1.25f, 0.95f), "ShipPart", ShipPartType.Cockpit),
-                new LootSpec("Bent Rocket Wings", 0, 0.68f, PrimitiveType.Cube, new Vector3(0.48f, 0.78f, 0.42f), new Vector3(2.3f, 0.28f, 0.85f), "ShipPart", ShipPartType.Wings),
-                new LootSpec("Coughing Engine", 0, 0.62f, PrimitiveType.Cylinder, new Vector3(0.04f, 0.78f, -0.62f), new Vector3(0.75f, 1.25f, 0.75f), "ShipPart", ShipPartType.Engine),
-                new LootSpec("Ancient Monitor", 90, 0.78f, PrimitiveType.Cube, new Vector3(-0.58f, 0.62f, -0.54f), new Vector3(1.2f, 0.8f, 0.7f), "LootBlue"),
-                new LootSpec("Printer From Hell", 120, 0.68f, PrimitiveType.Cube, new Vector3(0.18f, 0.34f, -0.92f), new Vector3(1.4f, 0.7f, 1f), "LootMetal"),
-                new LootSpec("Questionable Barrel", 75, 0.82f, PrimitiveType.Cylinder, new Vector3(-0.9f, -0.08f, -0.42f), new Vector3(0.9f, 1.2f, 0.9f), "LootGreen"),
-                new LootSpec("Glowing Cube", 160, 0.72f, PrimitiveType.Cube, new Vector3(0.42f, 0.76f, 0.48f), new Vector3(0.9f, 0.9f, 0.9f), "GlowCube"),
-                new LootSpec("Tiny Statue", 70, 0.9f, PrimitiveType.Capsule, new Vector3(0.88f, 0.32f, -0.34f), new Vector3(0.65f, 0.95f, 0.65f), "LootPink"),
-                new LootSpec("Office Fan", 65, 0.88f, PrimitiveType.Cylinder, new Vector3(-0.18f, 0.88f, 0.44f), new Vector3(0.8f, 0.32f, 0.8f), "LootMetal"),
-                new LootSpec("Wet Floor Sign", 45, 0.95f, PrimitiveType.Cube, new Vector3(0.96f, -0.08f, 0.26f), new Vector3(0.35f, 1.1f, 0.9f), "SafetyYellow"),
-                new LootSpec("Suspicious Server", 130, 0.65f, PrimitiveType.Cube, new Vector3(-0.38f, -0.42f, 0.82f), new Vector3(1f, 1.4f, 0.9f), "LootBlue"),
-                new LootSpec("Mystery Orb", 110, 0.8f, PrimitiveType.Sphere, new Vector3(0.5f, -0.76f, 0.18f), new Vector3(1f, 1f, 1f), "LootPink")
-            };
-        }
-
-        private static float GetLootSurfaceOffset(LootSpec spec)
-        {
-            return spec.Shape switch
-            {
-                PrimitiveType.Cube => spec.Scale.y * 0.5f + 0.04f,
-                PrimitiveType.Sphere => Mathf.Max(spec.Scale.x, spec.Scale.y, spec.Scale.z) * 0.5f + 0.04f,
-                PrimitiveType.Cylinder => spec.Scale.y + 0.04f,
-                PrimitiveType.Capsule => spec.Scale.y + 0.04f,
-                _ => 0.5f
-            };
-        }
-
-        private static string SanitizeAssetName(string name)
-        {
-            foreach (var invalidCharacter in System.IO.Path.GetInvalidFileNameChars())
-            {
-                name = name.Replace(invalidCharacter, '_');
-            }
-
-            return name.Replace(' ', '_');
-        }
-
-        private readonly struct LootSpec
-        {
-            public readonly string Name;
-            public readonly int Value;
-            public readonly float SpeedMultiplier;
-            public readonly PrimitiveType Shape;
-            public readonly Vector3 SurfaceNormal;
-            public readonly Vector3 Scale;
-            public readonly string MaterialName;
-            public readonly ShipPartType PartType;
-
-            public LootSpec(string name, int value, float speedMultiplier, PrimitiveType shape, Vector3 surfaceNormal, Vector3 scale, string materialName, ShipPartType partType = ShipPartType.None)
-            {
-                Name = name;
-                Value = value;
-                SpeedMultiplier = speedMultiplier;
-                Shape = shape;
-                SurfaceNormal = surfaceNormal;
-                Scale = scale;
-                MaterialName = materialName;
-                PartType = partType;
-            }
-        }
     }
 }
 #endif
