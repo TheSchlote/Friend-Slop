@@ -1,3 +1,4 @@
+using FriendSlop.SceneManagement;
 using UnityEngine;
 
 namespace FriendSlop.Round
@@ -20,6 +21,12 @@ namespace FriendSlop.Round
         [SerializeField] private Color skyTint = Color.white;
         [SerializeField] private Sprite previewIcon;
 
+        // When set, the round manager additively loads this scene on travel and unloads
+        // any previously-loaded planet scene. Leave null for legacy planets that still
+        // live as nested GameObjects inside the prototype scene.
+        [Header("Scene (optional - per-planet scene asset)")]
+        [SerializeField] private GameSceneDefinition planetScene;
+
         public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
         public string Description => description;
         public int Tier => Mathf.Clamp(tier, 1, PlanetCatalog.MaxTier);
@@ -28,5 +35,7 @@ namespace FriendSlop.Round
         public Color SkyTint => skyTint;
         public Sprite PreviewIcon => previewIcon;
         public RoundObjective Objective => objective;
+        public GameSceneDefinition PlanetScene => planetScene;
+        public bool HasPlanetScene => planetScene != null && planetScene.IsConfigured;
     }
 }

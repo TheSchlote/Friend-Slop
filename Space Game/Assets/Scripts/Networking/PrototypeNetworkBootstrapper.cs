@@ -14,6 +14,9 @@ namespace FriendSlop.Networking
         [SerializeField] private Transform[] playerSpawnPoints;
         [SerializeField] private Transform[] shipSpawnPoints;
         [SerializeField] private NetworkLootItem[] lootPrefabs;
+        // Legacy fallback. Once each planet lives in its own scene, leave this empty and
+        // wire spawn anchors on PlanetEnvironment.lootSpawnPoints instead - cross-scene
+        // serialized refs here would null out the moment the planet split happens.
         [SerializeField] private Transform[] lootSpawnPoints;
         [SerializeField] private RoamingMonster monsterPrefab;
         [SerializeField] private Transform[] monsterSpawnPoints;
@@ -29,6 +32,12 @@ namespace FriendSlop.Networking
         private readonly List<NetworkObject> spawnedObjects = new();
         private NetworkManager subscribedManager;
         private bool spawnedForSession;
+        // SpawnLoot/SpawnMonsters defer until the active planet's env is registered so
+        // per-planet scenes (which load asynchronously) can supply spawn anchors via
+        // PlanetEnvironment.
+        private bool spawnedLootForActivePlanet;
+        private bool spawnedMonstersForActivePlanet;
+        private bool subscribedToPlanetRegistered;
         private static readonly string[] DecorativeLaunchpadColliderNames =
         {
             "Crash Dirt Patch",
@@ -58,6 +67,12 @@ namespace FriendSlop.Networking
 
         private void OnDisable()
         {
+            if (subscribedToPlanetRegistered)
+            {
+                PlanetEnvironment.Registered -= HandlePlanetEnvironmentRegistered;
+                subscribedToPlanetRegistered = false;
+            }
+
             if (subscribedManager == null)
             {
                 return;
@@ -89,8 +104,47 @@ namespace FriendSlop.Networking
 
             spawnedForSession = true;
             SpawnRoundManager();
-            SpawnLoot();
-            SpawnMonsters();
+            BeginPlanetSpawnFlow();
+        }
+
+        private void BeginPlanetSpawnFlow()
+        {
+            if (!subscribedToPlanetRegistered)
+            {
+                PlanetEnvironment.Registered += HandlePlanetEnvironmentRegistered;
+                subscribedToPlanetRegistered = true;
+            }
+
+            // The active planet may already be in memory (nested planets in the bootstrap
+            // scene) - try once now so we don't wait on a registration that never comes.
+            TrySpawnForActivePlanet();
+        }
+
+        private void HandlePlanetEnvironmentRegistered(PlanetEnvironment env)
+        {
+            TrySpawnForActivePlanet();
+        }
+
+        private void TrySpawnForActivePlanet()
+        {
+            var rm = RoundManager.Instance;
+            if (rm == null) return;
+            var planet = rm.CurrentPlanet;
+            if (planet == null) return;
+            var env = PlanetEnvironment.FindFor(planet);
+            if (env == null) return;
+
+            if (!spawnedLootForActivePlanet)
+            {
+                spawnedLootForActivePlanet = true;
+                SpawnLoot(env);
+            }
+
+            if (!spawnedMonstersForActivePlanet)
+            {
+                spawnedMonstersForActivePlanet = true;
+                SpawnMonsters(env);
+            }
         }
 
         private void SpawnRoundManager()
@@ -107,24 +161,32 @@ namespace FriendSlop.Networking
             SpawnNetworkObject(round.NetworkObject);
         }
 
-        private void SpawnLoot()
+        private void SpawnLoot(PlanetEnvironment activeEnv)
         {
-            if (lootPrefabs == null || lootSpawnPoints == null)
-            {
-                return;
-            }
+            if (lootPrefabs == null) return;
+
+            // Prefer per-planet anchors carried on the env; fall back to the legacy
+            // bootstrapper array for any planets still hosted nested in this scene.
+            var anchors = activeEnv != null && activeEnv.LootSpawnPoints != null && activeEnv.LootSpawnPoints.Length > 0
+                ? activeEnv.LootSpawnPoints
+                : lootSpawnPoints;
+            if (anchors == null) return;
 
             // Resolve once - all ship parts roll positions relative to the same launchpad.
-            var launchpadTransform = FindLaunchpadTransform();
+            // Prefer the active planet's launchpad over a stale named lookup so split-scene
+            // planets work even if multiple launchpads are loaded.
+            var launchpadTransform = activeEnv != null && activeEnv.LaunchpadZone != null
+                ? activeEnv.LaunchpadZone.transform
+                : FindLaunchpadTransform();
             var launchpadWorld = launchpadTransform != null
                 ? SphereWorld.GetClosest(launchpadTransform.position)
                 : null;
 
-            var count = Mathf.Min(lootPrefabs.Length, lootSpawnPoints.Length);
+            var count = Mathf.Min(lootPrefabs.Length, anchors.Length);
             for (var i = 0; i < count; i++)
             {
                 var prefab = lootPrefabs[i];
-                var spawnPoint = lootSpawnPoints[i];
+                var spawnPoint = anchors[i];
                 if (prefab == null || spawnPoint == null)
                 {
                     continue;
@@ -184,14 +246,16 @@ namespace FriendSlop.Networking
             rot = world.GetSurfaceRotation(dir, forwardHint);
         }
 
-        private void SpawnMonsters()
+        private void SpawnMonsters(PlanetEnvironment activeEnv)
         {
-            if (monsterPrefab == null || monsterSpawnPoints == null)
-            {
-                return;
-            }
+            if (monsterPrefab == null) return;
 
-            foreach (var spawnPoint in monsterSpawnPoints)
+            var anchors = activeEnv != null && activeEnv.MonsterSpawnPoints != null && activeEnv.MonsterSpawnPoints.Length > 0
+                ? activeEnv.MonsterSpawnPoints
+                : monsterSpawnPoints;
+            if (anchors == null) return;
+
+            foreach (var spawnPoint in anchors)
             {
                 if (spawnPoint == null)
                 {
@@ -227,6 +291,8 @@ namespace FriendSlop.Networking
             }
 
             spawnedForSession = false;
+            spawnedLootForActivePlanet = false;
+            spawnedMonstersForActivePlanet = false;
             spawnedObjects.Clear();
         }
 

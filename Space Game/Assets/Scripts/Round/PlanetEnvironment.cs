@@ -7,24 +7,46 @@ namespace FriendSlop.Round
     [DisallowMultipleComponent]
     public class PlanetEnvironment : MonoBehaviour
     {
-        // All environments in the scene, including those on disabled GameObjects.
-        // Populated once at scene load so ApplyActivePlanetEnvironment can find and enable
-        // planets whose roots are currently inactive.
+        // Every environment that exists in any currently-loaded scene. Two registration
+        // sources keep this populated:
+        //   1. RuntimeInitializeOnLoadMethod after the initial scene load, which catches
+        //      legacy nested envs whose GameObjects are inactive at startup (Awake doesn't
+        //      run on those until they're enabled).
+        //   2. Awake on each PlanetEnvironment, which catches additively-loaded planet
+        //      scenes whose GameObjects are active when the scene loads. Awake's contains
+        //      check makes the two sources idempotent.
         public static readonly List<PlanetEnvironment> AllEnvironments = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void CollectAllEnvironments()
         {
+            // Active scene loads (typically the bootstrap scene). Additive planet scenes
+            // miss this and rely on Awake instead.
             AllEnvironments.Clear();
             AllEnvironments.AddRange(
                 FindObjectsByType<PlanetEnvironment>(FindObjectsInactive.Include, FindObjectsSortMode.None));
         }
 
+        // Subset of AllEnvironments whose GameObject is currently active. Inactive nested
+        // planets in the prototype scene stay in AllEnvironments but drop out of this list
+        // until RoundManager re-enables them. Once every planet lives in its own scene,
+        // this collapses back into AllEnvironments.
         public static readonly List<PlanetEnvironment> ActiveEnvironments = new();
+
+        // Fired when an environment registers (Awake) or unregisters (OnDestroy) - used by
+        // the round manager to re-evaluate the active planet binding when a scene loads
+        // mid-session.
+        public static event System.Action<PlanetEnvironment> Registered;
+        public static event System.Action<PlanetEnvironment> Unregistered;
 
         [SerializeField] private PlanetDefinition planet;
         [SerializeField] private LaunchpadZone launchpadZone;
         [SerializeField] private Transform[] playerSpawnPoints;
+        // Anchors used by PrototypeNetworkBootstrapper to place loot/ship parts. Per-planet
+        // scenes own their own anchors here so the bootstrapper doesn't need cross-scene
+        // serialized references that null out at scene-split time.
+        [SerializeField] private Transform[] lootSpawnPoints;
+        [SerializeField] private Transform[] monsterSpawnPoints;
         // For legacy planets whose content root is a separate scene object (not a child of this
         // GameObject), point this at that root so transitions can enable/disable the visuals.
         [SerializeField] private GameObject contentRoot;
@@ -36,9 +58,27 @@ namespace FriendSlop.Round
 
         public PlanetDefinition Planet => planet;
         public Transform[] PlayerSpawnPoints => playerSpawnPoints;
+        public Transform[] LootSpawnPoints => lootSpawnPoints;
+        public Transform[] MonsterSpawnPoints => monsterSpawnPoints;
         public LaunchpadZone LaunchpadZone => launchpadZone;
         public GameObject ContentRoot => contentRoot != null ? contentRoot : gameObject;
         public SphereWorld SphereWorld => sphereWorld;
+
+        private void Awake()
+        {
+            if (!AllEnvironments.Contains(this))
+            {
+                AllEnvironments.Add(this);
+                Registered?.Invoke(this);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (AllEnvironments.Remove(this))
+                Unregistered?.Invoke(this);
+            ActiveEnvironments.Remove(this);
+        }
 
         private void OnEnable()
         {
@@ -65,10 +105,14 @@ namespace FriendSlop.Round
 
         public static PlanetEnvironment FindFor(PlanetDefinition planetDefinition)
         {
+            // Search AllEnvironments (populated in Awake) rather than ActiveEnvironments
+            // (populated in OnEnable). The Registered event fires inside Awake, so
+            // subscribers that look up the env synchronously from that callback need to
+            // see registrations that haven't yet had OnEnable run.
             if (planetDefinition == null) return null;
-            for (var i = 0; i < ActiveEnvironments.Count; i++)
+            for (var i = 0; i < AllEnvironments.Count; i++)
             {
-                var env = ActiveEnvironments[i];
+                var env = AllEnvironments[i];
                 if (env != null && env.planet == planetDefinition)
                     return env;
             }
@@ -81,6 +125,9 @@ namespace FriendSlop.Round
             launchpadZone = zone;
             playerSpawnPoints = spawns;
         }
+
+        public void SetLootSpawnPoints(Transform[] points) => lootSpawnPoints = points;
+        public void SetMonsterSpawnPoints(Transform[] points) => monsterSpawnPoints = points;
 
         public void SetSphereWorld(SphereWorld world) => sphereWorld = world;
 

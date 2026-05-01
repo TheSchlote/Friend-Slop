@@ -19,6 +19,10 @@ namespace FriendSlop.Loot
         [SerializeField] private float carrySpeedMultiplier = 0.85f;
         [SerializeField] private float carryDistance = 2.1f;
         [SerializeField] private ShipPartType shipPartType = ShipPartType.None;
+        // How long the player has to hold F to deposit this item. 0 = instant tap.
+        // Ship parts override this to 0 in the property below since the assembly is
+        // the round objective and shouldn't be gated by a hold timer.
+        [SerializeField, Min(0f)] private float depositHoldSeconds = 1f;
 
         private Rigidbody body;
         private SphericalRigidbodyGravity sphericalGravity;
@@ -46,6 +50,7 @@ namespace FriendSlop.Loot
         public float CarryDistance => carryDistance;
         public ShipPartType ShipPartType => shipPartType;
         public bool IsShipPart => shipPartType != ShipPartType.None;
+        public float DepositHoldSeconds => IsShipPart ? 0f : Mathf.Max(0f, depositHoldSeconds);
 
         public void ServerSetSpawnPose(Vector3 position, Quaternion rotation)
         {
@@ -251,6 +256,27 @@ namespace FriendSlop.Loot
             ServerDrop(impulse);
         }
 
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void RequestDepositServerRpc(RpcParams rpcParams = default)
+        {
+            // Re-validate everything server-side: a modded client can't shortcut the
+            // hold by sending the RPC early, because we still require the carrier to be
+            // standing inside an accepting deposit surface at the moment of submission.
+            var senderId = rpcParams.Receive.SenderClientId;
+            if (!IsHeldBy(senderId) || IsDeposited.Value) return;
+
+            var round = RoundManager.Instance;
+            if (round == null || round.Phase.Value != RoundPhase.Active) return;
+
+            var carrier = NetworkFirstPersonController.FindByClientId(senderId);
+            if (carrier == null) return;
+
+            var surface = ItemDepositSurface.FindFor(carrier, this);
+            if (surface == null) return;
+
+            surface.ServerSubmit(this);
+        }
+
         public void ServerDrop(Vector3 impulse)
         {
             if (!IsServer || !IsCarried.Value)
@@ -299,20 +325,37 @@ namespace FriendSlop.Loot
                 return;
             }
 
+            // Ship-resting items keep their dropped position across round restarts so the
+            // crew can build a hoard. Carried items and deposited items always reset back
+            // to their planet spawn so the next round is winnable.
+            var preservePosition = ShouldPreserveShipPosition();
+
             IsCarried.Value = false;
             CarrierClientId.Value = NoCarrier;
             SlotIndex.Value = -1;
             IsDeposited.Value = false;
 
             body.isKinematic = true;
-            transform.SetPositionAndRotation(spawnPosition, spawnRotation);
-            body.position = spawnPosition;
-            body.rotation = spawnRotation;
+            if (!preservePosition)
+            {
+                transform.SetPositionAndRotation(spawnPosition, spawnRotation);
+                body.position = spawnPosition;
+                body.rotation = spawnRotation;
+            }
             body.isKinematic = false;
             ClearDynamicVelocity();
 
             ApplyPhysicsState();
             ApplyVisibilityState();
+        }
+
+        // True when the item is sitting (uncarried, undeposited) inside a flat-gravity
+        // volume - i.e. on the ship deck. Planet loot uses sphere gravity, so it never
+        // matches and always teleports back to its spawn anchor.
+        private bool ShouldPreserveShipPosition()
+        {
+            if (IsCarried.Value || IsDeposited.Value) return false;
+            return FlatGravityVolume.TryGetContaining(transform.position, out _);
         }
 
         private void OnCarrierChanged(ulong previousCarrier, ulong currentCarrier)

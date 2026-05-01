@@ -61,6 +61,13 @@ namespace FriendSlop.UI
         private Image _fadeOverlayImage;
         private float _fadeAlpha;
         private const float FadeSpeed = 2.2f; // alpha units per second
+        // Teleporter flash: a brief snap-to-black + fade-back triggered locally on the
+        // teleporting client. Phase fade and flash compose via max() so a flash during
+        // the planet-transition fade doesn't cancel the longer fade.
+        private float _teleporterFlashStartTime = -1f;
+        private const float TeleporterFlashAttackSeconds = 0.06f;
+        private const float TeleporterFlashHoldSeconds = 0.05f;
+        private const float TeleporterFlashReleaseSeconds = 0.32f;
         private RectTransform chargePanelRect;
         private RectTransform chargeFillRect;
         private Image chargeFillImage;
@@ -1842,7 +1849,34 @@ namespace FriendSlop.UI
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var targetAlpha = phase == RoundPhase.Transitioning ? 1f : 0f;
             _fadeAlpha = Mathf.MoveTowards(_fadeAlpha, targetAlpha, FadeSpeed * Time.deltaTime);
-            _fadeOverlayImage.color = new Color(0f, 0f, 0f, _fadeAlpha);
+            var combined = Mathf.Max(_fadeAlpha, ComputeTeleporterFlashAlpha());
+            _fadeOverlayImage.color = new Color(0f, 0f, 0f, combined);
+        }
+
+        // Triggers the teleport flash on this client. Server-side teleport effects RPC
+        // into RoundManager, which routes a targeted ClientRpc only to the teleporting
+        // player so other crew don't get flashed every time someone steps on a pad.
+        public static void RequestTeleporterFlash()
+        {
+            if (Instance == null) return;
+            Instance._teleporterFlashStartTime = Time.time;
+        }
+
+        private float ComputeTeleporterFlashAlpha()
+        {
+            if (_teleporterFlashStartTime < 0f) return 0f;
+            var elapsed = Time.time - _teleporterFlashStartTime;
+            if (elapsed <= TeleporterFlashAttackSeconds)
+                return Mathf.Clamp01(elapsed / TeleporterFlashAttackSeconds);
+            var holdEnd = TeleporterFlashAttackSeconds + TeleporterFlashHoldSeconds;
+            if (elapsed <= holdEnd) return 1f;
+            var releaseProgress = (elapsed - holdEnd) / TeleporterFlashReleaseSeconds;
+            if (releaseProgress >= 1f)
+            {
+                _teleporterFlashStartTime = -1f;
+                return 0f;
+            }
+            return 1f - releaseProgress;
         }
 
         private void QuitGame()

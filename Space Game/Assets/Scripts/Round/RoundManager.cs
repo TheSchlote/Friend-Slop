@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using FriendSlop.Hazards;
 using FriendSlop.Loot;
 using FriendSlop.Player;
+using FriendSlop.SceneManagement;
+using FriendSlop.UI;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -57,6 +59,13 @@ namespace FriendSlop.Round
         private const float TransitionFadeSeconds = 1.0f;
         private const float TransitionHoldSeconds = 0.8f;
 
+        // Server-side bookkeeping: which planet scene we last asked Netcode to load.
+        // Used to unload the previous planet scene when switching to a new one.
+        private string _activePlanetScenePath = string.Empty;
+        // Per-instance dedup so the "scene not in Build Settings" warning fires once per
+        // missing path instead of every time ApplyActivePlanetEnvironment is invoked.
+        private readonly HashSet<string> _warnedMissingPlanetScenes = new();
+
         public void ConfigureSpawnPoints(Transform[] spawnPoints)
         {
             playerSpawnPoints = spawnPoints;
@@ -92,6 +101,7 @@ namespace FriendSlop.Round
             }
 
             CurrentPlanetCatalogIndex.OnValueChanged += OnCurrentPlanetCatalogIndexChanged;
+            PlanetEnvironment.Registered += HandlePlanetEnvironmentRegistered;
 
             if (IsServer)
             {
@@ -125,6 +135,7 @@ namespace FriendSlop.Round
             }
 
             CurrentPlanetCatalogIndex.OnValueChanged -= OnCurrentPlanetCatalogIndexChanged;
+            PlanetEnvironment.Registered -= HandlePlanetEnvironmentRegistered;
         }
 
         private void OnCurrentPlanetCatalogIndexChanged(int previous, int current)
@@ -132,9 +143,30 @@ namespace FriendSlop.Round
             ApplyActivePlanetEnvironment();
         }
 
+        private void HandlePlanetEnvironmentRegistered(PlanetEnvironment env)
+        {
+            // A planet scene that just additively loaded brings its env with it. Two
+            // cases trigger a re-bind: the registered env is the active planet's env,
+            // or it's a same-tier env that the active planet falls back to (catalog
+            // entries without their own dedicated environment, like DeepHaul borrowing
+            // Rusty Moon's scene).
+            if (env == null || env.Planet == null) return;
+            var current = CurrentPlanet;
+            if (current == null) return;
+            if (env.Planet == current || env.Planet.Tier == current.Tier)
+                ApplyActivePlanetEnvironment();
+        }
+
         private void ApplyActivePlanetEnvironment()
         {
             var planet = CurrentPlanet;
+
+            // Server: reconcile per-planet scene loads. If the active planet has a scene
+            // assigned, ensure it's loaded; if a previous planet scene is still around and
+            // doesn't match, unload it. Scene loads are async - when the env Awakes inside
+            // the new scene it fires Registered, which calls back into this method.
+            if (IsServer)
+                ServerReconcilePlanetScenes(planet);
 
             // Search AllEnvironments so we can find and enable planets whose roots are disabled.
             PlanetEnvironment activeEnv = null;
@@ -161,12 +193,23 @@ namespace FriendSlop.Round
             }
 
             // Toggle planet roots. For planets whose visual content lives in a separate
-            // scene object (ContentRoot != gameObject), toggle that too.
+            // scene object (ContentRoot != gameObject), toggle that too. Scene-loaded envs
+            // skip the GameObject toggle (their visibility is owned by scene load/unload),
+            // but we still flip their launchpad's active flag so inactive planets don't
+            // keep accepting boarding/loot when multiple planet scenes happen to be loaded
+            // (typical in-editor when scenes are left open for authoring).
             for (var i = 0; i < PlanetEnvironment.AllEnvironments.Count; i++)
             {
                 var env = PlanetEnvironment.AllEnvironments[i];
                 if (env == null) continue;
                 var want = env == activeEnv;
+
+                if (IsSceneLoadedPlanet(env))
+                {
+                    env.SetActiveForRound(want);
+                    continue;
+                }
+
                 if (env.gameObject.activeSelf != want)
                     env.gameObject.SetActive(want);
                 var content = env.ContentRoot;
@@ -179,6 +222,108 @@ namespace FriendSlop.Round
 
             if (IsServer && activeEnv != null && activeEnv.PlayerSpawnPoints != null && activeEnv.PlayerSpawnPoints.Length > 0)
                 ConfigureSpawnPoints(activeEnv.PlayerSpawnPoints);
+        }
+
+        private void ServerReconcilePlanetScenes(PlanetDefinition planet)
+        {
+            // Defer to next frame so this never runs while NetworkManager's
+            // HostServerInitialize is still on the stack - mid-init SceneManager.LoadScene
+            // calls land in a half-initialized state and have produced "scene event in
+            // progress" / NREs in startup logs. The legacy fallback in
+            // ApplyActivePlanetEnvironment keeps the active env bound from the prototype
+            // scene during the one-frame gap, so gameplay doesn't notice.
+            StartCoroutine(ServerReconcilePlanetScenesDeferred(planet));
+        }
+
+        private IEnumerator ServerReconcilePlanetScenesDeferred(PlanetDefinition planet)
+        {
+            yield return null;
+            if (this == null || !IsServer) yield break;
+
+            var service = NetworkSceneTransitionService.Instance;
+            var sceneOwner = ResolveSceneOwner(planet);
+            var hasScene = sceneOwner != null;
+            var targetPath = hasScene ? sceneOwner.PlanetScene.ScenePath : string.Empty;
+
+            // Unload the previously-loaded planet scene if we're switching away from it.
+            if (!string.IsNullOrEmpty(_activePlanetScenePath) && _activePlanetScenePath != targetPath)
+            {
+                if (service != null)
+                    service.ServerUnloadScenePath(_activePlanetScenePath);
+                _activePlanetScenePath = string.Empty;
+            }
+
+            if (!hasScene) yield break;
+
+            // Build-settings sanity check: a planet asset can reference a scene that the
+            // extractor hasn't authored yet. Skip the additive load with a warning so the
+            // host stays alive on a fresh checkout - the nested fallback env will play.
+            if (UnityEngine.SceneManagement.SceneUtility.GetBuildIndexByScenePath(targetPath) < 0)
+            {
+                if (_warnedMissingPlanetScenes.Add(targetPath))
+                {
+                    Debug.LogWarning(
+                        $"RoundManager: planet scene '{targetPath}' is not in Build Settings; skipping additive load. " +
+                        "(Run Tools/Friend Slop/Extract Tier 1 Into Scene to author it.)");
+                }
+                yield break;
+            }
+
+            if (service != null && !service.WasServerSceneLoadStarted(targetPath))
+            {
+                service.ServerLoadScene(sceneOwner.PlanetScene);
+            }
+            _activePlanetScenePath = targetPath;
+        }
+
+        // True when an env exists that ApplyActivePlanetEnvironment would bind to for
+        // this planet - either the planet's own env, or any same-tier env if the planet
+        // is using the catalog fallback. Mirrors the search in Apply so the transition
+        // wait doesn't time out for catalog entries that share an environment.
+        private static bool IsBindableEnvRegistered(PlanetDefinition planet)
+        {
+            if (planet == null) return false;
+            if (PlanetEnvironment.FindFor(planet) != null) return true;
+            for (var i = 0; i < PlanetEnvironment.AllEnvironments.Count; i++)
+            {
+                var env = PlanetEnvironment.AllEnvironments[i];
+                if (env != null && env.Planet != null && env.Planet.Tier == planet.Tier)
+                    return true;
+            }
+            return false;
+        }
+
+        // Resolves which planet definition's scene actually backs this planet at runtime.
+        // Returns the planet itself if it has a dedicated scene, otherwise looks for any
+        // other catalog entry at the same tier that does. Tier-2 catalog entries like
+        // DeepHaul/GhostShift currently share Rusty Moon's environment via this fallback.
+        private PlanetDefinition ResolveSceneOwner(PlanetDefinition planet)
+        {
+            if (planet == null) return null;
+            if (planet.HasPlanetScene) return planet;
+            if (planetCatalog == null) return null;
+
+            for (var i = 0; i < planetCatalog.Count; i++)
+            {
+                var candidate = planetCatalog.GetByIndex(i);
+                if (candidate == null) continue;
+                if (candidate == planet) continue;
+                if (candidate.Tier != planet.Tier) continue;
+                if (candidate.HasPlanetScene) return candidate;
+            }
+            return null;
+        }
+
+        private static bool IsSceneLoadedPlanet(PlanetEnvironment env)
+        {
+            if (env == null || env.Planet == null) return false;
+            if (!env.Planet.HasPlanetScene) return false;
+            // Treat envs as scene-loaded only when their actual scene path matches the
+            // PlanetDefinition's assigned scene path. Otherwise they're a nested fallback
+            // in the bootstrap scene and should still be toggled like before.
+            var envScenePath = GameScenePathUtility.NormalizePath(env.gameObject.scene.path);
+            return string.Equals(envScenePath, env.Planet.PlanetScene.ScenePath,
+                System.StringComparison.OrdinalIgnoreCase);
         }
 
         private void Update()
@@ -424,6 +569,20 @@ namespace FriendSlop.Round
             // Brief hold so the loading screen is readable before the round starts.
             yield return new WaitForSeconds(TransitionHoldSeconds);
 
+            // Don't start the next round until an env we can bind to is registered.
+            // Otherwise RespawnPlayersAtPlanet would teleport players to the previous
+            // planet's spawn transforms, which the deferred unload just destroyed.
+            // Same fallback as ApplyActivePlanetEnvironment: accept an exact match OR
+            // any same-tier env, so catalog entries without their own scene (DeepHaul,
+            // GhostShift, etc.) succeed once the fallback scene's env registers.
+            const float maxEnvWaitSeconds = 10f;
+            var envWaitStart = Time.time;
+            while (!IsBindableEnvRegistered(next)
+                   && Time.time - envWaitStart < maxEnvWaitSeconds)
+            {
+                yield return null;
+            }
+
             SelectedNextPlanetCatalogIndex.Value = -1;
             _transitionCoroutine = null;
             ServerStartRound();
@@ -656,6 +815,12 @@ namespace FriendSlop.Round
                     continue;
 
                 var spawn = playerSpawnPoints[index % playerSpawnPoints.Length];
+                // Defensive: a previous planet's spawn transform could have been destroyed
+                // by an additive scene unload before the new planet's env rebound. Skip
+                // dangling slots so the round can still proceed - missing players will be
+                // placed when their next ServerPlaceNewPlayer/MovePlayersToShip fires.
+                if (spawn == null)
+                    continue;
                 player.ServerTeleport(spawn.position, spawn.rotation);
                 player.ServerRevive();
             }
@@ -671,7 +836,60 @@ namespace FriendSlop.Round
                 return;
 
             var spawn = GetSpawnForPlayer(player, spawnPoints);
+            if (spawn == null) return;
             player.ServerTeleport(spawn.position, spawn.rotation);
+        }
+
+        // Teleporter-pad entry points. Distinct from ServerPlaceNewPlayer because they're
+        // intended for mid-round transit between the ship and the active planet, so they
+        // ignore the phase-driven spawn-point switch and explicitly target one or the other.
+        public bool ServerTeleportPlayerToShip(NetworkFirstPersonController player)
+        {
+            if (!IsServer || player == null) return false;
+            return TeleportToSpawnPoints(player, shipSpawnPoints);
+        }
+
+        public bool ServerTeleportPlayerToPlanet(NetworkFirstPersonController player)
+        {
+            if (!IsServer || player == null) return false;
+            return TeleportToSpawnPoints(player, playerSpawnPoints);
+        }
+
+        private static bool TeleportToSpawnPoints(NetworkFirstPersonController player, Transform[] spawns)
+        {
+            if (spawns == null || spawns.Length == 0) return false;
+            var spawn = GetSpawnForPlayer(player, spawns);
+            if (spawn == null) return false;
+            player.ServerTeleport(spawn.position, spawn.rotation);
+            return true;
+        }
+
+        // Server-side fan-out for teleporter-pad effects. The flash is targeted at the
+        // teleported player only (other crew members shouldn't black out when someone
+        // else uses a pad), while the chirp broadcasts so everyone within earshot of the
+        // pad hears it.
+        public void ServerNotifyTeleporterEffect(NetworkFirstPersonController player, Vector3 padPosition)
+        {
+            if (!IsServer || player == null) return;
+
+            var flashParams = new ClientRpcParams
+            {
+                Send = new ClientRpcSendParams { TargetClientIds = new[] { player.OwnerClientId } }
+            };
+            TeleporterFlashClientRpc(flashParams);
+            TeleporterSoundClientRpc(padPosition);
+        }
+
+        [ClientRpc]
+        private void TeleporterFlashClientRpc(ClientRpcParams rpcParams = default)
+        {
+            FriendSlopUI.RequestTeleporterFlash();
+        }
+
+        [ClientRpc]
+        private void TeleporterSoundClientRpc(Vector3 padPosition)
+        {
+            TeleporterAudio.PlayAt(padPosition);
         }
 
         private void ServerSetPhase(RoundPhase phase)
@@ -716,6 +934,7 @@ namespace FriendSlop.Round
                     continue;
 
                 var spawn = GetSpawnForPlayer(player, shipSpawnPoints);
+                if (spawn == null) continue;
                 if (revivePlayers)
                     player.ServerRevive();
                 player.ServerTeleport(spawn.position, spawn.rotation);
@@ -724,9 +943,19 @@ namespace FriendSlop.Round
 
         private static Transform GetSpawnForPlayer(NetworkFirstPersonController player, Transform[] spawnPoints)
         {
-            var index = NetworkFirstPersonController.ActivePlayers.IndexOf(player);
-            if (index < 0) index = 0;
-            return spawnPoints[index % spawnPoints.Length];
+            if (spawnPoints == null || spawnPoints.Length == 0) return null;
+            var startIndex = NetworkFirstPersonController.ActivePlayers.IndexOf(player);
+            if (startIndex < 0) startIndex = 0;
+
+            // Skip null/destroyed slots so a stale planet-spawn array (e.g. transforms
+            // from a just-unloaded planet scene) doesn't strand players. Walk forward
+            // from the player's slot and return the first live transform.
+            for (var offset = 0; offset < spawnPoints.Length; offset++)
+            {
+                var candidate = spawnPoints[(startIndex + offset) % spawnPoints.Length];
+                if (candidate != null) return candidate;
+            }
+            return null;
         }
     }
 }
