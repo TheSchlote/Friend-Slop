@@ -32,6 +32,21 @@ namespace FriendSlop.Player
                 bone.SetParent(cameraRoot, true);
         }
 
+        public Vector3 GetServerViewOrigin()
+        {
+            if (playerCamera != null)
+                return playerCamera.transform.position;
+
+            return transform.position + transform.up * Mathf.Max(1.1f, CurrentBodyHeight * 0.75f);
+        }
+
+        public Vector3 GetServerViewDirection()
+        {
+            var pitch = Mathf.Clamp(_headPitch.Value, -82f, 82f);
+            var direction = transform.rotation * Quaternion.Euler(pitch, 0f, 0f) * Vector3.forward;
+            return direction.sqrMagnitude > 0.001f ? direction.normalized : transform.forward;
+        }
+
         private void LateUpdate()
         {
             if (IsOwner || cameraRoot == null) return;

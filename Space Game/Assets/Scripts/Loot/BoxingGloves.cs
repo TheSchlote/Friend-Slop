@@ -17,6 +17,7 @@ namespace FriendSlop.Loot
         [SerializeField] private float punchCooldown = 0.9f;
         [SerializeField] private int punchMonsterDamage = 25;
         [SerializeField] private LayerMask punchMask = ~0;
+        [SerializeField, Range(0f, 90f)] private float maxServerAimAngle = 30f;
 
         // Per-client cooldown — not networked, applied immediately on the owner
         // when they fire a punch so the button can't be spammed before the RPC round-trips.
@@ -53,12 +54,8 @@ namespace FriendSlop.Loot
             if (RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active) return;
             if (Time.time < _nextServerPunchTime) return;
 
-            // Clamp the RPC origin so a modified client can't reach across the map.
-            if (Vector3.SqrMagnitude(origin - attacker.transform.position) > 9f)
-                origin = attacker.transform.position + attacker.transform.forward * 1.2f;
-
-            direction = direction.normalized;
-            if (direction.sqrMagnitude < 0.5f) return;
+            origin = attacker.GetServerViewOrigin();
+            direction = ResolveServerAimDirection(attacker, direction, maxServerAimAngle);
 
             _nextServerPunchTime = Time.time + punchCooldown;
             if (!Physics.SphereCast(origin, punchRadius, direction, out var hit,

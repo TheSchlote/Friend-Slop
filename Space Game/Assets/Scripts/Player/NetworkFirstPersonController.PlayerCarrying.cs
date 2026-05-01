@@ -4,11 +4,10 @@ using UnityEngine;
 
 namespace FriendSlop.Player
 {
-    // "Player carrying" - Lethal-Company-style: a player can pick another player
-    // up (alive or dead) and walk around with them. The picker is the carrier;
-    // the picked is the held player. State splits across two NetworkObjects: the
-    // held player owns IsBeingCarried + CarriedByClientId; the carrier owns its
-    // local _heldPlayer reference. Server is authoritative for both.
+    // "Player carrying" - a player can pick up a dead teammate and move their body.
+    // The picker is the carrier; the picked is the held player. State splits across
+    // two NetworkObjects: the held player owns IsBeingCarried + CarriedByClientId;
+    // the carrier owns its local _heldPlayer reference. Server is authoritative for both.
     public partial class NetworkFirstPersonController
     {
         [Header("Player Carrying")]
@@ -62,6 +61,7 @@ namespace FriendSlop.Player
             if (carrier == null || carrier == this || !carrier.IsSpawned || !IsSpawned) return;
             if (carrier.HeldItem != null || carrier.HasHeldPlayer) return;
             if (IsBeingCarried.Value || carrier.IsBeingCarried.Value || carrier.IsDead) return;
+            if (!IsDead) return;
             var round = RoundManager.Instance;
             if (round == null || round.Phase.Value != RoundPhase.Active) return;
             if (!CanServerReachForPickup(carrier, this, ServerPlayerPickupMaxDistance)) return;

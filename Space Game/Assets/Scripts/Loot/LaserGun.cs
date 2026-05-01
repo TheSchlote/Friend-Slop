@@ -15,6 +15,7 @@ namespace FriendSlop.Loot
         [SerializeField] private float fireCooldown = 0.35f;
         [SerializeField] private int maxAmmo = 10;
         [SerializeField] private LayerMask fireMask = ~0;
+        [SerializeField, Range(0f, 90f)] private float maxServerAimAngle = 25f;
 
         private NetworkVariable<int> _ammo = new(0);
         private float _nextLocalFireTime;
@@ -91,11 +92,8 @@ namespace FriendSlop.Loot
             if (_ammo.Value <= 0) return;
             if (Time.time < _nextServerFireTime) return;
 
-            if (Vector3.SqrMagnitude(origin - shooter.transform.position) > 16f)
-                origin = shooter.transform.position + shooter.transform.forward * 1.5f;
-
-            direction = direction.normalized;
-            if (direction.sqrMagnitude < 0.5f) return;
+            origin = shooter.GetServerViewOrigin();
+            direction = ResolveServerAimDirection(shooter, direction, maxServerAimAngle);
 
             _nextServerFireTime = Time.time + fireCooldown;
             _ammo.Value--;

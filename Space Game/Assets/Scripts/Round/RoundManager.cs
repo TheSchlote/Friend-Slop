@@ -814,11 +814,7 @@ namespace FriendSlop.Round
                 if (player == null || !player.IsSpawned)
                     continue;
 
-                var spawn = playerSpawnPoints[index % playerSpawnPoints.Length];
-                // Defensive: a previous planet's spawn transform could have been destroyed
-                // by an additive scene unload before the new planet's env rebound. Skip
-                // dangling slots so the round can still proceed - missing players will be
-                // placed when their next ServerPlaceNewPlayer/MovePlayersToShip fires.
+                var spawn = GetSpawnForPlayer(player, playerSpawnPoints);
                 if (spawn == null)
                     continue;
                 player.ServerTeleport(spawn.position, spawn.rotation);

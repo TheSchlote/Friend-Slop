@@ -14,6 +14,7 @@ namespace FriendSlop.Loot
     {
         private const ulong NoCarrier = ulong.MaxValue;
         private const float ServerPickupMaxDistance = 4.25f;
+        private const float ServerDepositHoldGraceSeconds = 0.1f;
 
         [SerializeField] private string itemName = "Weird Junk";
         [SerializeField] private int value = 50;
@@ -32,6 +33,9 @@ namespace FriendSlop.Loot
         private Vector3 spawnPosition;
         private Quaternion spawnRotation;
         private float _monsterHitCooldown;
+        private ulong _depositHoldClientId = NoCarrier;
+        private float _depositHoldReadyAt;
+        private IItemDepositSurface _depositHoldSurface;
 
         // Declaration order matters: NGO deserializes NetworkVariables in this order, and
         // OnCarrierChanged reads SlotIndex.Value when wiring the carrier's inventory cache.
@@ -286,6 +290,23 @@ namespace FriendSlop.Loot
             return true;
         }
 
+        protected static Vector3 ResolveServerAimDirection(
+            NetworkFirstPersonController player,
+            Vector3 requestedDirection,
+            float maxAngleDegrees)
+        {
+            if (player == null) return Vector3.forward;
+
+            var serverDirection = player.GetServerViewDirection();
+            if (requestedDirection.sqrMagnitude < 0.001f)
+                return serverDirection;
+
+            var normalizedRequest = requestedDirection.normalized;
+            return Vector3.Angle(serverDirection, normalizedRequest) <= maxAngleDegrees
+                ? normalizedRequest
+                : serverDirection;
+        }
+
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void MoveCarriedServerRpc(Vector3 targetPosition, Quaternion targetRotation, RpcParams rpcParams = default)
         {
@@ -323,24 +344,91 @@ namespace FriendSlop.Loot
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void BeginDepositHoldServerRpc(RpcParams rpcParams = default)
+        {
+            var senderId = rpcParams.Receive.SenderClientId;
+            if (!TryResolveDepositSurface(senderId, out var surface))
+            {
+                ClearServerDepositHoldFor(senderId);
+                return;
+            }
+
+            var holdSeconds = DepositHoldSeconds;
+            if (holdSeconds <= 0f)
+            {
+                ClearServerDepositHoldFor(senderId);
+                return;
+            }
+
+            _depositHoldClientId = senderId;
+            _depositHoldSurface = surface;
+            _depositHoldReadyAt = Time.time + Mathf.Max(0f, holdSeconds - ServerDepositHoldGraceSeconds);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void CancelDepositHoldServerRpc(RpcParams rpcParams = default)
+        {
+            ClearServerDepositHoldFor(rpcParams.Receive.SenderClientId);
+        }
+
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
         public void RequestDepositServerRpc(RpcParams rpcParams = default)
         {
-            // Re-validate everything server-side: a modded client can't shortcut the
-            // hold by sending the RPC early, because we still require the carrier to be
-            // standing inside an accepting deposit surface at the moment of submission.
             var senderId = rpcParams.Receive.SenderClientId;
-            if (!IsHeldBy(senderId) || IsDeposited.Value) return;
+            if (!TryResolveDepositSurface(senderId, out var surface))
+            {
+                ClearServerDepositHoldFor(senderId);
+                return;
+            }
+
+            if (DepositHoldSeconds > 0f)
+            {
+                if (_depositHoldClientId != senderId) return;
+                if (_depositHoldSurface == null || !ReferenceEquals(_depositHoldSurface, surface)) return;
+                if (Time.time < _depositHoldReadyAt) return;
+            }
+
+            ClearServerDepositHoldFor(senderId);
+            surface.ServerSubmit(this);
+        }
+
+        private bool TryResolveDepositSurface(ulong senderId, out IItemDepositSurface surface)
+        {
+            surface = null;
+            if (!IsHeldBy(senderId) || IsDeposited.Value) return false;
 
             var round = RoundManager.Instance;
-            if (round == null || round.Phase.Value != RoundPhase.Active) return;
+            if (round == null || round.Phase.Value != RoundPhase.Active) return false;
 
             var carrier = NetworkFirstPersonController.FindByClientId(senderId);
-            if (carrier == null) return;
+            if (carrier == null) return false;
 
-            var surface = ItemDepositSurface.FindFor(carrier, this);
-            if (surface == null) return;
+            surface = ItemDepositSurface.FindFor(carrier, this);
+            return surface != null;
+        }
 
-            surface.ServerSubmit(this);
+        private void ClearServerDepositHold()
+        {
+            _depositHoldClientId = NoCarrier;
+            _depositHoldReadyAt = 0f;
+            _depositHoldSurface = null;
+        }
+
+        private void ClearServerDepositHoldFor(ulong clientId)
+        {
+            if (_depositHoldClientId != clientId) return;
+            ClearServerDepositHold();
+        }
+
+        private void ValidateServerDepositHold()
+        {
+            if (_depositHoldClientId == NoCarrier) return;
+            if (!TryResolveDepositSurface(_depositHoldClientId, out var surface)
+                || _depositHoldSurface == null
+                || !ReferenceEquals(_depositHoldSurface, surface))
+            {
+                ClearServerDepositHold();
+            }
         }
 
         public void ServerDrop(Vector3 impulse)
@@ -352,6 +440,7 @@ namespace FriendSlop.Loot
 
             var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
             carrier?.ClearHeldItem(this);
+            ClearServerDepositHold();
 
             IsCarried.Value = false;
             CarrierClientId.Value = NoCarrier;
@@ -373,6 +462,7 @@ namespace FriendSlop.Loot
 
             var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
             carrier?.ClearHeldItem(this);
+            ClearServerDepositHold();
 
             IsCarried.Value = false;
             CarrierClientId.Value = NoCarrier;
@@ -400,6 +490,7 @@ namespace FriendSlop.Loot
             CarrierClientId.Value = NoCarrier;
             SlotIndex.Value = -1;
             IsDeposited.Value = false;
+            ClearServerDepositHold();
 
             body.isKinematic = true;
             if (!preservePosition)
@@ -492,6 +583,7 @@ namespace FriendSlop.Loot
         private void LateUpdate()
         {
             if (!IsServer) return;
+            ValidateServerDepositHold();
             if (!IsCarried.Value || IsDeposited.Value) return;
 
             var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);

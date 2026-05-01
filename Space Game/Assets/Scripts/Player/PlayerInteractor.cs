@@ -66,6 +66,7 @@ namespace FriendSlop.Player
             if (controller.IsDeadLocally || controller.IsBeingCarried.Value)
             {
                 ResetCarrySync();
+                CancelDepositHold();
                 return;
             }
 
@@ -74,6 +75,7 @@ namespace FriendSlop.Player
             if (GameplayInputState.IsBlocked)
             {
                 _isCharging = false;
+                CancelDepositHold();
                 return;
             }
 
@@ -127,10 +129,11 @@ namespace FriendSlop.Player
                 if (holdSeconds <= 0f)
                 {
                     activeItem.RequestDepositServerRpc();
-                    CancelDepositHold();
+                    CancelDepositHold(notifyServer: false);
                     return;
                 }
 
+                activeItem.BeginDepositHoldServerRpc();
                 _depositHoldStartTime = Time.time;
                 _depositHoldItem = activeItem;
                 return;
@@ -147,11 +150,13 @@ namespace FriendSlop.Player
             if (Time.time - _depositHoldStartTime < holdSeconds) return;
 
             activeItem.RequestDepositServerRpc();
-            CancelDepositHold();
+            CancelDepositHold(notifyServer: false);
         }
 
-        private void CancelDepositHold()
+        private void CancelDepositHold(bool notifyServer = true)
         {
+            if (notifyServer && _depositHoldItem != null && _depositHoldItem.IsHeldBy(OwnerClientId))
+                _depositHoldItem.CancelDepositHoldServerRpc();
             _depositHoldStartTime = -1f;
             _depositHoldItem = null;
         }
@@ -313,6 +318,7 @@ namespace FriendSlop.Player
                 {
                     var target = hit.collider.GetComponentInParent<NetworkFirstPersonController>();
                     if (target != null && target != controller
+                        && target.IsDead
                         && !target.IsBeingCarried.Value
                         && !target.IsAncestorInCarrierChain(controller))
                     {
@@ -321,9 +327,7 @@ namespace FriendSlop.Player
                             ? NetworkManager.ServerClientId : 0UL;
                         var name = target.OwnerClientId == serverId
                             ? "Host" : $"Player {target.OwnerClientId}";
-                        CurrentPrompt = target.IsDead
-                            ? $"E grab {name}'s body"
-                            : $"E grab {name}";
+                        CurrentPrompt = $"E grab {name}'s body";
                         return;
                     }
                 }

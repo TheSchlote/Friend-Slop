@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FriendSlop.Loot
 {
@@ -45,16 +46,20 @@ namespace FriendSlop.Loot
 
         private void OnDisable()
         {
-            // Don't tear down spawned loot on planet deactivation — players may travel back.
-            // Cleanup happens on session stop instead.
+            // Scene unload cleanup is handled by OnDestroy. Legacy same-scene planets may
+            // be disabled and re-enabled during travel, so keep their loot in place here.
         }
 
         private void OnDestroy()
         {
-            if (subscribedManager == null) return;
-            subscribedManager.OnServerStarted -= HandleServerStarted;
-            subscribedManager.OnServerStopped -= HandleServerStopped;
-            subscribedManager = null;
+            if (subscribedManager != null)
+            {
+                subscribedManager.OnServerStarted -= HandleServerStarted;
+                subscribedManager.OnServerStopped -= HandleServerStopped;
+                subscribedManager = null;
+            }
+
+            CleanupSpawnedObjects(resetSession: false);
         }
 
         private void HandleServerStarted()
@@ -83,10 +88,13 @@ namespace FriendSlop.Loot
                     var pos = spawn.position + spawn.up * spawnSurfaceLift;
                     var rot = spawn.rotation;
                     var loot = Instantiate(prefab, pos, rot);
+                    var ownerScene = gameObject.scene;
+                    if (ownerScene.IsValid() && ownerScene.isLoaded)
+                        SceneManager.MoveGameObjectToScene(loot.gameObject, ownerScene);
                     loot.ServerSetSpawnPose(pos, rot);
                     if (loot.NetworkObject != null)
                     {
-                        loot.NetworkObject.Spawn();
+                        loot.NetworkObject.Spawn(destroyWithScene: true);
                         spawnedObjects.Add(loot.NetworkObject);
                     }
                 }
@@ -95,14 +103,23 @@ namespace FriendSlop.Loot
 
         private void HandleServerStopped(bool wasHost)
         {
+            CleanupSpawnedObjects(resetSession: true);
+        }
+
+        private void CleanupSpawnedObjects(bool resetSession)
+        {
             for (var i = 0; i < spawnedObjects.Count; i++)
             {
                 var obj = spawnedObjects[i];
                 if (obj == null) continue;
-                Destroy(obj.gameObject);
+                if (obj.IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+                    obj.Despawn(destroy: true);
+                else
+                    Destroy(obj.gameObject);
             }
             spawnedObjects.Clear();
-            spawnedThisSession = false;
+            if (resetSession)
+                spawnedThisSession = false;
         }
     }
 }
