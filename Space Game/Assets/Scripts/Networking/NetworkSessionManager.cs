@@ -16,8 +16,6 @@ namespace FriendSlop.Networking
 {
     public partial class NetworkSessionManager : MonoBehaviour
     {
-        public static NetworkSessionManager Instance { get; private set; }
-
         // Raised when the local client/host session has ended (disconnect, shutdown,
         // transport failure). UI subscribes to release the gameplay cursor lock so the
         // menu is interactable again. Kept as an event so this class never reaches

@@ -229,11 +229,11 @@ namespace FriendSlop.UI
             connectionHintText.gameObject.SetActive(false);
 
             joinInput = CreateInput("JoinInput", menuRoot.transform, "Relay code or LAN IP", new Vector2(0f, 68f));
-            hostButton = CreateButton("Host Online", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.HostOnline());
-            joinButton = CreateButton("Join Code", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.JoinOnline(joinInput.text));
-            localHostButton = CreateButton("Host LAN", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.StartLocalHost());
-            localJoinButton = CreateButton("Join LAN", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.StartLocalClient(string.IsNullOrWhiteSpace(joinInput.text) ? "127.0.0.1" : joinInput.text));
-            cancelButton = CreateButton("Cancel", menuRoot.transform, Vector2.zero, () => NetworkSessionManager.Instance?.CancelSessionOperation());
+            hostButton = CreateButton("Host Online", menuRoot.transform, Vector2.zero, () => SessionManager?.HostOnline());
+            joinButton = CreateButton("Join Code", menuRoot.transform, Vector2.zero, () => SessionManager?.JoinOnline(joinInput.text));
+            localHostButton = CreateButton("Host LAN", menuRoot.transform, Vector2.zero, () => SessionManager?.StartLocalHost());
+            localJoinButton = CreateButton("Join LAN", menuRoot.transform, Vector2.zero, () => SessionManager?.StartLocalClient(string.IsNullOrWhiteSpace(joinInput.text) ? "127.0.0.1" : joinInput.text));
+            cancelButton = CreateButton("Cancel", menuRoot.transform, Vector2.zero, () => SessionManager?.CancelSessionOperation());
             cancelButton.gameObject.SetActive(false);
             startButton = CreateButton("Start Round", menuRoot.transform, Vector2.zero, () =>
             {

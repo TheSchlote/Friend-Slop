@@ -206,9 +206,8 @@ namespace FriendSlop.UI
 
         private void CopyJoinCodeToClipboard()
         {
-            var code = GetCopyableJoinCode(NetworkSessionManager.Instance != null
-                ? NetworkSessionManager.Instance.LastJoinCode
-                : string.Empty);
+            var session = SessionManager;
+            var code = GetCopyableJoinCode(session != null ? session.LastJoinCode : string.Empty);
             if (string.IsNullOrWhiteSpace(code)) return;
 
             GUIUtility.systemCopyBuffer = code;

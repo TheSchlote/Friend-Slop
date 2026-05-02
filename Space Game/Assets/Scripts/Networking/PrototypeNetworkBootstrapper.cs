@@ -3,6 +3,7 @@ using FriendSlop.Core;
 using FriendSlop.Hazards;
 using FriendSlop.Loot;
 using FriendSlop.Round;
+using FriendSlop.SceneManagement;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -12,6 +13,7 @@ namespace FriendSlop.Networking
     public class PrototypeNetworkBootstrapper : MonoBehaviour
     {
         [SerializeField] private RoundManager roundManagerPrefab;
+        [SerializeField] private NetworkSceneTransitionService sceneTransitionService;
         [SerializeField] private Transform[] playerSpawnPoints;
         [SerializeField] private Transform[] shipSpawnPoints;
         [SerializeField] private NetworkLootItem[] lootPrefabs;
@@ -159,7 +161,24 @@ namespace FriendSlop.Networking
             var round = Instantiate(roundManagerPrefab);
             round.ConfigureSpawnPoints(playerSpawnPoints);
             round.ConfigureShipSpawnPoints(shipSpawnPoints);
+            round.ConfigureSceneTransitionService(ResolveSceneTransitionService());
             SpawnNetworkObject(round.NetworkObject);
+        }
+
+        private NetworkSceneTransitionService ResolveSceneTransitionService()
+        {
+            if (sceneTransitionService != null)
+            {
+                return sceneTransitionService;
+            }
+
+            var networkManager = subscribedManager != null ? subscribedManager : NetworkManager.Singleton;
+            if (networkManager != null)
+            {
+                sceneTransitionService = networkManager.GetComponent<NetworkSceneTransitionService>();
+            }
+
+            return sceneTransitionService;
         }
 
         private void SpawnLoot(PlanetEnvironment activeEnv)

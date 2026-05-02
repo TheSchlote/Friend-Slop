@@ -32,10 +32,6 @@ namespace FriendSlop.UI
         private static readonly Color CancelButtonColor = new Color(0.48f, 0.17f, 0.12f, 0.96f);
         private static readonly Color SuccessButtonColor = new Color(0.16f, 0.42f, 0.24f, 0.96f);
 
-        // ── Singleton ─────────────────────────────────────────────────────────
-        public static FriendSlopUI Instance { get; private set; }
-        public static bool BlocksGameplayInput => Instance != null && Instance.IsBlockingGameplayInput();
-
         // ── Canvas roots ──────────────────────────────────────────────────────
         private Canvas canvas;
         private RectTransform canvasRect;
@@ -150,7 +146,6 @@ namespace FriendSlop.UI
 
         private void Awake()
         {
-            Instance = this;
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (font == null)
                 font = Resources.GetBuiltinResource<Font>("Arial.ttf");
@@ -164,7 +159,7 @@ namespace FriendSlop.UI
         {
             // Register the input-block predicate so Gameplay code can ask "should I ignore
             // input?" without depending on FriendSlop.UI. See FriendSlop.Core.GameplayInputState.
-            GameplayInputState.RegisterBlockProvider(IsBlockingGameplayInput);
+            GameplayInputState.RegisterBlockProvider(this, IsBlockingGameplayInput);
 
             NetworkSessionManager.SessionEnded += HandleSessionEnded;
             NetworkFirstPersonController.LocalPlayerDamaged += HandleLocalPlayerDamaged;
@@ -182,10 +177,7 @@ namespace FriendSlop.UI
             RoundManager.LocalTeleporterFlashRequested -= HandleTeleporterFlashRequested;
             _chatInputFocused = false;
 
-            // Only clear if we're the registered provider; if a fresh UI instance has already
-            // taken over (e.g. scene reload during a host restart) leave its provider in place.
-            if (Instance == this)
-                GameplayInputState.ClearBlockProvider();
+            GameplayInputState.ClearBlockProvider(this);
         }
 
         private void HandleSessionEnded() => UnlockMenuCursor();
@@ -310,7 +302,7 @@ namespace FriendSlop.UI
         private void RefreshUi()
         {
             var networkManager = NetworkManager.Singleton;
-            var session = NetworkSessionManager.Instance;
+            var session = SessionManager;
             var round = RoundManager.Instance;
             var connected = networkManager != null && networkManager.IsListening;
             var isHost = networkManager != null && networkManager.IsHost;
@@ -468,7 +460,7 @@ namespace FriendSlop.UI
 
         private void HandleSessionExitButton()
         {
-            var session = NetworkSessionManager.Instance;
+            var session = SessionManager;
             if (session == null) return;
 
             if (session.CanCancelSessionOperation)

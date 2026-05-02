@@ -26,9 +26,6 @@ namespace FriendSlop.Tests.EditMode
         private static readonly HashSet<string> AllowedSingletons = new()
         {
             "Assets/Scripts/Round/RoundManager.cs::Instance",
-            "Assets/Scripts/UI/FriendSlopUI.cs::Instance",
-            "Assets/Scripts/Networking/NetworkSessionManager.cs::Instance",
-            "Assets/Scripts/SceneManagement/NetworkSceneTransitionService.cs::Instance",
             "Assets/Scripts/Player/NetworkFirstPersonController.cs::LocalPlayer",
         };
 

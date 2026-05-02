@@ -15,7 +15,7 @@ Every feature PR should answer these questions in its summary:
 - What EditMode or PlayMode test proves the integration?
 - Does any visual/layout work still need human playtest?
 
-CI enforces basic architecture drift through `ArchitectureGuardrailTests`: no new singleton-style globals, no direct scene searches in frame methods, no growing already-oversized runtime files, and no wrong-way runtime/UI/editor asmdef references.
+CI enforces basic architecture drift through `ArchitectureGuardrailTests`: no new singleton-style globals, no direct scene searches in frame methods, no growing already-oversized runtime files, and no wrong-way runtime/UI/editor asmdef references. The only approved project-owned globals are documented in [SingletonAudit.md](SingletonAudit.md).
 
 ## New Planet
 

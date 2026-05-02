@@ -592,6 +592,8 @@ namespace FriendSlop.Editor
             var serializedBootstrapper = new SerializedObject(bootstrapper);
 
             serializedBootstrapper.FindProperty("roundManagerPrefab").objectReferenceValue = roundManagerPrefab;
+            serializedBootstrapper.FindProperty("sceneTransitionService").objectReferenceValue =
+                Object.FindFirstObjectByType<NetworkSceneTransitionService>();
             AssignObjectArray(serializedBootstrapper.FindProperty("playerSpawnPoints"), playerSpawns);
             AssignObjectArray(serializedBootstrapper.FindProperty("shipSpawnPoints"), shipSpawns);
             AssignObjectArray(serializedBootstrapper.FindProperty("lootPrefabs"), lootPrefabs);
@@ -618,7 +620,11 @@ namespace FriendSlop.Editor
         private static void CreateRuntimeUi()
         {
             var ui = new GameObject("Friend Slop Runtime UI");
-            ui.AddComponent<FriendSlopUI>();
+            var friendSlopUi = ui.AddComponent<FriendSlopUI>();
+            var serializedUi = new SerializedObject(friendSlopUi);
+            serializedUi.FindProperty("sessionManager").objectReferenceValue =
+                Object.FindFirstObjectByType<NetworkSessionManager>();
+            serializedUi.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static GameObject CreateSurfaceProp(string name, Transform parent, SphereWorld world, PrimitiveType shape, Vector3 surfaceNormal, Vector3 forwardHint, float heightOffset, Vector3 scale, Material material)

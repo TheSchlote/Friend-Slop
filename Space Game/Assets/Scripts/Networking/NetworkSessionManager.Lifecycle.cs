@@ -9,13 +9,6 @@ namespace FriendSlop.Networking
     {
         private void Awake()
         {
-            if (Instance != null && Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            Instance = this;
             TaskScheduler.UnobservedTaskException += HandleUnobservedTaskException;
             TrySubscribeToNetworkManager();
         }
@@ -60,11 +53,6 @@ namespace FriendSlop.Networking
         {
             TaskScheduler.UnobservedTaskException -= HandleUnobservedTaskException;
             UnsubscribeFromNetworkManager();
-
-            if (Instance == this)
-            {
-                Instance = null;
-            }
         }
 
         private void HandleUnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs args)

@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace FriendSlop.Round
 {
-    public class RoundManager : NetworkBehaviour
+    public partial class RoundManager : NetworkBehaviour
     {
         public static RoundManager Instance { get; private set; }
         public static event System.Action LocalTeleporterFlashRequested;
@@ -99,7 +99,7 @@ namespace FriendSlop.Round
 
         public override void OnNetworkSpawn()
         {
-            EnsurePlanetSceneOrchestrator()?.Initialize(NetworkSceneTransitionService.Instance);
+            EnsurePlanetSceneOrchestrator()?.Initialize(sceneTransitionService);
 
             if (NetworkManager != null)
             {

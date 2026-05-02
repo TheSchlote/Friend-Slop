@@ -22,7 +22,7 @@ namespace FriendSlop.Round
             IsServer || (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
 
         private NetworkSceneTransitionService SceneTransitionService =>
-            sceneTransitionService != null ? sceneTransitionService : NetworkSceneTransitionService.Instance;
+            sceneTransitionService;
 
         public void Initialize(NetworkSceneTransitionService service)
         {
