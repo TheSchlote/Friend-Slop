@@ -50,6 +50,8 @@ namespace FriendSlop.Tests.PlayMode
             yield return WaitForActivePlanetSceneLoaded();
             yield return WaitForActivePlanetSpawnsPopulated();
 
+            var activePlanetScene = AssertActivePlanetSceneLoaded();
+            AssertSpawnedActorsInActivePlanetScene(activePlanetScene);
             AssertLaunchpadLayout();
             AssertShipPartSpawnPointsAreNearLaunchpadHemisphere();
 
@@ -132,6 +134,44 @@ namespace FriendSlop.Tests.PlayMode
             if (planet == null) return false;
             var env = PlanetEnvironment.FindFor(planet);
             return env != null && env.gameObject.activeInHierarchy;
+        }
+
+        private static Scene AssertActivePlanetSceneLoaded()
+        {
+            var rm = RoundManager.Instance;
+            Assert.IsNotNull(rm, "RoundManager should exist before validating planet scene ownership.");
+            var planet = rm.CurrentPlanet;
+            Assert.IsNotNull(planet, "RoundManager should have a current planet.");
+            Assert.IsTrue(planet.HasPlanetScene, "The active Tier 1 planet should have a dedicated scene definition.");
+
+            var scene = SceneManager.GetSceneByPath(planet.PlanetScene.ScenePath);
+            Assert.IsTrue(scene.IsValid(), $"Active planet scene should resolve by path '{planet.PlanetScene.ScenePath}'.");
+            Assert.IsTrue(scene.isLoaded, $"Active planet scene '{planet.PlanetScene.ScenePath}' should be loaded additively.");
+
+            var env = PlanetEnvironment.FindFor(planet);
+            Assert.IsNotNull(env, "Active planet scene should register a PlanetEnvironment for the current planet.");
+            Assert.AreEqual(scene.path, env.gameObject.scene.path,
+                "The active planet environment should be owned by the loaded planet scene.");
+            return scene;
+        }
+
+        private static void AssertSpawnedActorsInActivePlanetScene(Scene activePlanetScene)
+        {
+            var lootItems = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Assert.Greater(lootItems.Length, 0, "Host startup should spawn loot before validating scene ownership.");
+            foreach (var loot in lootItems)
+            {
+                Assert.AreEqual(activePlanetScene.path, loot.gameObject.scene.path,
+                    $"Loot '{loot.name}' should spawn in the active planet scene, not the bootstrap scene.");
+            }
+
+            var monsters = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Assert.Greater(monsters.Length, 0, "Host startup should spawn monsters before validating scene ownership.");
+            foreach (var monster in monsters)
+            {
+                Assert.AreEqual(activePlanetScene.path, monster.gameObject.scene.path,
+                    $"Monster '{monster.name}' should spawn in the active planet scene, not the bootstrap scene.");
+            }
         }
 
         private static IEnumerator LoadPrototypeScene()

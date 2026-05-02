@@ -5,6 +5,7 @@ using FriendSlop.Loot;
 using FriendSlop.Round;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FriendSlop.Networking
 {
@@ -212,6 +213,7 @@ namespace FriendSlop.Networking
                 }
 
                 var loot = Instantiate(prefab, pos, rot);
+                MoveToActivePlanetScene(loot.gameObject, activeEnv);
                 loot.ServerSetSpawnPose(pos, rot);
                 SpawnNetworkObject(loot.NetworkObject);
             }
@@ -271,8 +273,25 @@ namespace FriendSlop.Networking
                 }
 
                 var monster = Instantiate(monsterPrefab, spawnPoint.position, spawnPoint.rotation);
+                MoveToActivePlanetScene(monster.gameObject, activeEnv);
                 SpawnNetworkObject(monster.NetworkObject);
             }
+        }
+
+        private static void MoveToActivePlanetScene(GameObject spawnedObject, PlanetEnvironment activeEnv)
+        {
+            if (spawnedObject == null || activeEnv == null)
+            {
+                return;
+            }
+
+            var targetScene = activeEnv.gameObject.scene;
+            if (!targetScene.IsValid() || !targetScene.isLoaded || spawnedObject.scene == targetScene)
+            {
+                return;
+            }
+
+            SceneManager.MoveGameObjectToScene(spawnedObject, targetScene);
         }
 
         private void SpawnNetworkObject(NetworkObject networkObject)
