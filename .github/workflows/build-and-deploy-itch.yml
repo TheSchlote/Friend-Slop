@@ -151,12 +151,67 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  validate-scenes:
+    name: Validate planet scenes
+    runs-on: ubuntu-22.04
+    needs: validate-unity-version
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Check Unity license secrets
+        uses: ./.github/actions/check-unity-license
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+
+      - name: Cache Unity Library
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.UNITY_PROJECT_PATH }}/Library
+          key: Library-FriendSlop-${{ runner.os }}-SceneValidation-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
+          restore-keys: |
+            Library-FriendSlop-${{ runner.os }}-SceneValidation-
+            Library-FriendSlop-${{ runner.os }}-
+
+      - name: Run planet scene validator
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          projectPath: ${{ env.UNITY_PROJECT_PATH }}
+          unityVersion: ${{ env.UNITY_VERSION }}
+          testMode: EditMode
+          testFilter: FriendSlop.Tests.EditMode.PlanetSceneValidatorTests
+          artifactsPath: scene-validation-results
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload planet scene validation results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: FriendSlop-Scene-Validation-Results-${{ github.run_number }}
+          path: scene-validation-results
+          if-no-files-found: warn
+          retention-days: 14
+
   build-windows:
     name: Build Windows player
     runs-on: ubuntu-22.04
     needs:
       - editmode-tests
       - playmode-tests
+      - validate-scenes
     timeout-minutes: 60
     outputs:
       build-version: ${{ steps.unity-build.outputs.buildVersion }}
