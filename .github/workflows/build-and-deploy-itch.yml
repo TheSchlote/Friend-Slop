@@ -21,7 +21,6 @@ concurrency:
 env:
   UNITY_PROJECT_PATH: Space Game
   UNITY_VERSION: 6000.3.4f1
-  BUILD_TARGET: StandaloneWindows64
   BUILD_NAME: FriendSlop
   BUILD_VERSION: 0.1.${{ github.run_number }}
   # GameCI v4 actions still declare Node 20 as of this workflow revision.
@@ -205,16 +204,27 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  build-windows:
-    name: Build Windows player
+  build-player:
+    name: Build ${{ matrix.label }} player
     runs-on: ubuntu-22.04
     needs:
       - editmode-tests
       - playmode-tests
       - validate-scenes
     timeout-minutes: 60
-    outputs:
-      build-version: ${{ steps.unity-build.outputs.buildVersion }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - targetPlatform: StandaloneWindows64
+            itchChannel: windows
+            label: Windows
+          - targetPlatform: StandaloneLinux64
+            itchChannel: linux
+            label: Linux
+          - targetPlatform: StandaloneOSX
+            itchChannel: mac
+            label: macOS
 
     steps:
       - name: Checkout
@@ -235,12 +245,12 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.UNITY_PROJECT_PATH }}/Library
-          key: Library-FriendSlop-${{ runner.os }}-${{ env.BUILD_TARGET }}-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
+          key: Library-FriendSlop-${{ runner.os }}-${{ matrix.targetPlatform }}-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
           restore-keys: |
-            Library-FriendSlop-${{ runner.os }}-${{ env.BUILD_TARGET }}-
+            Library-FriendSlop-${{ runner.os }}-${{ matrix.targetPlatform }}-
             Library-FriendSlop-${{ runner.os }}-
 
-      - name: Build Windows player
+      - name: Build ${{ matrix.label }} player
         id: unity-build
         uses: game-ci/unity-builder@v4
         env:
@@ -251,7 +261,7 @@ jobs:
         with:
           projectPath: ${{ env.UNITY_PROJECT_PATH }}
           unityVersion: ${{ env.UNITY_VERSION }}
-          targetPlatform: ${{ env.BUILD_TARGET }}
+          targetPlatform: ${{ matrix.targetPlatform }}
           buildName: ${{ env.BUILD_NAME }}
           buildsPath: build
           versioning: Custom
@@ -259,22 +269,28 @@ jobs:
 
       - name: Fix build output ownership
         shell: bash
-        run: sudo chown -R "$(id -u):$(id -g)" build
+        run: sudo chown -R "$(id -u):$(id -g)" "build/${TARGET_PLATFORM}"
+        env:
+          TARGET_PLATFORM: ${{ matrix.targetPlatform }}
 
       - name: Write playtest notes
         shell: bash
+        env:
+          TARGET_PLATFORM: ${{ matrix.targetPlatform }}
+          ITCH_CHANNEL: ${{ matrix.itchChannel }}
+          PLATFORM_LABEL: ${{ matrix.label }}
         run: |
-          output_dir="build/${BUILD_TARGET}"
+          output_dir="build/${TARGET_PLATFORM}"
           notes_path="${output_dir}/PLAYTEST_NOTES.txt"
           release_notes_path="${output_dir}/RELEASE_NOTES.md"
           mkdir -p "$output_dir"
 
           {
-            echo "# Friend Slop Retrieval ${BUILD_VERSION}"
+            echo "# Friend Slop Retrieval ${BUILD_VERSION} (${PLATFORM_LABEL})"
             echo
             echo "- Commit: \`${GITHUB_SHA}\`"
             echo "- Build: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "- Itch channel: ${ITCH_USER}/${ITCH_GAME}:windows"
+            echo "- Itch channel: ${ITCH_USER}/${ITCH_GAME}:${ITCH_CHANNEL}"
             echo
             if [[ -f RELEASE_NOTES.md ]]; then
               echo "## Curated Release Notes"
@@ -289,10 +305,10 @@ jobs:
           } > "$release_notes_path"
 
           {
-            echo "Friend Slop Retrieval ${BUILD_VERSION}"
+            echo "Friend Slop Retrieval ${BUILD_VERSION} (${PLATFORM_LABEL})"
             echo "Commit: ${GITHUB_SHA}"
             echo "Build: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo "Itch channel: ${ITCH_USER}/${ITCH_GAME}:windows"
+            echo "Itch channel: ${ITCH_USER}/${ITCH_GAME}:${ITCH_CHANNEL}"
             echo
             if [[ -f RELEASE_NOTES.md ]]; then
               echo "Curated release notes:"
@@ -306,20 +322,33 @@ jobs:
 
           cat "$release_notes_path" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload Windows build artifact
+      - name: Upload ${{ matrix.label }} build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: FriendSlop-Windows-${{ github.run_number }}
-          path: build/${{ env.BUILD_TARGET }}
+          name: FriendSlop-${{ matrix.itchChannel }}-${{ github.run_number }}
+          path: build/${{ matrix.targetPlatform }}
           if-no-files-found: error
           retention-days: 14
 
   deploy-itch:
-    name: Deploy Windows build to itch.io
+    name: Deploy ${{ matrix.label }} build to itch.io
     runs-on: ubuntu-22.04
-    needs: build-windows
+    needs: build-player
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - targetPlatform: StandaloneWindows64
+            itchChannel: windows
+            label: Windows
+          - targetPlatform: StandaloneLinux64
+            itchChannel: linux
+            label: Linux
+          - targetPlatform: StandaloneOSX
+            itchChannel: mac
+            label: macOS
     environment:
       name: itch-production
       url: https://theschlote.itch.io/friend-slop
@@ -332,19 +361,21 @@ jobs:
         if: env.BUTLER_API_KEY_PRESENT != 'true'
         run: |
           echo "BUTLER_API_KEY is not set, so the itch.io deploy step was skipped."
-          echo "The Windows build artifact is still available on this workflow run."
+          echo "The ${PLATFORM_LABEL} build artifact is still available on this workflow run."
           {
             echo "### itch.io deploy skipped"
             echo
-            echo "BUTLER_API_KEY is not configured. The Windows build artifact is still available on this run."
+            echo "BUTLER_API_KEY is not configured. The ${PLATFORM_LABEL} build artifact is still available on this run."
           } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          PLATFORM_LABEL: ${{ matrix.label }}
 
-      - name: Download Windows build artifact
+      - name: Download ${{ matrix.label }} build artifact
         if: env.BUTLER_API_KEY_PRESENT == 'true'
         uses: actions/download-artifact@v8
         with:
-          name: FriendSlop-Windows-${{ github.run_number }}
-          path: build/${{ env.BUILD_TARGET }}
+          name: FriendSlop-${{ matrix.itchChannel }}-${{ github.run_number }}
+          path: build/${{ matrix.targetPlatform }}
 
       - name: Install butler
         if: env.BUTLER_API_KEY_PRESENT == 'true'
@@ -358,17 +389,17 @@ jobs:
       - name: Push build to itch.io
         if: env.BUTLER_API_KEY_PRESENT == 'true'
         shell: bash
+        env:
+          TARGET_PLATFORM: ${{ matrix.targetPlatform }}
+          ITCH_CHANNEL: ${{ matrix.itchChannel }}
         run: |
-          user_version="${{ needs.build-windows.outputs.build-version }}"
-          if [[ -z "$user_version" ]]; then
-            user_version="${GITHUB_SHA::7}"
-          fi
+          user_version="${BUILD_VERSION}"
 
-          ./butler/butler push "build/${BUILD_TARGET}" "${ITCH_USER}/${ITCH_GAME}:windows" --userversion "$user_version"
+          ./butler/butler push "build/${TARGET_PLATFORM}" "${ITCH_USER}/${ITCH_GAME}:${ITCH_CHANNEL}" --userversion "$user_version"
           {
             echo "### Deployed to itch.io"
             echo
             echo "- Page: https://${ITCH_USER}.itch.io/${ITCH_GAME}"
-            echo "- Channel: ${ITCH_USER}/${ITCH_GAME}:windows"
+            echo "- Channel: ${ITCH_USER}/${ITCH_GAME}:${ITCH_CHANNEL}"
             echo "- Version: ${user_version}"
           } >> "$GITHUB_STEP_SUMMARY"
