@@ -32,5 +32,20 @@ namespace FriendSlop.Round
             if (round == null) return string.Empty;
             return $"Survive: {RoundManager.FormatTime(round.TimeRemaining.Value)}";
         }
+
+        public override string BuildSuccessText(RoundManager round)
+        {
+            var suffix = requireBoardingOnSurvive ? "Crew survived and boarded." : "Crew survived the timer.";
+            return round != null
+                ? $"SURVIVED on {FormatPlanetLabel(round)}.\n{suffix}"
+                : "SURVIVED.";
+        }
+
+        public override string BuildFailureText(RoundManager round)
+        {
+            return round != null
+                ? $"SURVIVAL FAILED on {FormatPlanetLabel(round)}.\nTimer expired before everyone boarded."
+                : "SURVIVAL FAILED.";
+        }
     }
 }

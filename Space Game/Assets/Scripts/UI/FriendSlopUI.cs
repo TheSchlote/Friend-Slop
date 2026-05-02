@@ -413,7 +413,7 @@ namespace FriendSlop.UI
                         : "Host or join to begin.",
                     RoundPhase.Active => string.Empty,
                     RoundPhase.Success => BuildSuccessResultText(round),
-                    RoundPhase.Failed => "FAILED: back aboard the ship.\nHost can restart the planet run.",
+                    RoundPhase.Failed => BuildFailureResultText(round),
                     RoundPhase.AllDead => $"WIPE OUT - everyone died.\nBack aboard with ${round.CollectedValue.Value} collected.",
                     _ => string.Empty
                 };

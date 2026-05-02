@@ -31,6 +31,20 @@ namespace FriendSlop.Round
             return $"Parts: {Format(round.HasCockpit.Value, "Cockpit")} | {Format(round.HasWings.Value, "Wings")} | {Format(round.HasEngine.Value, "Engine")}";
         }
 
+        public override string BuildSuccessText(RoundManager round)
+        {
+            return round != null
+                ? $"ROCKET ASSEMBLED on {FormatPlanetLabel(round)}."
+                : "ROCKET ASSEMBLED.";
+        }
+
+        public override string BuildFailureText(RoundManager round)
+        {
+            if (round == null) return "ROCKET NOT READY.";
+            return $"ROCKET NOT READY on {FormatPlanetLabel(round)}.\n" +
+                   $"{Format(round.HasCockpit.Value, "Cockpit")}, {Format(round.HasWings.Value, "Wings")}, {Format(round.HasEngine.Value, "Engine")}.";
+        }
+
         private static string Format(bool installed, string label)
         {
             return installed ? $"{label} OK" : $"{label} missing";

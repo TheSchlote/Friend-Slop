@@ -306,15 +306,21 @@ namespace FriendSlop.UI
 
         private static string BuildSuccessResultText(RoundManager round)
         {
-            if (round == null) return "ROCKET ASSEMBLED.";
+            if (round == null) return "OBJECTIVE COMPLETE.";
 
-            var current = FormatPlanetLabel(round.CurrentPlanet);
+            var objectiveText = round.ActiveObjective != null
+                ? round.ActiveObjective.BuildSuccessText(round)
+                : string.Empty;
+            if (string.IsNullOrWhiteSpace(objectiveText))
+                objectiveText = $"OBJECTIVE COMPLETE on {FormatPlanetLabel(round.CurrentPlanet)}.";
+
+            objectiveText = objectiveText.TrimEnd();
             if (round.HasReachedFinalTier)
-                return $"ROCKET ASSEMBLED on {current}.\nFinal tier reached - replay to keep grinding.";
+                return $"{objectiveText}\nFinal tier reached - replay to keep grinding.";
 
             var choices = round.GetOfferedNextPlanetChoices();
             if (choices.Count == 0)
-                return $"ROCKET ASSEMBLED on {current}.\nNo tier {round.NextTier} planets registered yet - host can replay.";
+                return $"{objectiveText}\nNo tier {round.NextTier} planets registered yet - host can replay.";
 
             var next = round.SelectedNextPlanet;
             if (next == null || next.Tier != round.NextTier || !choices.Contains(next))
@@ -328,7 +334,20 @@ namespace FriendSlop.UI
                 optionsLine = $"\n{choices.Count} of {totalForTier} tier {round.NextTier} planets rolled - host can cycle between them.";
             else
                 optionsLine = $"\n{choices.Count} tier {round.NextTier} options - host can cycle.";
-            return $"ROCKET ASSEMBLED on {current}.\nNext: {FormatPlanetLabel(next)}{optionsLine}";
+            return $"{objectiveText}\nNext: {FormatPlanetLabel(next)}{optionsLine}";
+        }
+
+        private static string BuildFailureResultText(RoundManager round)
+        {
+            if (round == null) return "FAILED: back aboard the ship.\nHost can restart the planet run.";
+
+            var objectiveText = round.ActiveObjective != null
+                ? round.ActiveObjective.BuildFailureText(round)
+                : string.Empty;
+            if (string.IsNullOrWhiteSpace(objectiveText))
+                objectiveText = "FAILED: back aboard the ship.";
+
+            return $"{objectiveText.TrimEnd()}\nHost can restart the planet run.";
         }
 
         private static string BuildLobbyQueue(NetworkManager networkManager)
