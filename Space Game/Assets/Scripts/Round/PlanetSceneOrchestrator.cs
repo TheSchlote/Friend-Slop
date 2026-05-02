@@ -87,14 +87,8 @@ namespace FriendSlop.Round
                 yield break;
             }
 
-            if (SceneUtility.GetBuildIndexByScenePath(targetPath) < 0)
+            if (WarnMissingPlanetSceneIfNeeded(targetPath))
             {
-                if (warnedMissingPlanetScenes.Add(targetPath))
-                {
-                    Debug.LogWarning(
-                        $"RoundManager: planet scene '{targetPath}' is not in Build Settings; skipping additive load. " +
-                        "(Run Tools/Friend Slop/Extract Tier 1 Into Scene to author it.)");
-                }
                 FinishPlanetSceneReconcile(targetPath);
                 yield break;
             }
@@ -193,6 +187,21 @@ namespace FriendSlop.Round
         {
             if (warnedFailedPlanetSceneLoads.Add($"{scenePath}|{reason}"))
                 Debug.LogError($"RoundManager: cannot load planet scene '{scenePath}' ({reason}).");
+        }
+
+        private bool WarnMissingPlanetSceneIfNeeded(string scenePath)
+        {
+            if (SceneUtility.GetBuildIndexByScenePath(scenePath) >= 0)
+                return false;
+
+            if (warnedMissingPlanetScenes.Add(scenePath))
+            {
+                Debug.LogWarning(
+                    $"RoundManager: planet scene '{scenePath}' is not in Build Settings; skipping additive load. " +
+                    "(Run Tools/Friend Slop/Extract Tier 1 Into Scene to author it.)");
+            }
+
+            return true;
         }
 
         private static PlanetDefinition ResolveSceneOwner(PlanetDefinition planet, PlanetCatalog catalog)
