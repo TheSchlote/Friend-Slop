@@ -67,7 +67,13 @@ namespace FriendSlop.UI
         private RectTransform loadingBarFillRect;
         private bool _lateJoinLoading;
         private float _lateJoinLoadingStartTime;
+        private bool _loadingProgressActive;
+        private RoundPhase _loadingProgressPhase;
+        private float _loadingProgressStartTime;
+        private float _loadingProgressValue;
         private const float LateJoinLoadingDuration = 3f;
+        private const float TransitionProgressFillSeconds = 4f;
+        private const float TransitionProgressMax = 0.92f;
 
         // ── Environment effects ───────────────────────────────────────────────
         private Image _sunGlareImage;

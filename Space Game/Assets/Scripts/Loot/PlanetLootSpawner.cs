@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using FriendSlop.Round;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -20,6 +21,7 @@ namespace FriendSlop.Loot
 
         private bool spawnedThisSession;
         private readonly List<NetworkObject> spawnedObjects = new();
+        private PlanetEnvironment planetEnvironment;
         private NetworkManager subscribedManager;
 
         public LootPool LootPool => lootPool;
@@ -30,6 +32,11 @@ namespace FriendSlop.Loot
             lootPool = pool;
             spawnPoints = points;
             rollsPerSpawnPoint = Mathf.Max(1, rolls);
+        }
+
+        private void Awake()
+        {
+            CachePlanetEnvironment();
         }
 
         private void OnEnable()
@@ -46,19 +53,13 @@ namespace FriendSlop.Loot
 
         private void OnDisable()
         {
-            // Scene unload cleanup is handled by OnDestroy. Legacy same-scene planets may
-            // be disabled and re-enabled during travel, so keep their loot in place here.
+            UnsubscribeFromNetworkManager();
+            CleanupSpawnedObjects(resetSession: true);
         }
 
         private void OnDestroy()
         {
-            if (subscribedManager != null)
-            {
-                subscribedManager.OnServerStarted -= HandleServerStarted;
-                subscribedManager.OnServerStopped -= HandleServerStopped;
-                subscribedManager = null;
-            }
-
+            UnsubscribeFromNetworkManager();
             CleanupSpawnedObjects(resetSession: false);
         }
 
@@ -73,6 +74,7 @@ namespace FriendSlop.Loot
             var nm = NetworkManager.Singleton;
             if (nm == null || !nm.IsListening || !nm.IsServer) return;
             if (lootPool == null || spawnPoints == null || spawnPoints.Length == 0) return;
+            if (!IsCurrentActivePlanet()) return;
 
             spawnedThisSession = true;
             for (var i = 0; i < spawnPoints.Length; i++)
@@ -104,6 +106,30 @@ namespace FriendSlop.Loot
         private void HandleServerStopped(bool wasHost)
         {
             CleanupSpawnedObjects(resetSession: true);
+        }
+
+        private void UnsubscribeFromNetworkManager()
+        {
+            if (subscribedManager == null) return;
+            subscribedManager.OnServerStarted -= HandleServerStarted;
+            subscribedManager.OnServerStopped -= HandleServerStopped;
+            subscribedManager = null;
+        }
+
+        private bool IsCurrentActivePlanet()
+        {
+            CachePlanetEnvironment();
+            if (planetEnvironment == null) return true;
+            var rm = RoundManager.Instance;
+            return rm != null && rm.IsEnvironmentActiveForCurrentPlanet(planetEnvironment);
+        }
+
+        private void CachePlanetEnvironment()
+        {
+            if (planetEnvironment != null) return;
+            planetEnvironment = GetComponent<PlanetEnvironment>();
+            if (planetEnvironment == null)
+                planetEnvironment = GetComponentInParent<PlanetEnvironment>(true);
         }
 
         private void CleanupSpawnedObjects(bool resetSession)

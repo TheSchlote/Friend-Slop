@@ -117,32 +117,50 @@ namespace FriendSlop.UI
         {
             if (loadingScreenRoot == null) return;
             loadingScreenRoot.SetActive(isLoading);
-            if (!isLoading) return;
+            if (!isLoading)
+            {
+                _loadingProgressActive = false;
+                _loadingProgressValue = 0f;
+                return;
+            }
 
-            float progress;
+            if (!_loadingProgressActive || _loadingProgressPhase != phase)
+            {
+                _loadingProgressActive = true;
+                _loadingProgressPhase = phase;
+                _loadingProgressStartTime = Time.unscaledTime;
+                _loadingProgressValue = 0f;
+            }
+
+            float targetProgress;
             string statusMsg;
             if (phase == RoundPhase.Transitioning && round != null)
             {
                 var dest = round.SelectedNextPlanet ?? round.CurrentPlanet;
                 var destName = dest != null ? dest.DisplayName : "Unknown";
                 statusMsg = $"Traveling to {destName}...";
-                // Pulse the bar back and forth as an indeterminate indicator.
-                progress = Mathf.PingPong(Time.time * 0.6f, 1f);
+                targetProgress = Mathf.Clamp01((Time.unscaledTime - _loadingProgressStartTime) /
+                                                TransitionProgressFillSeconds) * TransitionProgressMax;
             }
             else if (phase == RoundPhase.Loading && round != null)
             {
                 var ready = round.PlayersReady.Value;
                 var expected = Mathf.Max(1, round.PlayersExpectedToLoad.Value);
-                progress = (float)ready / expected;
+                targetProgress = Mathf.Clamp01((float)ready / expected);
                 statusMsg = ready >= expected
                     ? "All players ready!"
                     : $"Waiting for players... ({ready} / {expected})";
             }
             else
             {
-                progress = Mathf.Clamp01((Time.time - _lateJoinLoadingStartTime) / LateJoinLoadingDuration);
+                targetProgress = Mathf.Clamp01((Time.unscaledTime - _lateJoinLoadingStartTime) / LateJoinLoadingDuration);
                 statusMsg = "Syncing world...";
             }
+
+            var progress = Mathf.Max(_loadingProgressValue, targetProgress);
+            if (phase == RoundPhase.Transitioning)
+                progress = Mathf.Min(progress, TransitionProgressMax);
+            _loadingProgressValue = progress;
 
             if (loadingStatusText != null)
                 loadingStatusText.text = statusMsg;

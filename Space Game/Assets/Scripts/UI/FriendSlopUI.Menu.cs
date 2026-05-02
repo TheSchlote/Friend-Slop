@@ -19,7 +19,7 @@ namespace FriendSlop.UI
             var menuWidth = Mathf.Clamp(canvasSize.x * 0.34f, MinMenuWidth, MaxMenuWidth);
             var menuHeight = connected
                 ? showJoinCodePanel
-                    ? Mathf.Clamp(canvasSize.y * 0.58f, 580f, 660f)
+                    ? Mathf.Clamp(canvasSize.y * 0.66f, 680f, 760f)
                     : Mathf.Clamp(canvasSize.y * 0.44f, MinConnectedMenuHeight, MaxConnectedMenuHeight)
                 : Mathf.Clamp(canvasSize.y * 0.58f, MinDisconnectedMenuHeight, MaxDisconnectedMenuHeight);
             var contentWidth = menuWidth - 64f;
@@ -90,7 +90,7 @@ namespace FriendSlop.UI
                 return;
             }
 
-            var primaryButtonY = showJoinCodePanel ? -126f : -48f;
+            var primaryButtonY = showJoinCodePanel ? -96f : -48f;
             var secondaryButtonY = primaryButtonY - buttonHeight - buttonGap;
             var tertiaryButtonY = secondaryButtonY - buttonHeight - buttonGap;
             if (isHost && phase == RoundPhase.Lobby)

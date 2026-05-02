@@ -167,9 +167,13 @@ namespace FriendSlop.Networking
 
             // Prefer per-planet anchors carried on the env; fall back to the legacy
             // bootstrapper array for any planets still hosted nested in this scene.
-            var anchors = activeEnv != null && activeEnv.LootSpawnPoints != null && activeEnv.LootSpawnPoints.Length > 0
-                ? activeEnv.LootSpawnPoints
-                : lootSpawnPoints;
+            var hasPlanetAnchors = activeEnv != null
+                                   && activeEnv.LootSpawnPoints != null
+                                   && activeEnv.LootSpawnPoints.Length > 0;
+            if (!hasPlanetAnchors && activeEnv != null && activeEnv.Planet != null && activeEnv.Planet.HasPlanetScene)
+                return;
+
+            var anchors = hasPlanetAnchors ? activeEnv.LootSpawnPoints : lootSpawnPoints;
             if (anchors == null) return;
 
             // Resolve once - all ship parts roll positions relative to the same launchpad.
@@ -250,9 +254,13 @@ namespace FriendSlop.Networking
         {
             if (monsterPrefab == null) return;
 
-            var anchors = activeEnv != null && activeEnv.MonsterSpawnPoints != null && activeEnv.MonsterSpawnPoints.Length > 0
-                ? activeEnv.MonsterSpawnPoints
-                : monsterSpawnPoints;
+            var hasPlanetAnchors = activeEnv != null
+                                   && activeEnv.MonsterSpawnPoints != null
+                                   && activeEnv.MonsterSpawnPoints.Length > 0;
+            if (!hasPlanetAnchors && activeEnv != null && activeEnv.Planet != null && activeEnv.Planet.HasPlanetScene)
+                return;
+
+            var anchors = hasPlanetAnchors ? activeEnv.MonsterSpawnPoints : monsterSpawnPoints;
             if (anchors == null) return;
 
             foreach (var spawnPoint in anchors)

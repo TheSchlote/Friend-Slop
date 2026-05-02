@@ -474,6 +474,33 @@ namespace FriendSlop.Loot
             carrier?.ServerCycleToNonEmptySlotIfActiveCleared();
         }
 
+        public void ServerDespawnForPlanetTravel()
+        {
+            if (!IsServer)
+            {
+                return;
+            }
+
+            var networkObject = NetworkObject;
+            if (networkObject == null || !networkObject.IsSpawned)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
+            carrier?.ClearHeldItem(this);
+            ClearServerDepositHold();
+
+            IsCarried.Value = false;
+            CarrierClientId.Value = NoCarrier;
+            SlotIndex.Value = -1;
+            IsDeposited.Value = false;
+
+            carrier?.ServerCycleToNonEmptySlotIfActiveCleared();
+            networkObject.Despawn(destroy: true);
+        }
+
         public virtual void ServerReset()
         {
             if (!IsServer)
