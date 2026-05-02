@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 1366301870837280682}
   - component: {fileID: 2241022140542481033}
   - component: {fileID: 5631540053391249862}
+  - component: {fileID: 688656829663541873}
   m_Layer: 0
   m_Name: RoundManager
   m_TagString: Untagged
@@ -74,8 +75,11 @@ MonoBehaviour:
   quota: 0
   roundLengthSeconds: 0
   playerSpawnPoints: []
+  shipSpawnPoints: []
+  returnToShipOnRoundEnd: 1
   planetCatalog: {fileID: 11400000, guid: b633b88ecc9715d4497101cdf30fe8af, type: 2}
   startingPlanet: {fileID: 11400000, guid: e23f03a4d5f48ff4b8fc68c33031b581, type: 2}
+  planetSceneOrchestrator: {fileID: 688656829663541873}
   defaultObjective: {fileID: 11400000, guid: b325c8ff756ce0e478e8f571eca1f060, type: 2}
   Phase:
     UpdateTraits:
@@ -147,3 +151,20 @@ MonoBehaviour:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: -1
+  NextPlanetChoiceIndices:
+    UpdateTraits:
+      MinSecondsBetweenUpdates: 0
+      MaxSecondsBetweenUpdates: 0
+--- !u!114 &688656829663541873
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3469322735182761814}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff57778c35b84c7d9a0c54f104eecbcb, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Round.PlanetSceneOrchestrator
+  ShowTopMostFoldoutHeaderGroup: 1

@@ -142,7 +142,7 @@ namespace FriendSlop.Editor
             var materials = CreateMaterials();
             var monsterPrefab = AssetDatabase.LoadAssetAtPath<RoamingMonster>(MonsterPrefabPath) ?? BuildMonsterPrefab(materials);
             var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath) ?? BuildPlayerPrefab(materials);
-            var roundManagerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RoundManagerPrefabPath);
+            var roundManagerPrefab = BuildRoundManagerPrefab()?.gameObject;
             var lootPrefabs = LoadLootPrefabs();
             BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
             EnsureBootstrapperLootReferences(lootPrefabs);
@@ -169,7 +169,7 @@ namespace FriendSlop.Editor
             var materials = CreateMaterials();
             var monsterPrefab = BuildMonsterPrefab(materials);
             var playerPrefab = BuildPlayerPrefab(materials);
-            var roundManagerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RoundManagerPrefabPath);
+            var roundManagerPrefab = BuildRoundManagerPrefab()?.gameObject;
             var lootPrefabs = LoadLootPrefabs();
             BuildNetworkPrefabsList(playerPrefab, roundManagerPrefab, monsterPrefab.gameObject, lootPrefabs);
             EnsureBootstrapperLootReferences(lootPrefabs);

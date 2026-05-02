@@ -25,6 +25,7 @@ namespace FriendSlop.Round
         [Header("Planet Progression")]
         [SerializeField] private PlanetCatalog planetCatalog;
         [SerializeField] private PlanetDefinition startingPlanet;
+        [SerializeField] private PlanetSceneOrchestrator planetSceneOrchestrator;
 
         [Header("Objective")]
         [SerializeField] private RoundObjective defaultObjective;
@@ -58,17 +59,6 @@ namespace FriendSlop.Round
         private Coroutine _transitionCoroutine;
         private const float TransitionFadeSeconds = 1.0f;
         private const float TransitionHoldSeconds = 0.8f;
-        private const float PlanetSceneEventRetrySeconds = 12f;
-
-        // Server-side bookkeeping: which planet scene we last asked Netcode to load.
-        // Used to unload the previous planet scene when switching to a new one.
-        private string _activePlanetScenePath = string.Empty;
-        private Coroutine _planetSceneReconcileCoroutine;
-        private string _planetSceneReconcileTargetPath = string.Empty;
-        // Per-instance dedup so the "scene not in Build Settings" warning fires once per
-        // missing path instead of every time ApplyActivePlanetEnvironment is invoked.
-        private readonly HashSet<string> _warnedMissingPlanetScenes = new();
-        private readonly HashSet<string> _warnedFailedPlanetSceneLoads = new();
 
         public void ConfigureSpawnPoints(Transform[] spawnPoints)
         {
@@ -80,9 +70,19 @@ namespace FriendSlop.Round
             shipSpawnPoints = spawnPoints;
         }
 
+        private PlanetSceneOrchestrator EnsurePlanetSceneOrchestrator()
+        {
+            if (planetSceneOrchestrator == null)
+                planetSceneOrchestrator = GetComponent<PlanetSceneOrchestrator>();
+            if (planetSceneOrchestrator == null && !IsSpawned)
+                planetSceneOrchestrator = gameObject.AddComponent<PlanetSceneOrchestrator>();
+            return planetSceneOrchestrator;
+        }
+
         private void Awake()
         {
             Instance = this;
+            EnsurePlanetSceneOrchestrator();
             // NetworkList must exist before OnNetworkSpawn so the server's first writes replicate.
             NextPlanetChoiceIndices = new NetworkList<int>();
         }
@@ -99,6 +99,8 @@ namespace FriendSlop.Round
 
         public override void OnNetworkSpawn()
         {
+            EnsurePlanetSceneOrchestrator()?.Initialize(NetworkSceneTransitionService.Instance);
+
             if (NetworkManager != null)
             {
                 NetworkManager.OnClientDisconnectCallback += HandleClientDisconnect;
@@ -170,7 +172,7 @@ namespace FriendSlop.Round
             // doesn't match, unload it. Scene loads are async - when the env Awakes inside
             // the new scene it fires Registered, which calls back into this method.
             if (IsServer)
-                ServerReconcilePlanetScenes(planet);
+                EnsurePlanetSceneOrchestrator()?.ServerReconcilePlanetScenes(planet, planetCatalog);
 
             // Search AllEnvironments so we can find and enable planets whose roots are disabled.
             var activeEnv = FindBindableEnvironment(planet);
@@ -203,176 +205,6 @@ namespace FriendSlop.Round
         public bool IsEnvironmentActiveForCurrentPlanet(PlanetEnvironment env)
         {
             return env != null && env == FindBindableEnvironment(CurrentPlanet);
-        }
-
-        private void ServerReconcilePlanetScenes(PlanetDefinition planet)
-        {
-            var sceneOwner = ResolveSceneOwner(planet);
-            var targetPath = sceneOwner != null ? sceneOwner.PlanetScene.ScenePath : string.Empty;
-            if (_planetSceneReconcileCoroutine != null)
-            {
-                if (string.Equals(_planetSceneReconcileTargetPath, targetPath,
-                        System.StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-
-                StopCoroutine(_planetSceneReconcileCoroutine);
-                _planetSceneReconcileCoroutine = null;
-            }
-
-            // Defer to next frame so this never runs while NetworkManager's
-            // HostServerInitialize is still on the stack - mid-init SceneManager.LoadScene
-            // calls land in a half-initialized state and have produced "scene event in
-            // progress" / NREs in startup logs. The legacy fallback in
-            // ApplyActivePlanetEnvironment keeps the active env bound from the prototype
-            // scene during the one-frame gap, so gameplay doesn't notice.
-            _planetSceneReconcileTargetPath = targetPath;
-            _planetSceneReconcileCoroutine = StartCoroutine(ServerReconcilePlanetScenesDeferred(sceneOwner, targetPath));
-        }
-
-        private IEnumerator ServerReconcilePlanetScenesDeferred(PlanetDefinition sceneOwner, string targetPath)
-        {
-            yield return null;
-            if (this == null || !IsServer)
-            {
-                FinishPlanetSceneReconcile(targetPath);
-                yield break;
-            }
-
-            var service = NetworkSceneTransitionService.Instance;
-            var hasScene = sceneOwner != null;
-
-            // Unload the previously-loaded planet scene if we're switching away from it.
-            if (!string.IsNullOrEmpty(_activePlanetScenePath) && _activePlanetScenePath != targetPath)
-            {
-                if (service == null)
-                {
-                    WarnFailedPlanetSceneLoad(_activePlanetScenePath,
-                        "no NetworkSceneTransitionService exists in the active scene");
-                    _activePlanetScenePath = string.Empty;
-                }
-                else
-                {
-                    yield return ServerUnloadActivePlanetScene(service, targetPath);
-                }
-            }
-
-            if (!hasScene)
-            {
-                FinishPlanetSceneReconcile(targetPath);
-                yield break;
-            }
-
-            // Build-settings sanity check: a planet asset can reference a scene that the
-            // extractor hasn't authored yet. Skip the additive load with a warning so the
-            // host stays alive on a fresh checkout - the nested fallback env will play.
-            if (UnityEngine.SceneManagement.SceneUtility.GetBuildIndexByScenePath(targetPath) < 0)
-            {
-                if (_warnedMissingPlanetScenes.Add(targetPath))
-                {
-                    Debug.LogWarning(
-                        $"RoundManager: planet scene '{targetPath}' is not in Build Settings; skipping additive load. " +
-                        "(Run Tools/Friend Slop/Extract Tier 1 Into Scene to author it.)");
-                }
-                FinishPlanetSceneReconcile(targetPath);
-                yield break;
-            }
-
-            if (service == null)
-            {
-                WarnFailedPlanetSceneLoad(targetPath,
-                    "no NetworkSceneTransitionService exists in the active scene");
-                FinishPlanetSceneReconcile(targetPath);
-                yield break;
-            }
-
-            if (service.WasServerSceneLoadStarted(targetPath))
-            {
-                _activePlanetScenePath = targetPath;
-                FinishPlanetSceneReconcile(targetPath);
-                yield break;
-            }
-
-            var deadline = Time.time + PlanetSceneEventRetrySeconds;
-            while (true)
-            {
-                var status = service.ServerLoadScene(sceneOwner.PlanetScene);
-                if (status == SceneEventProgressStatus.Started)
-                {
-                    _activePlanetScenePath = targetPath;
-                    FinishPlanetSceneReconcile(targetPath);
-                    yield break;
-                }
-
-                if (status == SceneEventProgressStatus.SceneEventInProgress && Time.time < deadline)
-                {
-                    yield return null;
-                    if (NetworkSceneTransitionService.Instance == null)
-                    {
-                        WarnFailedPlanetSceneLoad(targetPath,
-                            "NetworkSceneTransitionService disappeared while waiting for Netcode scene event");
-                        FinishPlanetSceneReconcile(targetPath);
-                        yield break;
-                    }
-                    service = NetworkSceneTransitionService.Instance;
-                    continue;
-                }
-
-                WarnFailedPlanetSceneLoad(targetPath, $"Netcode returned {status}");
-                FinishPlanetSceneReconcile(targetPath);
-                yield break;
-            }
-        }
-
-        private IEnumerator ServerUnloadActivePlanetScene(NetworkSceneTransitionService service, string nextTargetPath)
-        {
-            var previousPath = _activePlanetScenePath;
-            var deadline = Time.time + PlanetSceneEventRetrySeconds;
-            while (!string.IsNullOrEmpty(previousPath))
-            {
-                var status = service.ServerUnloadScenePath(previousPath);
-                if (status == SceneEventProgressStatus.Started || status == SceneEventProgressStatus.SceneNotLoaded)
-                {
-                    _activePlanetScenePath = string.Empty;
-                    yield break;
-                }
-
-                if (status == SceneEventProgressStatus.SceneEventInProgress && Time.time < deadline)
-                {
-                    yield return null;
-                    service = NetworkSceneTransitionService.Instance;
-                    if (service != null) continue;
-                    WarnFailedPlanetSceneLoad(nextTargetPath,
-                        "NetworkSceneTransitionService disappeared while unloading previous planet scene");
-                    _activePlanetScenePath = string.Empty;
-                    yield break;
-                }
-
-                Debug.LogWarning(
-                    $"RoundManager: could not unload previous planet scene '{previousPath}' before loading '{nextTargetPath}' " +
-                    $"(Netcode returned {status}).");
-                _activePlanetScenePath = string.Empty;
-                yield break;
-            }
-        }
-
-        private void FinishPlanetSceneReconcile(string targetPath)
-        {
-            if (!string.Equals(_planetSceneReconcileTargetPath, targetPath,
-                    System.StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
-            _planetSceneReconcileCoroutine = null;
-            _planetSceneReconcileTargetPath = string.Empty;
-        }
-
-        private void WarnFailedPlanetSceneLoad(string scenePath, string reason)
-        {
-            if (_warnedFailedPlanetSceneLoads.Add($"{scenePath}|{reason}"))
-                Debug.LogError($"RoundManager: cannot load planet scene '{scenePath}' ({reason}).");
         }
 
         private static PlanetEnvironment FindBindableEnvironment(PlanetDefinition planet)
@@ -446,27 +278,6 @@ namespace FriendSlop.Round
             if (!HasAnyLiveSpawn(env.PlayerSpawnPoints))
                 return $"PlanetEnvironment '{env.name}' has no live player spawn points";
             return $"PlanetEnvironment '{env.name}' is not ready";
-        }
-
-        // Resolves which planet definition's scene actually backs this planet at runtime.
-        // Returns the planet itself if it has a dedicated scene, otherwise looks for any
-        // other catalog entry at the same tier that does. Tier-2 catalog entries like
-        // DeepHaul/GhostShift currently share Rusty Moon's environment via this fallback.
-        private PlanetDefinition ResolveSceneOwner(PlanetDefinition planet)
-        {
-            if (planet == null) return null;
-            if (planet.HasPlanetScene) return planet;
-            if (planetCatalog == null) return null;
-
-            for (var i = 0; i < planetCatalog.Count; i++)
-            {
-                var candidate = planetCatalog.GetByIndex(i);
-                if (candidate == null) continue;
-                if (candidate == planet) continue;
-                if (candidate.Tier != planet.Tier) continue;
-                if (candidate.HasPlanetScene) return candidate;
-            }
-            return null;
         }
 
         private static bool IsSceneLoadedPlanet(PlanetEnvironment env)
@@ -736,7 +547,7 @@ namespace FriendSlop.Round
             // Same fallback as ApplyActivePlanetEnvironment: accept an exact match OR
             // any same-tier env, so catalog entries without their own scene (DeepHaul,
             // GhostShift, etc.) succeed once the fallback scene's env registers.
-            const float maxEnvWaitSeconds = PlanetSceneEventRetrySeconds + 8f;
+            const float maxEnvWaitSeconds = PlanetSceneOrchestrator.SceneEventRetrySeconds + 8f;
             var envWaitStart = Time.time;
             while (FindRoundReadyEnvironment(next) == null
                    && Time.time - envWaitStart < maxEnvWaitSeconds)
