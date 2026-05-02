@@ -11,6 +11,13 @@
 - `PlanetDefinition` scene assignment status: populated for `Tier1_StarterJunk.asset` and `Tier2_RustyMoon.asset`; null for `Tier2_DeepHaul.asset` (`Cobalt Trench`), `Tier2_QuickStrike.asset` (`Volt Foundry`), `Tier2_GhostShift.asset` (`Wraith Halo`), and `Tier3_VioletGiant.asset`.
 - Immediate migration implication: Tier 1 is already largely split and should be verified/kept as the baseline. Remaining scene-split work is to finish anchors/content for `Planet_RustyMoon`, decide whether Tier 2 variants share that scene or become unique scenes, and extract the nested Tier 3 `Violet Giant` out of `FriendSlopPrototype`.
 
+## Tier 2 Scene Decision (2026-05-02)
+
+- `Tier2_DeepHaul.asset` (`Cobalt Trench`), `Tier2_QuickStrike.asset` (`Volt Foundry`), and `Tier2_GhostShift.asset` (`Wraith Halo`) are treated as mission variants on the shared `Planet_RustyMoon.unity` scene.
+- Each variant must keep an explicit `RoundObjective` assigned because its gameplay identity comes from objective/timer/quota data, not unique scene content.
+- `Tier2_RustyMoon.asset` remains the Tier 2 scene owner with `planetScene` assigned to `Planet_RustyMoon_Scene.asset`.
+- If a future playtest needs unique Tier 2 visuals, convert one variant at a time by adding a new `Planet_*` scene and assigning that variant's `planetScene`. Until then, do not create placeholder duplicate Tier 2 scenes.
+
 ## Current Vertical Slice
 
 - The prototype still boots through `Assets/Scenes/FriendSlopPrototype.unity`, but Tier 1 and one Tier 2 planet now have dedicated additive scene assets.
