@@ -172,6 +172,7 @@ When you finish a change:
 Read these before making non-trivial changes:
 
 - [docs/architecture.md](../docs/architecture.md) — architectural decisions and rationale. The "why" behind every rule above.
+- [docs/FeatureIntegrationContracts.md](../docs/FeatureIntegrationContracts.md) — extension points and PR contracts for agents adding features.
 - [docs/SpaceshipSceneManagement.md](../docs/SpaceshipSceneManagement.md) — current scene state, target additive multi-scene layout, scene-ownership rules.
 - [docs/RemainingFeatures.md](../docs/RemainingFeatures.md) — feature backlog. Check before claiming a feature is "missing"; it may already be tracked.
 - [docs/builder-audit.md](../docs/builder-audit.md) — GUID-determinism analysis of the editor builders. Read this before editing anything in `Assets/Scripts/Editor/`.

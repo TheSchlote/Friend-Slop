@@ -135,6 +135,7 @@ The following are explicitly out of scope for this project. If you find yourself
 ## Related documents
 
 - [SpaceshipSceneManagement.md](SpaceshipSceneManagement.md) — current vertical slice, target scene layout, and scene-ownership rules.
+- [FeatureIntegrationContracts.md](FeatureIntegrationContracts.md) — feature extension points and PR contracts for AI agents.
 - [RemainingFeatures.md](RemainingFeatures.md) — feature backlog organized by system.
 - [MultiplayerQA.md](MultiplayerQA.md) — manual playtest checklist.
 - [builder-audit.md](builder-audit.md) — GUID-determinism analysis of the editor builders.
