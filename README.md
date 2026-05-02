@@ -1,6 +1,6 @@
 # Friend Slop Retrieval
 
-Unity prototype for a small co-op sphere-world salvage run. Players host or join a session, scavenge junk and rocket parts on a tiny planet, avoid roaming monsters, and assemble a busted rocket at the launchpad.
+Unity prototype for a small co-op sphere-world salvage run. Players host or join a session, scavenge tiny planets, assemble a busted rocket, travel to higher-tier planets, and extract through launchpads and teleporters while avoiding prototype hazards.
 
 ## Project Snapshot
 
@@ -15,11 +15,12 @@ Unity prototype for a small co-op sphere-world salvage run. Players host or join
 ## Current Game Loop
 
 1. Host or join a lobby.
-2. The host starts the round.
-3. Players spawn on a small spherical planet.
-4. Find salvage and bring it to deposit zones for team money.
-5. Find the three rocket parts and bring them to the launchpad.
-6. Once the rocket is assembled, all connected players board the launchpad to complete the run.
+2. Walk around the ship lobby while the host starts the round.
+3. Spawn on the starter planet and collect salvage for team money.
+4. Find the three rocket parts and bring them to the launchpad.
+5. Once the rocket is assembled, all connected players board the launchpad.
+6. The host chooses a rolled higher-tier destination.
+7. Travel to the next planet, use ship/planet teleporters, complete that planet objective, and extract.
 
 Required ship parts:
 
@@ -27,7 +28,7 @@ Required ship parts:
 - `Bent Rocket Wings`
 - `Coughing Engine`
 
-Flying to the next planet is not implemented yet; reaching the assembled/boarded state currently ends the run in success.
+Current authored content reaches prototype tier 3. Tier 2 contains several mission variants, with some variants intentionally sharing the same Rusty Moon scene while their final planet identities are still being groomed.
 
 ## Current Features
 
@@ -40,16 +41,23 @@ Flying to the next planet is not implemented yet; reaching the assembled/boarded
 - Host/client leave handling that returns players to an interactive menu.
 - Lobby queue display and player name entry.
 - Restartable rounds without duplicating runtime managers, loot, or monsters.
+- Walkable ship lobby with placeholder stations and ship spawn points.
+- Additive planet scene loading/unloading for split planet content.
+- Tiered planet catalog, host planet-choice rolling, and travel between planets.
+- Ship-to-planet and planet-to-ship teleporter pads.
+- Launchpad compass indicator and objective progress HUD.
 - Spherical gravity, planet-relative movement, jumping, sprinting, and surface alignment.
 - Networked loot pickup, carrying, dropping, charged throwing, and depositing.
 - Networked player carrying, including dead-player/body carrying.
 - Health, death, revive-on-round-start, spectating, and all-dead wipeout state.
 - Roaming monsters with vision/proximity detection, chasing, investigating, attacks, knockback, and damage.
-- Rocket assembly display, launchpad submission, and boarded-player tracking.
+- Anomaly orbs, boxing gloves, and laser-gun prototype items.
+- Rocket assembly display, launchpad submission, boarded-player tracking, and non-rocket objective support.
+- In-game chat.
 - Runtime day/night sun visuals, skybox color changes, sun glare, planet color randomization, and runtime tree spawning.
 - HUD for team money, ship-part status, health, stamina, carry prompts, death/spectate state, and round result.
-- EditMode tests for join-code handling, round-state helpers, and carry-sync throttling.
-- PlayMode smoke test for scene startup, host shutdown/restart, canceling a pending join, cursor state, and duplicate runtime object protection.
+- EditMode tests for join-code handling, round-state helpers, carry-sync throttling, build-settings scene wiring, and planet scene launchpad/teleporter readiness.
+- PlayMode smoke test for scene startup, additive starter planet load, host shutdown/restart, canceling a pending join, cursor state, and duplicate runtime object protection.
 
 ## Controls
 
@@ -60,6 +68,8 @@ Flying to the next planet is not implemented yet; reaching the assembled/boarded
 - `Space`: jump
 - `E`: pick up loot, interact, or grab another player/body
 - `Q`: drop carried loot/player
+- `F`: hold to deposit carried loot while inside a deposit surface
+- Left mouse: fire/use supported carried tools
 - Hold right mouse, then release: charged throw for carried loot/player
 - `Tab` or `Esc`: toggle gameplay menu during active play
 - `E` / `Q` while dead and spectating: cycle spectate target
@@ -141,8 +151,13 @@ The workflow:
 - Builds a Windows player.
 - Uploads the Windows artifact.
 - Deploys to itch.io when configured for `main`.
+- Packages `PLAYTEST_NOTES.txt` and `RELEASE_NOTES.md` into each build.
 
 Setup details are in `docs/itch-cicd.md`.
+
+## Release Notes
+
+Curated player-facing notes live in `RELEASE_NOTES.md`. The CI build copies those notes into the downloadable Windows build and the GitHub Actions summary. The itch.io page and devlog should stay manually curated for now; automatic page/devlog edits on every `main` push would publish noisy commit-level notes instead of useful playtest notes.
 
 ## Multiplayer QA
 
@@ -154,14 +169,22 @@ Run that checklist before publishing a playtest build or starting major new mult
 
 ## Troubleshooting Notes
 
-- GitHub's Node 20 action deprecation annotation is handled by `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` in the workflow.
+- GameCI v4 currently emits GitHub's Node 20 action deprecation annotation. The workflow sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`; remove it once GameCI publishes Node 24 action metadata.
+- Unity 6 URP/Core may emit non-blocking ray tracing shader warnings during CI Windows builds even though this project does not use ray tracing. Treat those as package shader-variant noise unless the build fails or ray tracing/probe-volume features are intentionally added.
 - Unity Cloud/native-symbol warnings during CI are non-blocking unless the project is intentionally using Cloud Diagnostics or symbol upload.
 - Root-level Unity `.log` files are ignored and should be treated as disposable local diagnostics.
 
 ## Known Prototype Limits
 
-- No next-planet travel yet after rocket assembly.
+- Current planet progression is prototype-depth only; authored content reaches tier 3, while the catalog supports more tiers.
+- Some tier 2 destinations are mission variants that share Rusty Moon's scene/environment.
+- Ship stations are placeholders; pilot, board, customization, and utility station flows need grooming before they become real gameplay.
+- Runtime-generated UI is functional but still needs layout hardening and eventual prefab/UI-document treatment for larger screens.
 - No public matchmaking UI beyond Relay join codes.
 - No dedicated server flow.
 - Visuals and UI are still prototype-quality.
 - Relay requires Unity Services/Auth configuration for online play; LAN is the fallback path for local testing.
+
+## Backlog
+
+Open design, gameplay, and engineering grooming items are tracked in `BACKLOG.md`.

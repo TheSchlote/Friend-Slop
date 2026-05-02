@@ -14,12 +14,18 @@ permissions:
   contents: read
   checks: write
 
+concurrency:
+  group: friend-slop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   UNITY_PROJECT_PATH: Space Game
   UNITY_VERSION: 6000.3.4f1
   BUILD_TARGET: StandaloneWindows64
   BUILD_NAME: FriendSlop
   BUILD_VERSION: 0.1.${{ github.run_number }}
+  # GameCI v4 actions still declare Node 20 as of this workflow revision.
+  # Keep this until GameCI ships Node 24 action metadata, then remove it.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   ITCH_USER: theschlote
   ITCH_GAME: ${{ vars.ITCH_GAME != '' && vars.ITCH_GAME || 'friend-slop' }}
@@ -28,6 +34,7 @@ jobs:
   validate-unity-version:
     name: Validate Unity version
     runs-on: ubuntu-22.04
+    timeout-minutes: 5
 
     steps:
       - name: Checkout
@@ -41,6 +48,7 @@ jobs:
     name: Run EditMode tests
     runs-on: ubuntu-22.04
     needs: validate-unity-version
+    timeout-minutes: 25
 
     steps:
       - name: Check Unity license secrets
@@ -103,6 +111,7 @@ jobs:
     name: Run PlayMode smoke tests
     runs-on: ubuntu-22.04
     needs: editmode-tests
+    timeout-minutes: 25
 
     steps:
       - name: Check Unity license secrets
@@ -168,6 +177,7 @@ jobs:
     needs:
       - editmode-tests
       - playmode-tests
+    timeout-minutes: 60
     outputs:
       build-version: ${{ steps.unity-build.outputs.buildVersion }}
 
@@ -229,28 +239,47 @@ jobs:
       - name: Write playtest notes
         shell: bash
         run: |
-          notes_path="build/${BUILD_TARGET}/PLAYTEST_NOTES.txt"
-          mkdir -p "$(dirname "$notes_path")"
+          output_dir="build/${BUILD_TARGET}"
+          notes_path="${output_dir}/PLAYTEST_NOTES.txt"
+          release_notes_path="${output_dir}/RELEASE_NOTES.md"
+          mkdir -p "$output_dir"
+
+          {
+            echo "# Friend Slop Retrieval ${BUILD_VERSION}"
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Build: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "- Itch channel: ${ITCH_USER}/${ITCH_GAME}:windows"
+            echo
+            if [[ -f RELEASE_NOTES.md ]]; then
+              echo "## Curated Release Notes"
+              echo
+              sed -n '1,160p' RELEASE_NOTES.md
+              echo
+            fi
+            echo "## Recent Commits"
+            echo
+            git log -5 --pretty=format:'- %s (%h)'
+            echo
+          } > "$release_notes_path"
+
           {
             echo "Friend Slop Retrieval ${BUILD_VERSION}"
             echo "Commit: ${GITHUB_SHA}"
             echo "Build: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo "Itch channel: ${ITCH_USER}/${ITCH_GAME}:windows"
             echo
+            if [[ -f RELEASE_NOTES.md ]]; then
+              echo "Curated release notes:"
+              sed -n '1,160p' RELEASE_NOTES.md
+              echo
+            fi
             echo "Recent changes:"
             git log -5 --pretty=format:'- %s (%h)'
             echo
           } > "$notes_path"
 
-          {
-            echo "### Friend Slop Retrieval ${BUILD_VERSION}"
-            echo
-            echo "- Commit: \`${GITHUB_SHA}\`"
-            echo "- Build: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo
-            echo "Recent changes:"
-            git log -5 --pretty=format:'- %s (%h)'
-            echo
-          } >> "$GITHUB_STEP_SUMMARY"
+          cat "$release_notes_path" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Windows build artifact
         uses: actions/upload-artifact@v7
@@ -265,6 +294,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: build-windows
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    timeout-minutes: 10
     environment:
       name: itch-production
       url: https://theschlote.itch.io/friend-slop
@@ -278,6 +308,11 @@ jobs:
         run: |
           echo "BUTLER_API_KEY is not set, so the itch.io deploy step was skipped."
           echo "The Windows build artifact is still available on this workflow run."
+          {
+            echo "### itch.io deploy skipped"
+            echo
+            echo "BUTLER_API_KEY is not configured. The Windows build artifact is still available on this run."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Download Windows build artifact
         if: env.BUTLER_API_KEY_PRESENT == 'true'
@@ -305,3 +340,10 @@ jobs:
           fi
 
           ./butler/butler push "build/${BUILD_TARGET}" "${ITCH_USER}/${ITCH_GAME}:windows" --userversion "$user_version"
+          {
+            echo "### Deployed to itch.io"
+            echo
+            echo "- Page: https://${ITCH_USER}.itch.io/${ITCH_GAME}"
+            echo "- Channel: ${ITCH_USER}/${ITCH_GAME}:windows"
+            echo "- Version: ${user_version}"
+          } >> "$GITHUB_STEP_SUMMARY"

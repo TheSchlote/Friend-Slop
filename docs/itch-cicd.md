@@ -10,9 +10,10 @@ Workflow file: `.github/workflows/build-and-deploy-itch.yml`
 - Runs EditMode tests and a PlayMode scene smoke test before building.
 - Targets `StandaloneWindows64`.
 - Stamps each CI build as `0.1.<GitHub run number>`, which appears in-game and on itch.io.
-- Writes `PLAYTEST_NOTES.txt` into each build with the version, commit, workflow run, and recent commits.
+- Writes `PLAYTEST_NOTES.txt` and `RELEASE_NOTES.md` into each build with the version, commit, workflow run, curated release notes, and recent commits.
 - Uploads the build as a GitHub Actions artifact.
 - Pushes the build to `theschlote/<game-slug>:windows` when `BUTLER_API_KEY` is configured.
+- Adds deployment/version details to the GitHub Actions step summary.
 
 The default itch.io game slug is `friend-slop`, so the default target is:
 
@@ -81,9 +82,33 @@ If `BUTLER_API_KEY` is missing, the workflow still builds and uploads a GitHub a
 
 If the Unity license secrets are missing, the workflow stops before the Unity build and prints which secrets need to be added.
 
+## Release Notes And itch.io Page Updates
+
+Curated player-facing notes live in `RELEASE_NOTES.md` at the repository root. The workflow packages those notes into every Windows build and includes them in the GitHub Actions summary.
+
+Do not automatically rewrite the public itch.io page or post a devlog on every `main` push. Most pushes are integration commits, and auto-posted commit summaries would make noisy public updates. For now:
+
+1. Keep `RELEASE_NOTES.md` current when preparing a playtest build.
+2. Let CI deploy the Windows channel with the generated `0.1.<run number>` version.
+3. Manually copy the curated notes into an itch.io devlog when the build is worth notifying players about.
+
+If the project later needs fully automated public release posts, add a separate manually-triggered workflow input so devlog publishing is deliberate instead of tied to every successful `main` build.
+
 ## Current Scope
 
 This pipeline only builds Windows. Add more jobs later for Linux, macOS, or WebGL after the prototype stabilizes.
+
+## Known CI Warning Policy
+
+- GameCI `unity-test-runner` and `unity-builder` v4 currently target Node 20 in their action metadata. This repo sets `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` so GitHub-hosted runners execute them on Node 24. Re-check GameCI releases periodically; when a Node 24-compatible GameCI release is available, upgrade the actions and remove the force flag.
+- Unity 6 URP/Core can print ray tracing shader compilation warnings for bundled render-pipeline resources on non-ray-tracing CI targets. The project is URP and does not enable ray tracing, so these warnings are treated as non-blocking unless the build fails or the project intentionally starts using ray tracing/probe-volume features.
+
+## Coverage Gaps To Add
+
+- PlayMode coverage for traveling from starter planet to tier 2 and back through both teleporters.
+- Server-authority tests around loot deposit holds, weapon cooldowns, and pickup range checks.
+- UI layout tests for the connected menu, loading screen, HUD objective copy, and small viewports.
+- Multiplayer manual QA with at least two clients through lobby, starter planet, tier 2 travel, extraction, host shutdown, and reconnect.
 
 ## References
 
