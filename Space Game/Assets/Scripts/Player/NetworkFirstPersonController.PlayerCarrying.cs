@@ -1,3 +1,4 @@
+using FriendSlop.Core;
 using FriendSlop.Round;
 using Unity.Netcode;
 using UnityEngine;
@@ -134,6 +135,7 @@ namespace FriendSlop.Player
             if (rpcParams.Receive.SenderClientId != OwnerClientId || _heldPlayer == null) return;
             var carrier = FindByClientId(rpcParams.Receive.SenderClientId);
             if (carrier != null && Vector3.SqrMagnitude(position - carrier.transform.position) > 36f) return;
+            position = CarrySurfaceUtility.ClampTargetAboveSurface(position);
             _heldPlayer.ServerMoveAsCarried(position, rotation);
         }
 

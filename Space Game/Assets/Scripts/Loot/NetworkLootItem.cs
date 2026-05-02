@@ -10,7 +10,7 @@ namespace FriendSlop.Loot
 {
     [RequireComponent(typeof(NetworkObject))]
     [RequireComponent(typeof(Rigidbody))]
-    public class NetworkLootItem : NetworkBehaviour, IFriendSlopInteractable
+    public partial class NetworkLootItem : NetworkBehaviour, IFriendSlopInteractable
     {
         private const ulong NoCarrier = ulong.MaxValue;
         private const float ServerPickupMaxDistance = 4.25f;
@@ -47,6 +47,7 @@ namespace FriendSlop.Loot
         public NetworkVariable<ulong> CarrierClientId = new(NoCarrier);
         public NetworkVariable<bool> IsDeposited = new(false);
 
+        private NetworkFirstPersonController _cachedCarrier;
         private NetworkFirstPersonController subscribedCarrier;
 
         public string ItemName => itemName;
@@ -110,6 +111,7 @@ namespace FriendSlop.Loot
             IsDeposited.OnValueChanged -= OnDepositedChanged;
             SlotIndex.OnValueChanged -= OnSlotIndexChanged;
             UnsubscribeFromCarrierActiveSlot();
+            _cachedCarrier = null;
         }
 
         public bool CanInteract(NetworkFirstPersonController player)
@@ -307,26 +309,6 @@ namespace FriendSlop.Loot
                 : serverDirection;
         }
 
-        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        public void MoveCarriedServerRpc(Vector3 targetPosition, Quaternion targetRotation, RpcParams rpcParams = default)
-        {
-            if (!IsHeldBy(rpcParams.Receive.SenderClientId) || IsDeposited.Value)
-            {
-                return;
-            }
-
-            var player = NetworkFirstPersonController.FindByClientId(rpcParams.Receive.SenderClientId);
-            if (player != null && Vector3.SqrMagnitude(targetPosition - player.transform.position) > 16f)
-            {
-                targetPosition = player.transform.position + player.transform.forward * carryDistance + player.transform.up * 1.2f;
-            }
-
-            body.position = targetPosition;
-            body.rotation = targetRotation;
-            ClearDynamicVelocity();
-            transform.SetPositionAndRotation(targetPosition, targetRotation);
-        }
-
         // Max legitimate throw impulse = throwImpulse(8) * chargeThrowMultiplier(3.5) ≈ 28.
         // Clamp at 30 to reject obviously spoofed magnitudes while allowing real throws.
         private const float MaxDropImpulseMagnitude = 30f;
@@ -400,8 +382,7 @@ namespace FriendSlop.Loot
             var round = RoundManager.Instance;
             if (round == null || round.Phase.Value != RoundPhase.Active) return false;
 
-            var carrier = NetworkFirstPersonController.FindByClientId(senderId);
-            if (carrier == null) return false;
+            if (!TryGetCachedCarrier(senderId, out var carrier)) return false;
 
             surface = ItemDepositSurface.FindFor(carrier, this);
             return surface != null;
@@ -438,7 +419,7 @@ namespace FriendSlop.Loot
                 return;
             }
 
-            var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
+            TryGetCachedCarrier(CarrierClientId.Value, out var carrier);
             carrier?.ClearHeldItem(this);
             ClearServerDepositHold();
 
@@ -460,7 +441,7 @@ namespace FriendSlop.Loot
                 return;
             }
 
-            var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
+            TryGetCachedCarrier(CarrierClientId.Value, out var carrier);
             carrier?.ClearHeldItem(this);
             ClearServerDepositHold();
 
@@ -488,7 +469,7 @@ namespace FriendSlop.Loot
                 return;
             }
 
-            var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
+            TryGetCachedCarrier(CarrierClientId.Value, out var carrier);
             carrier?.ClearHeldItem(this);
             ClearServerDepositHold();
 
@@ -544,18 +525,22 @@ namespace FriendSlop.Loot
 
         private void OnCarrierChanged(ulong previousCarrier, ulong currentCarrier)
         {
-            var previousPlayer = NetworkFirstPersonController.FindByClientId(previousCarrier);
+            var previousPlayer = previousCarrier != NoCarrier
+                ? NetworkFirstPersonController.FindByClientId(previousCarrier)
+                : null;
             previousPlayer?.ClearHeldItem(this);
 
             UnsubscribeFromCarrierActiveSlot();
 
-            var currentPlayer = NetworkFirstPersonController.FindByClientId(currentCarrier);
-            currentPlayer?.SetHeldItem(this);
+            _cachedCarrier = currentCarrier != NoCarrier
+                ? NetworkFirstPersonController.FindByClientId(currentCarrier)
+                : null;
+            _cachedCarrier?.SetHeldItem(this);
 
-            if (currentPlayer != null)
+            if (_cachedCarrier != null)
             {
-                subscribedCarrier = currentPlayer;
-                currentPlayer.ActiveInventorySlot.OnValueChanged += OnCarrierActiveSlotChanged;
+                subscribedCarrier = _cachedCarrier;
+                _cachedCarrier.ActiveInventorySlot.OnValueChanged += OnCarrierActiveSlotChanged;
             }
 
             ApplyVisibilityState();
@@ -613,8 +598,7 @@ namespace FriendSlop.Loot
             ValidateServerDepositHold();
             if (!IsCarried.Value || IsDeposited.Value) return;
 
-            var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
-            if (carrier == null) return;
+            if (!TryGetCachedCarrier(CarrierClientId.Value, out var carrier)) return;
             if (SlotIndex.Value == carrier.ActiveInventorySlot.Value) return;
 
             var stowedPos = carrier.transform.position + carrier.transform.up * 0.6f;
@@ -627,8 +611,7 @@ namespace FriendSlop.Loot
             get
             {
                 if (!IsCarried.Value || IsDeposited.Value) return false;
-                var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
-                if (carrier == null) return false;
+                if (!TryGetCachedCarrier(CarrierClientId.Value, out var carrier)) return false;
                 return SlotIndex.Value == carrier.ActiveInventorySlot.Value;
             }
         }
@@ -679,8 +662,8 @@ namespace FriendSlop.Loot
             {
                 // Stowed inventory items (carried but not in the active slot) are hidden so
                 // only the item in the player's "hand" is visible.
-                var carrier = NetworkFirstPersonController.FindByClientId(CarrierClientId.Value);
-                if (carrier != null && SlotIndex.Value != carrier.ActiveInventorySlot.Value)
+                if (TryGetCachedCarrier(CarrierClientId.Value, out var carrier)
+                    && SlotIndex.Value != carrier.ActiveInventorySlot.Value)
                     visible = false;
             }
 
@@ -703,6 +686,18 @@ namespace FriendSlop.Loot
                     itemCollider.enabled = shouldEnable;
                 }
             }
+        }
+
+        private bool TryGetCachedCarrier(ulong clientId, out NetworkFirstPersonController carrier)
+        {
+            carrier = _cachedCarrier;
+            if (carrier == null || carrier.OwnerClientId != clientId)
+            {
+                carrier = null;
+                return false;
+            }
+
+            return true;
         }
     }
 }

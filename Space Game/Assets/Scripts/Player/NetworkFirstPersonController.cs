@@ -219,46 +219,6 @@ namespace FriendSlop.Player
             }
         }
 
-        public override void OnNetworkDespawn()
-        {
-            if (IsServer)
-            {
-                ServerForceDropHeld(Vector3.zero);
-                if (_heldPlayer != null) ServerDropHeldPlayer(Vector3.zero);
-                if (IsBeingCarried.Value)
-                {
-                    var carrier = FindByClientId(CarriedByClientId.Value);
-                    carrier?.ServerDropHeldPlayer(Vector3.zero);
-                }
-            }
-
-            if (IsOwner)
-            {
-                _health.OnValueChanged -= OnHealthChanged;
-                if (_subscribedToRoundPhase)
-                {
-                    var rm = RoundManager.Instance;
-                    if (rm != null) rm.Phase.OnValueChanged -= OnRoundPhaseChanged;
-                    _subscribedToRoundPhase = false;
-                }
-            }
-
-            ActivePlayers.Remove(this);
-
-            if (LocalPlayer == this)
-            {
-                LocalPlayer = null;
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
-            }
-        }
-
-        public override void OnDestroy()
-        {
-            base.OnDestroy();
-            ActivePlayers.Remove(this);
-        }
-
         private void ConfigureLocalPlayer(bool isLocal)
         {
             if (playerCamera != null)
