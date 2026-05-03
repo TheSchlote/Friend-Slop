@@ -478,15 +478,30 @@ namespace FriendSlop.Editor
                 Debug.LogWarning($"RoundManager prefab not found at {RoundManagerPrefabPath}; skipping catalog wiring.");
                 return;
             }
-            var round = prefab.GetComponent<RoundManager>();
-            if (round == null) return;
 
-            var so = new SerializedObject(round);
-            so.FindProperty("planetCatalog").objectReferenceValue = catalog;
-            so.FindProperty("startingPlanet").objectReferenceValue = startingPlanet;
-            so.FindProperty("defaultObjective").objectReferenceValue = defaultObjective;
-            so.ApplyModifiedPropertiesWithoutUndo();
-            EditorUtility.SetDirty(prefab);
+            var root = PrefabUtility.LoadPrefabContents(RoundManagerPrefabPath);
+            try
+            {
+                var round = root.GetComponent<RoundManager>();
+                if (round == null) return;
+
+                var orchestrator = root.GetComponent<PlanetSceneOrchestrator>();
+                if (orchestrator == null)
+                    orchestrator = root.AddComponent<PlanetSceneOrchestrator>();
+
+                var so = new SerializedObject(round);
+                so.FindProperty("planetCatalog").objectReferenceValue = catalog;
+                so.FindProperty("startingPlanet").objectReferenceValue = startingPlanet;
+                so.FindProperty("planetSceneOrchestrator").objectReferenceValue = orchestrator;
+                so.FindProperty("defaultObjective").objectReferenceValue = defaultObjective;
+                so.ApplyModifiedPropertiesWithoutUndo();
+
+                PrefabUtility.SaveAsPrefabAsset(root, RoundManagerPrefabPath);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
         }
 
         private static void PlaceOnSurface(SphereWorld world, Transform target, Vector3 normal, float heightOffset)

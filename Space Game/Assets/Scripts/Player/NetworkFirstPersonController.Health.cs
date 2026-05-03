@@ -22,6 +22,11 @@ namespace FriendSlop.Player
         private float _deathOverheadTimer;
         private bool _spectating;
         private int _spectatorIndex;
+        private readonly List<NetworkFirstPersonController> _aliveSpectateTargets = new();
+        private string _spectatorTargetLabel = string.Empty;
+        private int _spectatorTargetLabelAliveCount = -1;
+        private int _spectatorTargetLabelIndex = -1;
+        private ulong _spectatorTargetLabelClientId = ulong.MaxValue;
 
         public bool IsDead => _health.Value <= 0;
         public float HealthPercent => maxHealth > 0 ? Mathf.Clamp01((float)_health.Value / maxHealth) : 0f;
@@ -30,24 +35,7 @@ namespace FriendSlop.Player
         public bool IsDeadLocally => IsOwner && _isDead;
         public bool IsSpectatingLocally => IsOwner && _isDead && _spectating;
 
-        public string SpectatorTargetLabel
-        {
-            get
-            {
-                if (!_spectating) return string.Empty;
-                var alive = new List<NetworkFirstPersonController>();
-                foreach (var p in ActivePlayers)
-                {
-                    if (p != null && p != this && p.IsSpawned && !p.IsDead)
-                        alive.Add(p);
-                }
-                if (alive.Count == 0) return "nobody";
-                var idx = ((_spectatorIndex % alive.Count) + alive.Count) % alive.Count;
-                var target = alive[idx];
-                var serverId = NetworkManager.Singleton != null ? NetworkManager.ServerClientId : 0UL;
-                return target.OwnerClientId == serverId ? "Host" : $"Player {target.OwnerClientId}";
-            }
-        }
+        public string SpectatorTargetLabel => _spectating ? _spectatorTargetLabel : string.Empty;
 
         private void OnHealthChanged(int previous, int current)
         {
@@ -111,6 +99,7 @@ namespace FriendSlop.Player
             _spectating = false;
             _deathOverheadTimer = 5f;
             _spectatorIndex = 0;
+            ResetSpectatorTargetLabel();
             if (characterController != null) characterController.enabled = false;
             if (playerCamera != null) playerCamera.transform.SetParent(null);
         }
@@ -122,6 +111,7 @@ namespace FriendSlop.Player
             _isDead = false;
             _spectating = false;
             _deathOverheadTimer = 0f;
+            ResetSpectatorTargetLabel();
             if (playerCamera != null && cameraRoot != null)
             {
                 playerCamera.transform.SetParent(cameraRoot);
@@ -158,23 +148,19 @@ namespace FriendSlop.Player
                 return;
             }
 
+            RefreshAliveSpectateTargets();
+
             if (Keyboard.current != null && !GameplayInputState.IsBlocked)
             {
-                if (Keyboard.current.eKey.wasPressedThisFrame) CycleSpectateTarget(1);
-                if (Keyboard.current.qKey.wasPressedThisFrame) CycleSpectateTarget(-1);
+                if (Keyboard.current.eKey.wasPressedThisFrame) CycleSpectateTarget(1, _aliveSpectateTargets.Count);
+                if (Keyboard.current.qKey.wasPressedThisFrame) CycleSpectateTarget(-1, _aliveSpectateTargets.Count);
             }
 
-            var alive = new List<NetworkFirstPersonController>();
-            foreach (var p in ActivePlayers)
+            if (_aliveSpectateTargets.Count > 0)
             {
-                if (p != null && p != this && p.IsSpawned && !p.IsDead)
-                    alive.Add(p);
-            }
-
-            if (alive.Count > 0)
-            {
-                _spectatorIndex = ((_spectatorIndex % alive.Count) + alive.Count) % alive.Count;
-                var target = alive[_spectatorIndex];
+                _spectatorIndex = ((_spectatorIndex % _aliveSpectateTargets.Count) + _aliveSpectateTargets.Count) % _aliveSpectateTargets.Count;
+                var target = _aliveSpectateTargets[_spectatorIndex];
+                UpdateSpectatorTargetLabel(_aliveSpectateTargets.Count, target);
                 if (target.PlayerCamera != null)
                 {
                     playerCamera.transform.position = target.PlayerCamera.transform.position;
@@ -183,6 +169,7 @@ namespace FriendSlop.Player
             }
             else
             {
+                UpdateSpectatorTargetLabel(0, null);
                 var overheadPos = transform.position + up * 8f;
                 playerCamera.transform.position = overheadPos;
                 var surfaceForward = Vector3.ProjectOnPlane(transform.forward, up);
@@ -194,14 +181,66 @@ namespace FriendSlop.Player
 
         private void CycleSpectateTarget(int direction)
         {
+            CycleSpectateTarget(direction, CountAliveSpectateTargets());
+        }
+
+        private void CycleSpectateTarget(int direction, int aliveCount)
+        {
+            if (aliveCount == 0) return;
+            _spectatorIndex = ((_spectatorIndex + direction) % aliveCount + aliveCount) % aliveCount;
+        }
+
+        private int CountAliveSpectateTargets()
+        {
             var aliveCount = 0;
             foreach (var p in ActivePlayers)
             {
                 if (p != null && p != this && p.IsSpawned && !p.IsDead)
                     aliveCount++;
             }
-            if (aliveCount == 0) return;
-            _spectatorIndex = ((_spectatorIndex + direction) % aliveCount + aliveCount) % aliveCount;
+            return aliveCount;
+        }
+
+        private void RefreshAliveSpectateTargets()
+        {
+            _aliveSpectateTargets.Clear();
+            foreach (var p in ActivePlayers)
+            {
+                if (p != null && p != this && p.IsSpawned && !p.IsDead)
+                    _aliveSpectateTargets.Add(p);
+            }
+        }
+
+        private void UpdateSpectatorTargetLabel(int aliveCount, NetworkFirstPersonController target)
+        {
+            var targetClientId = target != null ? target.OwnerClientId : ulong.MaxValue;
+            if (_spectatorTargetLabelAliveCount == aliveCount
+                && _spectatorTargetLabelIndex == _spectatorIndex
+                && _spectatorTargetLabelClientId == targetClientId)
+            {
+                return;
+            }
+
+            _spectatorTargetLabelAliveCount = aliveCount;
+            _spectatorTargetLabelIndex = _spectatorIndex;
+            _spectatorTargetLabelClientId = targetClientId;
+
+            if (target == null)
+            {
+                _spectatorTargetLabel = "nobody";
+                return;
+            }
+
+            var serverId = NetworkManager.Singleton != null ? NetworkManager.ServerClientId : 0UL;
+            _spectatorTargetLabel = target.OwnerClientId == serverId ? "Host" : $"Player {target.OwnerClientId}";
+        }
+
+        private void ResetSpectatorTargetLabel()
+        {
+            _spectatorTargetLabel = string.Empty;
+            _spectatorTargetLabelAliveCount = -1;
+            _spectatorTargetLabelIndex = -1;
+            _spectatorTargetLabelClientId = ulong.MaxValue;
         }
     }
 }

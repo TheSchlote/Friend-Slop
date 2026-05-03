@@ -7,32 +7,11 @@ namespace FriendSlop.SceneManagement
 {
     public class NetworkSceneTransitionService : MonoBehaviour
     {
-        public static NetworkSceneTransitionService Instance { get; private set; }
-
         [SerializeField] private GameSceneCatalog sceneCatalog;
 
         private readonly HashSet<string> serverLoadedScenePaths = new();
 
         public GameSceneCatalog Catalog => sceneCatalog;
-
-        private void Awake()
-        {
-            if (Instance != null && Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            Instance = this;
-        }
-
-        private void OnDestroy()
-        {
-            if (Instance == this)
-            {
-                Instance = null;
-            }
-        }
 
         public SceneEventProgressStatus ServerLoadScene(GameSceneDefinition scene)
         {

@@ -11,18 +11,37 @@ namespace FriendSlop.Core
     // blocked by default, which is the safe answer for headless tests.
     public static class GameplayInputState
     {
-        private static Func<bool> _provider = () => false;
+        private static readonly Func<bool> DefaultProvider = () => false;
+        private static Func<bool> _provider = DefaultProvider;
+        private static object _providerOwner;
 
         public static bool IsBlocked => _provider();
 
         public static void RegisterBlockProvider(Func<bool> provider)
         {
-            _provider = provider ?? (() => false);
+            RegisterBlockProvider(provider?.Target, provider);
+        }
+
+        public static void RegisterBlockProvider(object owner, Func<bool> provider)
+        {
+            _providerOwner = owner;
+            _provider = provider ?? DefaultProvider;
         }
 
         public static void ClearBlockProvider()
         {
-            _provider = () => false;
+            _providerOwner = null;
+            _provider = DefaultProvider;
+        }
+
+        public static void ClearBlockProvider(object owner)
+        {
+            if (_providerOwner != owner)
+            {
+                return;
+            }
+
+            ClearBlockProvider();
         }
     }
 }

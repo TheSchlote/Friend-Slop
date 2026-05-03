@@ -3,14 +3,17 @@ using FriendSlop.Core;
 using FriendSlop.Hazards;
 using FriendSlop.Loot;
 using FriendSlop.Round;
+using FriendSlop.SceneManagement;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FriendSlop.Networking
 {
     public class PrototypeNetworkBootstrapper : MonoBehaviour
     {
         [SerializeField] private RoundManager roundManagerPrefab;
+        [SerializeField] private NetworkSceneTransitionService sceneTransitionService;
         [SerializeField] private Transform[] playerSpawnPoints;
         [SerializeField] private Transform[] shipSpawnPoints;
         [SerializeField] private NetworkLootItem[] lootPrefabs;
@@ -158,7 +161,24 @@ namespace FriendSlop.Networking
             var round = Instantiate(roundManagerPrefab);
             round.ConfigureSpawnPoints(playerSpawnPoints);
             round.ConfigureShipSpawnPoints(shipSpawnPoints);
+            round.ConfigureSceneTransitionService(ResolveSceneTransitionService());
             SpawnNetworkObject(round.NetworkObject);
+        }
+
+        private NetworkSceneTransitionService ResolveSceneTransitionService()
+        {
+            if (sceneTransitionService != null)
+            {
+                return sceneTransitionService;
+            }
+
+            var networkManager = subscribedManager != null ? subscribedManager : NetworkManager.Singleton;
+            if (networkManager != null)
+            {
+                sceneTransitionService = networkManager.GetComponent<NetworkSceneTransitionService>();
+            }
+
+            return sceneTransitionService;
         }
 
         private void SpawnLoot(PlanetEnvironment activeEnv)
@@ -212,6 +232,7 @@ namespace FriendSlop.Networking
                 }
 
                 var loot = Instantiate(prefab, pos, rot);
+                MoveToActivePlanetScene(loot.gameObject, activeEnv);
                 loot.ServerSetSpawnPose(pos, rot);
                 SpawnNetworkObject(loot.NetworkObject);
             }
@@ -271,8 +292,25 @@ namespace FriendSlop.Networking
                 }
 
                 var monster = Instantiate(monsterPrefab, spawnPoint.position, spawnPoint.rotation);
+                MoveToActivePlanetScene(monster.gameObject, activeEnv);
                 SpawnNetworkObject(monster.NetworkObject);
             }
+        }
+
+        private static void MoveToActivePlanetScene(GameObject spawnedObject, PlanetEnvironment activeEnv)
+        {
+            if (spawnedObject == null || activeEnv == null)
+            {
+                return;
+            }
+
+            var targetScene = activeEnv.gameObject.scene;
+            if (!targetScene.IsValid() || !targetScene.isLoaded || spawnedObject.scene == targetScene)
+            {
+                return;
+            }
+
+            SceneManager.MoveGameObjectToScene(spawnedObject, targetScene);
         }
 
         private void SpawnNetworkObject(NetworkObject networkObject)

@@ -53,6 +53,20 @@ namespace FriendSlop.Round
             return $"{prefix}  |  {boarding}";
         }
 
+        public override string BuildSuccessText(RoundManager round)
+        {
+            if (round == null) return "QUOTA MET.";
+            var target = ResolveTarget(round);
+            return $"QUOTA MET on {FormatPlanetLabel(round)}.\nCollected ${round.CollectedValue.Value} / ${target}.";
+        }
+
+        public override string BuildFailureText(RoundManager round)
+        {
+            if (round == null) return "QUOTA FAILED.";
+            var target = ResolveTarget(round);
+            return $"QUOTA FAILED on {FormatPlanetLabel(round)}.\nCollected ${round.CollectedValue.Value} / ${target} before time ran out.";
+        }
+
         private int ResolveTarget(RoundManager round)
         {
             return quotaOverride > 0 ? quotaOverride : Mathf.Max(1, round.Quota.Value);

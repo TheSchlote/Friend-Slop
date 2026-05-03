@@ -21,5 +21,14 @@ namespace FriendSlop.Round
         // HUD progress string shown while the round is active. Returning empty
         // hides the line.
         public virtual string BuildHudStatus(RoundManager round) => string.Empty;
+
+        public abstract string BuildSuccessText(RoundManager round);
+        public abstract string BuildFailureText(RoundManager round);
+
+        protected static string FormatPlanetLabel(RoundManager round)
+        {
+            var planet = round != null ? round.CurrentPlanet : null;
+            return planet != null ? $"{planet.DisplayName} (Tier {planet.Tier})" : "Unknown planet";
+        }
     }
 }

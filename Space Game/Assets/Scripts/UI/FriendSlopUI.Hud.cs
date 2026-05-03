@@ -242,10 +242,9 @@ namespace FriendSlop.UI
             _fadeOverlayImage.color = new Color(0f, 0f, 0f, combinedAlpha);
         }
 
-        public static void RequestTeleporterFlash()
+        private void RequestTeleporterFlash()
         {
-            if (Instance == null) return;
-            Instance._teleporterFlashStartTime = Time.time;
+            _teleporterFlashStartTime = Time.time;
         }
 
         private float ComputeTeleporterFlashAlpha()

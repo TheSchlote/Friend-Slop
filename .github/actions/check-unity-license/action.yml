@@ -1,0 +1,23 @@
+name: Check Unity License Secrets
+description: Validates that Unity license secrets are configured before running Unity jobs
+
+runs:
+  using: composite
+  steps:
+    - name: Validate Unity license secrets
+      shell: bash
+      env:
+        UNITY_LICENSE: ${{ env.UNITY_LICENSE }}
+        UNITY_SERIAL: ${{ env.UNITY_SERIAL }}
+        UNITY_EMAIL: ${{ env.UNITY_EMAIL }}
+        UNITY_PASSWORD: ${{ env.UNITY_PASSWORD }}
+      run: |
+        if [[ -z "$UNITY_EMAIL" || -z "$UNITY_PASSWORD" ]]; then
+          echo "::error::Set UNITY_EMAIL and UNITY_PASSWORD in GitHub Actions secrets."
+          exit 1
+        fi
+
+        if [[ -z "$UNITY_LICENSE" && -z "$UNITY_SERIAL" ]]; then
+          echo "::error::Set UNITY_LICENSE for a Personal license, or UNITY_SERIAL for a Pro/Plus license."
+          exit 1
+        fi

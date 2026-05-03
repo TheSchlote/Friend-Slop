@@ -66,7 +66,7 @@ The server triggers loads via `NetworkManager.SceneManager.LoadScene(path, LoadS
 
 **Cost.** Higher discipline required around scene ownership. Gameplay code must never `FindObjectOfType` across the additive set without filtering by scene. The `RoundManager` needs to know which planet scene is active, not "the scene."
 
-**Status.** `NetworkSceneTransitionService` skeleton exists at `Assets/Scripts/SceneManagement/`. Not yet consumed by gameplay flow. Gating criteria for marking this complete:
+**Status.** `NetworkSceneTransitionService` is consumed by the round scene orchestration path through spawn-time dependency wiring. Gating criteria for marking the full multi-scene split complete:
 
 1. `Bootstrap`, `ShipInterior`, and at least one `Planet_*` scene exist as separate assets and are in Build Settings.
 2. `GameSceneCatalog` is the only place runtime code looks up scenes (no string literals).
@@ -97,13 +97,13 @@ FriendSlop.Core         <-  FriendSlop.Networking  <-  FriendSlop.Gameplay  <-  
 
 ### D-007: File-size and singleton limits
 
-**Decision.** Files stop at ~400 lines. New singletons require explicit justification.
+**Decision.** Files stop at ~400 lines. New project-owned singleton-style globals are refused by default. The current allowed legacy globals are `RoundManager.Instance` and `NetworkFirstPersonController.LocalPlayer`; see [SingletonAudit.md](SingletonAudit.md).
 
 **Why.** Both are leading indicators that the code is growing in the wrong shape. AI agents naturally append to existing files and reach for global state. A hard cap forces the right reaction (split, inject) at the moment when the cost is still small.
 
 **Cost.** Some refactor churn. Worth it.
 
-**Status.** Two files currently exceed the cap (`FriendSlopUI.cs` ~1455, `NetworkFirstPersonController.cs` ~1321) and `FriendSlopSceneBuilder.cs` ~1297. These are flagged for split before any further additions.
+**Status.** Several runtime files still exceed the cap and are frozen by `ArchitectureGuardrailTests` baselines. `FriendSlopUI`, `NetworkFirstPersonController`, `NetworkLootItem`, `PlayerInteractor`, `RoamingMonster`, and `RoundManager` are flagged for staged splits before significant additions.
 
 ### D-008: Tests at architectural seams
 
@@ -128,13 +128,15 @@ The following are explicitly out of scope for this project. If you find yourself
 
 ## Open questions
 
-- **NGO scene-transition idiom.** The exact handoff between `RoundManager` (gameplay-phase owner) and `NetworkSceneTransitionService` (scene-load owner) needs to be settled before D-005 ships. Likely answer: `RoundManager` requests, the service executes, `RoundManager.OnNetworkSpawn` re-runs in the new scene to re-anchor.
+- **NGO scene-transition idiom.** The first handoff is settled: `PrototypeNetworkBootstrapper` passes `NetworkSceneTransitionService` into the spawned `RoundManager`, and `RoundManager` delegates additive planet loads to `PlanetSceneOrchestrator`. Late-join behavior and full ship/planet scene splitting still need tests.
 - **Late-join during transition.** What does a client see if it joins while the server is mid-load? Probably: hold them in a "Joining" UI state, let NGO sync them to the destination scene.
 - **Persistent player state across scenes.** `NetworkFirstPersonController` is currently scene-local. For multi-scene, either the player NetworkObject lives in Bootstrap (DontDestroyOnLoad-able NetworkObject), or it gets re-spawned each transition with serialized state passed through `RoundManager`. Pending decision.
 
 ## Related documents
 
 - [SpaceshipSceneManagement.md](SpaceshipSceneManagement.md) — current vertical slice, target scene layout, and scene-ownership rules.
+- [FeatureIntegrationContracts.md](FeatureIntegrationContracts.md) — feature extension points and PR contracts for AI agents.
+- [SingletonAudit.md](SingletonAudit.md) — singleton audit, removals, and migration plan for remaining globals.
 - [RemainingFeatures.md](RemainingFeatures.md) — feature backlog organized by system.
 - [MultiplayerQA.md](MultiplayerQA.md) — manual playtest checklist.
 - [builder-audit.md](builder-audit.md) — GUID-determinism analysis of the editor builders.

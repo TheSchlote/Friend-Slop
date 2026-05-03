@@ -14,10 +14,8 @@ using UnityEngine;
 
 namespace FriendSlop.Networking
 {
-    public class NetworkSessionManager : MonoBehaviour
+    public partial class NetworkSessionManager : MonoBehaviour
     {
-        public static NetworkSessionManager Instance { get; private set; }
-
         // Raised when the local client/host session has ended (disconnect, shutdown,
         // transport failure). UI subscribes to release the gameplay cursor lock so the
         // menu is interactable again. Kept as an event so this class never reaches
@@ -47,128 +45,6 @@ namespace FriendSlop.Networking
         public float PendingConnectionSecondsRemaining => pendingConnectionDeadline > 0f
             ? Mathf.Max(0f, pendingConnectionDeadline - Time.realtimeSinceStartup)
             : 0f;
-
-        private void Awake()
-        {
-            if (Instance != null && Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            Instance = this;
-            TrySubscribeToNetworkManager();
-        }
-
-        private void OnEnable()
-        {
-            TrySubscribeToNetworkManager();
-        }
-
-        private async void Update()
-        {
-            TrySubscribeToNetworkManager();
-            CheckPendingConnectionTimeout();
-
-            if (currentLobby == null || Time.realtimeSinceStartup < nextLobbyHeartbeat)
-            {
-                return;
-            }
-
-            nextLobbyHeartbeat = Time.realtimeSinceStartup + 15f;
-            try
-            {
-                await WithServiceTimeout(LobbyService.Instance.SendHeartbeatPingAsync(currentLobby.Id), "Lobby heartbeat");
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning($"Lobby heartbeat failed: {exception.Message}");
-            }
-        }
-
-        private void OnDisable()
-        {
-            UnsubscribeFromNetworkManager();
-        }
-
-        public async void HostOnline()
-        {
-            if (!TryBeginSessionOperation("Starting online host...", out var operationId))
-            {
-                return;
-            }
-
-            try
-            {
-                await HostRelayAsync(operationId);
-            }
-            catch (Exception exception)
-            {
-                if (IsSessionOperationCancelled(operationId))
-                {
-                    return;
-                }
-
-                Debug.LogWarning($"Relay host failed, falling back to local host: {exception.Message}");
-                sessionOperationInProgress = false;
-                if (StartLocalHost())
-                {
-                    Status = $"Relay unavailable. Local host started on port {localPort}.";
-                }
-            }
-            finally
-            {
-                CompleteSessionOperation(operationId);
-            }
-        }
-
-        public async void JoinOnline(string joinCodeOrAddress)
-        {
-            var target = JoinCodeUtility.NormalizeJoinTarget(joinCodeOrAddress);
-            if (string.IsNullOrWhiteSpace(target))
-            {
-                Status = "Enter a Relay code, or use Join LAN for local testing.";
-                return;
-            }
-
-            if (JoinCodeUtility.LooksLikeLanAddress(target))
-            {
-                StartLocalClient(target);
-                return;
-            }
-
-            if (!JoinCodeUtility.IsValidRelayJoinCode(target))
-            {
-                Status = $"'{target}' is not a valid Relay code. Codes are {JoinCodeUtility.MinRelayCodeLength}-{JoinCodeUtility.MaxRelayCodeLength} letters or numbers.";
-                return;
-            }
-
-            if (!TryBeginSessionOperation($"Joining Relay code {target}...", out var operationId))
-            {
-                return;
-            }
-
-            try
-            {
-                await JoinRelayAsync(target, operationId);
-            }
-            catch (Exception exception)
-            {
-                if (IsSessionOperationCancelled(operationId))
-                {
-                    return;
-                }
-
-                Debug.LogWarning($"Relay join failed for code {target}: {exception}");
-                LastJoinCode = string.Empty;
-                LastRelayRegion = string.Empty;
-                Status = JoinCodeUtility.GetFriendlyJoinFailure(exception, target);
-            }
-            finally
-            {
-                CompleteSessionOperation(operationId);
-            }
-        }
 
         public bool StartLocalHost()
         {
@@ -438,21 +314,6 @@ namespace FriendSlop.Networking
             finally
             {
                 currentLobby = null;
-            }
-        }
-
-        private void OnApplicationQuit()
-        {
-            _ = LeaveLobbyAsync();
-        }
-
-        private void OnDestroy()
-        {
-            UnsubscribeFromNetworkManager();
-
-            if (Instance == this)
-            {
-                Instance = null;
             }
         }
 

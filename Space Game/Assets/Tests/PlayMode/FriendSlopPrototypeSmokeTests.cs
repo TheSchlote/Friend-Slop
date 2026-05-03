@@ -5,6 +5,7 @@ using FriendSlop.Loot;
 using FriendSlop.Networking;
 using FriendSlop.Player;
 using FriendSlop.Round;
+using FriendSlop.SceneManagement;
 using FriendSlop.Ship;
 using FriendSlop.UI;
 using NUnit.Framework;
@@ -24,8 +25,9 @@ namespace FriendSlop.Tests.PlayMode
 
             Assert.AreEqual("FriendSlopPrototype", SceneManager.GetActiveScene().name);
             Assert.IsNotNull(NetworkManager.Singleton, "NetworkManager should exist in the prototype scene.");
-            Assert.IsNotNull(NetworkSessionManager.Instance, "NetworkSessionManager should exist in the prototype scene.");
-            Assert.IsNotNull(FriendSlopUI.Instance, "FriendSlopUI should exist in the prototype scene.");
+            Assert.IsNotNull(FindSessionManager(), "NetworkSessionManager should exist in the prototype scene.");
+            Assert.IsNotNull(Object.FindAnyObjectByType<FriendSlopUI>(), "FriendSlopUI should exist in the prototype scene.");
+            Assert.IsNotNull(Object.FindAnyObjectByType<NetworkSceneTransitionService>(), "NetworkSceneTransitionService should exist in the prototype scene.");
             Assert.IsNotNull(Object.FindAnyObjectByType<PrototypeNetworkBootstrapper>(), "Prototype bootstrapper should exist in the prototype scene.");
             // Tier 1 launchpad / ship-part assertions used to live here, but the planet now
             // ships in its own additively-loaded scene. They run after host start, once the
@@ -50,6 +52,8 @@ namespace FriendSlop.Tests.PlayMode
             yield return WaitForActivePlanetSceneLoaded();
             yield return WaitForActivePlanetSpawnsPopulated();
 
+            var activePlanetScene = AssertActivePlanetSceneLoaded();
+            AssertSpawnedActorsInActivePlanetScene(activePlanetScene);
             AssertLaunchpadLayout();
             AssertShipPartSpawnPointsAreNearLaunchpadHemisphere();
 
@@ -71,7 +75,7 @@ namespace FriendSlop.Tests.PlayMode
             yield return ShutdownAndWaitForSessionCleanup();
 
             Assert.IsFalse(NetworkManager.Singleton.IsListening, "Shutdown should stop the local session.");
-            Assert.AreEqual("Not connected.", NetworkSessionManager.Instance.Status);
+            Assert.AreEqual("Not connected.", FindSessionManager().Status);
             Assert.AreEqual(CursorLockMode.None, Cursor.lockState, "Shutdown should release the cursor back to the UI.");
             Assert.IsTrue(Cursor.visible, "Shutdown should make the cursor visible for UI interaction.");
             Assert.AreEqual(0, Object.FindObjectsByType<RoundManager>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
@@ -134,6 +138,44 @@ namespace FriendSlop.Tests.PlayMode
             return env != null && env.gameObject.activeInHierarchy;
         }
 
+        private static Scene AssertActivePlanetSceneLoaded()
+        {
+            var rm = RoundManager.Instance;
+            Assert.IsNotNull(rm, "RoundManager should exist before validating planet scene ownership.");
+            var planet = rm.CurrentPlanet;
+            Assert.IsNotNull(planet, "RoundManager should have a current planet.");
+            Assert.IsTrue(planet.HasPlanetScene, "The active Tier 1 planet should have a dedicated scene definition.");
+
+            var scene = SceneManager.GetSceneByPath(planet.PlanetScene.ScenePath);
+            Assert.IsTrue(scene.IsValid(), $"Active planet scene should resolve by path '{planet.PlanetScene.ScenePath}'.");
+            Assert.IsTrue(scene.isLoaded, $"Active planet scene '{planet.PlanetScene.ScenePath}' should be loaded additively.");
+
+            var env = PlanetEnvironment.FindFor(planet);
+            Assert.IsNotNull(env, "Active planet scene should register a PlanetEnvironment for the current planet.");
+            Assert.AreEqual(scene.path, env.gameObject.scene.path,
+                "The active planet environment should be owned by the loaded planet scene.");
+            return scene;
+        }
+
+        private static void AssertSpawnedActorsInActivePlanetScene(Scene activePlanetScene)
+        {
+            var lootItems = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Assert.Greater(lootItems.Length, 0, "Host startup should spawn loot before validating scene ownership.");
+            foreach (var loot in lootItems)
+            {
+                Assert.AreEqual(activePlanetScene.path, loot.gameObject.scene.path,
+                    $"Loot '{loot.name}' should spawn in the active planet scene, not the bootstrap scene.");
+            }
+
+            var monsters = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Assert.Greater(monsters.Length, 0, "Host startup should spawn monsters before validating scene ownership.");
+            foreach (var monster in monsters)
+            {
+                Assert.AreEqual(activePlanetScene.path, monster.gameObject.scene.path,
+                    $"Monster '{monster.name}' should spawn in the active planet scene, not the bootstrap scene.");
+            }
+        }
+
         private static IEnumerator LoadPrototypeScene()
         {
             var operation = SceneManager.LoadSceneAsync("FriendSlopPrototype", LoadSceneMode.Single);
@@ -146,10 +188,16 @@ namespace FriendSlop.Tests.PlayMode
             yield return null;
         }
 
+        private static NetworkSessionManager FindSessionManager()
+        {
+            return Object.FindAnyObjectByType<NetworkSessionManager>();
+        }
+
         private static IEnumerator StartLocalHostAndWaitForRoundManager()
         {
-            Assert.IsNotNull(NetworkSessionManager.Instance, "NetworkSessionManager should exist before host startup.");
-            NetworkSessionManager.Instance.StartLocalHost();
+            var sessionManager = FindSessionManager();
+            Assert.IsNotNull(sessionManager, "NetworkSessionManager should exist before host startup.");
+            sessionManager.StartLocalHost();
 
             for (var frame = 0; frame < 120 && RoundManager.Instance == null; frame++)
             {
@@ -161,8 +209,9 @@ namespace FriendSlop.Tests.PlayMode
 
         private static IEnumerator ShutdownAndWaitForSessionCleanup()
         {
-            Assert.IsNotNull(NetworkSessionManager.Instance, "NetworkSessionManager should exist before shutdown.");
-            NetworkSessionManager.Instance.Shutdown();
+            var sessionManager = FindSessionManager();
+            Assert.IsNotNull(sessionManager, "NetworkSessionManager should exist before shutdown.");
+            sessionManager.Shutdown();
 
             for (var frame = 0; frame < 10; frame++)
             {
@@ -186,17 +235,18 @@ namespace FriendSlop.Tests.PlayMode
 
         private static IEnumerator StartLocalClientAndCancel()
         {
-            Assert.IsNotNull(NetworkSessionManager.Instance, "NetworkSessionManager should exist before client startup.");
-            Assert.IsTrue(NetworkSessionManager.Instance.StartLocalClient("127.0.0.1"),
+            var sessionManager = FindSessionManager();
+            Assert.IsNotNull(sessionManager, "NetworkSessionManager should exist before client startup.");
+            Assert.IsTrue(sessionManager.StartLocalClient("127.0.0.1"),
                 "Starting a LAN client should enter a cancelable connection attempt.");
 
             yield return null;
 
-            Assert.IsTrue(NetworkSessionManager.Instance.CanCancelSessionOperation,
+            Assert.IsTrue(sessionManager.CanCancelSessionOperation,
                 "A pending LAN client connection should be cancelable.");
-            Assert.Greater(NetworkSessionManager.Instance.PendingConnectionSecondsRemaining, 0f,
+            Assert.Greater(sessionManager.PendingConnectionSecondsRemaining, 0f,
                 "A pending LAN client connection should expose remaining timeout time for the UI.");
-            NetworkSessionManager.Instance.CancelSessionOperation();
+            sessionManager.CancelSessionOperation();
 
             for (var frame = 0; frame < 10; frame++)
             {
@@ -204,7 +254,7 @@ namespace FriendSlop.Tests.PlayMode
             }
 
             Assert.IsFalse(NetworkManager.Singleton.IsListening, "Cancel should stop the pending LAN client.");
-            Assert.AreEqual("Connection cancelled.", NetworkSessionManager.Instance.Status);
+            Assert.AreEqual("Connection cancelled.", sessionManager.Status);
             Assert.AreEqual(CursorLockMode.None, Cursor.lockState, "Cancel should leave the UI cursor unlocked.");
             Assert.IsTrue(Cursor.visible, "Cancel should leave the UI cursor visible.");
         }

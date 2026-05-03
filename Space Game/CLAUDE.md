@@ -85,7 +85,7 @@ If you need a reference that crosses an arrow the wrong direction, the design is
 ### 6. Size and complexity ceilings
 
 - **Files over ~400 lines must be split before adding to them.** No "I'll just append one more method." If the file is already over the limit, the next change is a refactor that brings it back under.
-- **No new singletons.** We already have five (`RoundManager.Instance`, `FriendSlopUI.Instance`, `NetworkSessionManager.Instance`, `NetworkSceneTransitionService.Instance`, `NetworkFirstPersonController.LocalPlayer`). The next time singleton-shaped state is tempting, inject the dependency via `SerializeField` or pass it at spawn time.
+- **No new singletons.** The only approved project-owned globals are `RoundManager.Instance` and `NetworkFirstPersonController.LocalPlayer`, both transitional. Inject dependencies via `SerializeField`, pass them at spawn time, or use a narrow provider/event. See `docs/SingletonAudit.md`.
 - **No `FindObjectsByType` in per-frame `Update`/`FixedUpdate`.** Cache or use a static registry.
 
 ### 7. Tests are the safety net
@@ -172,6 +172,8 @@ When you finish a change:
 Read these before making non-trivial changes:
 
 - [docs/architecture.md](../docs/architecture.md) — architectural decisions and rationale. The "why" behind every rule above.
+- [docs/FeatureIntegrationContracts.md](../docs/FeatureIntegrationContracts.md) — extension points and PR contracts for agents adding features.
+- [docs/SingletonAudit.md](../docs/SingletonAudit.md) — current singleton audit and migration plan.
 - [docs/SpaceshipSceneManagement.md](../docs/SpaceshipSceneManagement.md) — current scene state, target additive multi-scene layout, scene-ownership rules.
 - [docs/RemainingFeatures.md](../docs/RemainingFeatures.md) — feature backlog. Check before claiming a feature is "missing"; it may already be tracked.
 - [docs/builder-audit.md](../docs/builder-audit.md) — GUID-determinism analysis of the editor builders. Read this before editing anything in `Assets/Scripts/Editor/`.
