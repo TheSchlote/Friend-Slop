@@ -142,7 +142,7 @@ namespace FriendSlop.UI
             chatInput.DeactivateInputField();
             chatInput.gameObject.SetActive(false);
 
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             if (!activeMenuOpen && RoundStateUtility.AllowsGameplayInput(phase))
                 LockGameplayCursor();
@@ -154,7 +154,7 @@ namespace FriendSlop.UI
             var trimmed = (value ?? string.Empty).Trim();
             if (!string.IsNullOrEmpty(trimmed))
             {
-                var local = NetworkFirstPersonController.LocalPlayer;
+                var local = LocalPlayerRegistry.Current;
                 if (local != null) local.SendChatMessageServerRpc(trimmed);
             }
             CloseChatInput(send: true);

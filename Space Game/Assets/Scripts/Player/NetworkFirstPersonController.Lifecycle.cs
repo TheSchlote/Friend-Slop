@@ -23,7 +23,7 @@ namespace FriendSlop.Player
                 _health.OnValueChanged -= OnHealthChanged;
                 if (_subscribedToRoundPhase)
                 {
-                    var rm = RoundManager.Instance;
+                    var rm = RoundManagerRegistry.Current;
                     if (rm != null) rm.Phase.OnValueChanged -= OnRoundPhaseChanged;
                     _subscribedToRoundPhase = false;
                 }
@@ -33,9 +33,9 @@ namespace FriendSlop.Player
 
             ActivePlayers.Remove(this);
 
-            if (LocalPlayer == this)
+            if (LocalPlayerRegistry.Current == this)
             {
-                LocalPlayer = null;
+                LocalPlayerRegistry.Unregister(this);
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
             }
@@ -45,6 +45,7 @@ namespace FriendSlop.Player
         {
             base.OnDestroy();
             ActivePlayers.Remove(this);
+            LocalPlayerRegistry.Unregister(this);
         }
 
         private void ReparentDetachedDeathCameraForDespawn()

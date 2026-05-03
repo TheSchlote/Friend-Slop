@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.IO;
 using FriendSlop.Core;
+using FriendSlop.Loot;
 using FriendSlop.Round;
 using FriendSlop.SceneManagement;
+using FriendSlop.Ship;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -13,6 +15,7 @@ namespace FriendSlop.Editor
     public static class PlanetSceneValidator
     {
         private const string BootstrapScenePath = "Assets/Scenes/FriendSlopPrototype.unity";
+        private const string ShipInteriorRootName = "Bigger-On-The-Inside Ship Interior";
 
         [MenuItem("Tools/Friend Slop/Validate Planet Scenes")]
         public static void ValidateFromMenu()
@@ -48,8 +51,10 @@ namespace FriendSlop.Editor
             failures = new List<string>();
             ValidateCatalogPlanetScenesInBuildSettings(failures);
             ValidateSceneCatalogPlanetEntriesInBuildSettings(failures);
+            ValidateSceneCatalogShipInterior(failures);
             ValidateCatalogPlanetScenesRoundReady(failures);
-            ValidateBootstrapShipTeleporter(failures);
+            ValidateBootstrapDoesNotOwnShipInterior(failures);
+            ValidateNoSceneOwnedPlanetsNestedInBootstrap(failures);
             return failures.Count == 0;
         }
 
@@ -137,6 +142,11 @@ namespace FriendSlop.Editor
                         if (ResolveSphereWorld(environment) == null)
                             failures.Add($"{label}: PlanetEnvironment '{environment.name}' has no SphereWorld assigned or discoverable.");
 
+                        if (!HasAnyLiveTransform(environment.MonsterSpawnPoints))
+                            failures.Add($"{label}: PlanetEnvironment '{environment.name}' has no live monster spawn anchors.");
+
+                        ValidateSceneLootOwnership(scene, environment, label, failures);
+
                         if (!HasTeleporterToShip(scene))
                             failures.Add($"{label}: scene has no TeleporterPad targeting Ship.");
                     });
@@ -145,6 +155,62 @@ namespace FriendSlop.Editor
         }
 
         public static void ValidateBootstrapShipTeleporter(List<string> failures)
+        {
+            ValidateSceneCatalogShipInterior(failures);
+        }
+
+        public static void ValidateSceneCatalogShipInterior(List<string> failures)
+        {
+            if (failures == null) throw new System.ArgumentNullException(nameof(failures));
+
+            var buildScenes = LoadBuildSettingsScenePaths();
+            var sawCatalog = false;
+
+            foreach (var catalog in LoadAllAssets<GameSceneCatalog>())
+            {
+                sawCatalog = true;
+                var scene = catalog.GetFirstByRole(GameSceneRole.ShipInterior);
+                if (scene == null)
+                {
+                    failures.Add($"{catalog.name}: no ShipInterior scene definition is registered.");
+                    continue;
+                }
+
+                if (!scene.IsConfigured)
+                {
+                    failures.Add($"{catalog.name} -> {scene.name}: ShipInterior scene path is not configured.");
+                    continue;
+                }
+
+                ValidateScenePathInBuildSettings(buildScenes, scene.ScenePath, $"{catalog.name} -> {scene.name}", failures);
+                if (!File.Exists(scene.ScenePath))
+                    continue;
+
+                WithScene(scene.ScenePath, loadedScene =>
+                {
+                    var environments = GetComponentsInScene<ShipEnvironment>(loadedScene);
+                    if (environments.Length == 0)
+                    {
+                        failures.Add($"{catalog.name} -> {scene.name}: no ShipEnvironment was found.");
+                    }
+                    else if (!HasAnyLiveTransform(environments[0].ShipSpawnPoints))
+                    {
+                        failures.Add($"{catalog.name} -> {scene.name}: ShipEnvironment has no live ship spawn points.");
+                    }
+
+                    if (!HasTeleporterToActivePlanet(loadedScene))
+                        failures.Add($"{catalog.name} -> {scene.name}: scene has no TeleporterPad targeting ActivePlanet.");
+
+                    if (GetComponentsInScene<ShipStation>(loadedScene).Length == 0)
+                        failures.Add($"{catalog.name} -> {scene.name}: scene has no ShipStation components.");
+                });
+            }
+
+            if (!sawCatalog)
+                failures.Add("No GameSceneCatalog assets were found.");
+        }
+
+        public static void ValidateBootstrapDoesNotOwnShipInterior(List<string> failures)
         {
             if (failures == null) throw new System.ArgumentNullException(nameof(failures));
 
@@ -156,8 +222,36 @@ namespace FriendSlop.Editor
 
             WithScene(BootstrapScenePath, scene =>
             {
-                if (!HasTeleporterToActivePlanet(scene))
-                    failures.Add("The bootstrap ship scene should include a TeleporterPad targeting ActivePlanet.");
+                if (FindRoot(scene, ShipInteriorRootName) != null)
+                    failures.Add($"Bootstrap scene still owns ship root '{ShipInteriorRootName}'.");
+
+                var environments = GetComponentsInScene<ShipEnvironment>(scene);
+                if (environments.Length > 0)
+                    failures.Add("Bootstrap scene should not contain a ShipEnvironment; ship content belongs in ShipInterior.");
+
+                var stations = GetComponentsInScene<ShipStation>(scene);
+                if (stations.Length > 0)
+                    failures.Add("Bootstrap scene should not contain ShipStation components; ship content belongs in ShipInterior.");
+            });
+        }
+
+        public static void ValidateNoSceneOwnedPlanetsNestedInBootstrap(List<string> failures)
+        {
+            if (failures == null) throw new System.ArgumentNullException(nameof(failures));
+
+            if (!File.Exists(BootstrapScenePath))
+                return;
+
+            WithScene(BootstrapScenePath, scene =>
+            {
+                var environments = GetComponentsInScene<PlanetEnvironment>(scene);
+                for (var i = 0; i < environments.Length; i++)
+                {
+                    var env = environments[i];
+                    if (env == null || env.Planet == null || !env.Planet.HasPlanetScene) continue;
+                    failures.Add(
+                        $"Bootstrap scene still contains scene-owned PlanetEnvironment '{env.name}' for '{env.Planet.name}'.");
+                }
             });
         }
 
@@ -256,6 +350,20 @@ namespace FriendSlop.Editor
             return results.ToArray();
         }
 
+        private static GameObject FindRoot(Scene scene, string objectName)
+        {
+            if (!scene.IsValid() || !scene.isLoaded || string.IsNullOrEmpty(objectName)) return null;
+
+            var roots = scene.GetRootGameObjects();
+            for (var i = 0; i < roots.Length; i++)
+            {
+                if (roots[i] != null && roots[i].name == objectName)
+                    return roots[i];
+            }
+
+            return null;
+        }
+
         private static PlanetEnvironment FindCompatibleEnvironment(PlanetEnvironment[] environments, PlanetDefinition planet)
         {
             if (environments == null || planet == null) return null;
@@ -298,6 +406,37 @@ namespace FriendSlop.Editor
 
             var contentRoot = environment.ContentRoot;
             return contentRoot != null ? contentRoot.GetComponentInChildren<SphereWorld>(true) : null;
+        }
+
+        private static void ValidateSceneLootOwnership(
+            Scene scene,
+            PlanetEnvironment environment,
+            string label,
+            List<string> failures)
+        {
+            var spawner = FindPlanetLootSpawner(scene, environment);
+            if (spawner == null) return;
+
+            if (!HasAnyLiveTransform(spawner.SpawnPoints))
+                failures.Add($"{label}: PlanetLootSpawner '{spawner.name}' has no live spawn points.");
+
+            if (!HasAnyLiveTransform(environment.LootSpawnPoints))
+            {
+                failures.Add(
+                    $"{label}: PlanetEnvironment '{environment.name}' does not expose the scene loot anchors owned by PlanetLootSpawner '{spawner.name}'.");
+            }
+        }
+
+        private static PlanetLootSpawner FindPlanetLootSpawner(Scene scene, PlanetEnvironment environment)
+        {
+            if (environment != null)
+            {
+                var owned = environment.GetComponentInChildren<PlanetLootSpawner>(true);
+                if (owned != null) return owned;
+            }
+
+            var spawners = GetComponentsInScene<PlanetLootSpawner>(scene);
+            return spawners.Length > 0 ? spawners[0] : null;
         }
 
         private static bool HasTeleporterToShip(Scene scene)

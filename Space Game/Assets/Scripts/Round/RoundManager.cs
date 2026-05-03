@@ -11,7 +11,6 @@ namespace FriendSlop.Round
 {
     public partial class RoundManager : NetworkBehaviour
     {
-        public static RoundManager Instance { get; private set; }
         public static event System.Action LocalTeleporterFlashRequested;
 
         [SerializeField] private int quota = 500;
@@ -81,7 +80,7 @@ namespace FriendSlop.Round
 
         private void Awake()
         {
-            Instance = this;
+            RoundManagerRegistry.Register(this);
             EnsurePlanetSceneOrchestrator();
             // NetworkList must exist before OnNetworkSpawn so the server's first writes replicate.
             NextPlanetChoiceIndices = new NetworkList<int>();
@@ -89,11 +88,7 @@ namespace FriendSlop.Round
 
         public override void OnDestroy()
         {
-            if (Instance == this)
-            {
-                Instance = null;
-            }
-
+            RoundManagerRegistry.Unregister(this);
             base.OnDestroy();
         }
 
@@ -142,154 +137,6 @@ namespace FriendSlop.Round
 
             CurrentPlanetCatalogIndex.OnValueChanged -= OnCurrentPlanetCatalogIndexChanged;
             PlanetEnvironment.Registered -= HandlePlanetEnvironmentRegistered;
-        }
-
-        private void OnCurrentPlanetCatalogIndexChanged(int previous, int current)
-        {
-            ApplyActivePlanetEnvironment();
-        }
-
-        private void HandlePlanetEnvironmentRegistered(PlanetEnvironment env)
-        {
-            // A planet scene that just additively loaded brings its env with it. Two
-            // cases trigger a re-bind: the registered env is the active planet's env,
-            // or it's a same-tier env that the active planet falls back to (catalog
-            // entries without their own dedicated environment, like DeepHaul borrowing
-            // Rusty Moon's scene).
-            if (env == null || env.Planet == null) return;
-            var current = CurrentPlanet;
-            if (current == null) return;
-            if (env.Planet == current || env.Planet.Tier == current.Tier)
-                ApplyActivePlanetEnvironment();
-        }
-
-        private void ApplyActivePlanetEnvironment()
-        {
-            var planet = CurrentPlanet;
-
-            // Server: reconcile per-planet scene loads. If the active planet has a scene
-            // assigned, ensure it's loaded; if a previous planet scene is still around and
-            // doesn't match, unload it. Scene loads are async - when the env Awakes inside
-            // the new scene it fires Registered, which calls back into this method.
-            if (IsServer)
-                EnsurePlanetSceneOrchestrator()?.ServerReconcilePlanetScenes(planet, planetCatalog);
-
-            // Search AllEnvironments so we can find and enable planets whose roots are disabled.
-            var activeEnv = FindBindableEnvironment(planet);
-
-            // Toggle planet roots. Even scene-loaded planets need this because authored
-            // additive scenes are often left open in-editor; Netcode won't unload those,
-            // so inactive planets must be hidden and made non-interactive here.
-            for (var i = 0; i < PlanetEnvironment.AllEnvironments.Count; i++)
-            {
-                var env = PlanetEnvironment.AllEnvironments[i];
-                if (env == null) continue;
-                var want = env == activeEnv;
-
-                env.SetActiveForRound(want);
-                if (env.gameObject.activeSelf != want)
-                    env.gameObject.SetActive(want);
-
-                var content = env.ContentRoot;
-                if (content != null && content != env.gameObject && content.activeSelf != want)
-                    content.SetActive(want);
-            }
-
-            if (activeEnv != null)
-                activeEnv.SetActiveForRound(true);
-
-            if (IsServer && activeEnv != null && HasAnyLiveSpawn(activeEnv.PlayerSpawnPoints))
-                ConfigureSpawnPoints(activeEnv.PlayerSpawnPoints);
-        }
-
-        public bool IsEnvironmentActiveForCurrentPlanet(PlanetEnvironment env)
-        {
-            return env != null && env == FindBindableEnvironment(CurrentPlanet);
-        }
-
-        private static PlanetEnvironment FindBindableEnvironment(PlanetDefinition planet)
-        {
-            if (planet == null) return null;
-            var exact = PlanetEnvironment.FindFor(planet);
-            if (exact != null) return exact;
-
-            // Fallback: planets defined in the catalog without a dedicated scene environment
-            // (e.g. newly authored variants) reuse any environment for the same tier so they
-            // are playable while real environments are being built.
-            for (var i = 0; i < PlanetEnvironment.AllEnvironments.Count; i++)
-            {
-                var env = PlanetEnvironment.AllEnvironments[i];
-                if (env != null && env.Planet != null && env.Planet.Tier == planet.Tier && IsRoundReadyEnvironment(env))
-                    return env;
-            }
-
-            for (var i = 0; i < PlanetEnvironment.AllEnvironments.Count; i++)
-            {
-                var env = PlanetEnvironment.AllEnvironments[i];
-                if (env != null && env.Planet != null && env.Planet.Tier == planet.Tier)
-                    return env;
-            }
-            return null;
-        }
-
-        private static PlanetEnvironment FindRoundReadyEnvironment(PlanetDefinition planet)
-        {
-            if (planet == null) return null;
-            var exact = PlanetEnvironment.FindFor(planet);
-            if (exact != null)
-                return IsRoundReadyEnvironment(exact) ? exact : null;
-
-            for (var i = 0; i < PlanetEnvironment.AllEnvironments.Count; i++)
-            {
-                var env = PlanetEnvironment.AllEnvironments[i];
-                if (env == null || env.Planet == null || env.Planet.Tier != planet.Tier)
-                    continue;
-                if (IsRoundReadyEnvironment(env))
-                    return env;
-            }
-            return null;
-        }
-
-        private static bool IsRoundReadyEnvironment(PlanetEnvironment env)
-        {
-            return env != null
-                   && env.LaunchpadZone != null
-                   && HasAnyLiveSpawn(env.PlayerSpawnPoints);
-        }
-
-        private static bool HasAnyLiveSpawn(Transform[] spawnPoints)
-        {
-            if (spawnPoints == null) return false;
-            for (var i = 0; i < spawnPoints.Length; i++)
-            {
-                if (spawnPoints[i] != null)
-                    return true;
-            }
-            return false;
-        }
-
-        private static string GetPlanetReadinessProblem(PlanetDefinition planet)
-        {
-            var env = FindBindableEnvironment(planet);
-            if (env == null)
-                return "no matching PlanetEnvironment is registered";
-            if (env.LaunchpadZone == null)
-                return $"PlanetEnvironment '{env.name}' has no LaunchpadZone assigned";
-            if (!HasAnyLiveSpawn(env.PlayerSpawnPoints))
-                return $"PlanetEnvironment '{env.name}' has no live player spawn points";
-            return $"PlanetEnvironment '{env.name}' is not ready";
-        }
-
-        private static bool IsSceneLoadedPlanet(PlanetEnvironment env)
-        {
-            if (env == null || env.Planet == null) return false;
-            if (!env.Planet.HasPlanetScene) return false;
-            // Treat envs as scene-loaded only when their actual scene path matches the
-            // PlanetDefinition's assigned scene path. Otherwise they're a nested fallback
-            // in the bootstrap scene and should still be toggled like before.
-            var envScenePath = GameScenePathUtility.NormalizePath(env.gameObject.scene.path);
-            return string.Equals(envScenePath, env.Planet.PlanetScene.ScenePath,
-                System.StringComparison.OrdinalIgnoreCase);
         }
 
         private void Update()
@@ -549,17 +396,17 @@ namespace FriendSlop.Round
             // GhostShift, etc.) succeed once the fallback scene's env registers.
             const float maxEnvWaitSeconds = PlanetSceneOrchestrator.SceneEventRetrySeconds + 8f;
             var envWaitStart = Time.time;
-            while (FindRoundReadyEnvironment(next) == null
+            while (PlanetSceneOwnership.FindRoundReadyEnvironment(next) == null
                    && Time.time - envWaitStart < maxEnvWaitSeconds)
             {
                 yield return null;
             }
 
-            if (FindRoundReadyEnvironment(next) == null)
+            if (PlanetSceneOwnership.FindRoundReadyEnvironment(next) == null)
             {
                 Debug.LogError(
                     $"RoundManager: planet '{next.name}' was not round-ready after {maxEnvWaitSeconds:0.#}s " +
-                    $"({GetPlanetReadinessProblem(next)}). Restoring the previous planet instead of starting a broken round.");
+                    $"({PlanetSceneOwnership.GetReadinessProblem(next)}). Restoring the previous planet instead of starting a broken round.");
 
                 quota = previousQuota;
                 roundLengthSeconds = previousRoundLengthSeconds;
@@ -648,29 +495,6 @@ namespace FriendSlop.Round
 
             RespawnPlayersAtPlanet();
             ServerSetPhase(RoundPhase.Loading);
-        }
-
-        private bool TryPreparePlanetForRound()
-        {
-            var planet = CurrentPlanet;
-            if (planet == null)
-            {
-                Debug.LogError("RoundManager: cannot start round because no current planet is selected.");
-                return false;
-            }
-
-            ApplyActivePlanetEnvironment();
-            var activeEnv = FindRoundReadyEnvironment(planet);
-            if (activeEnv == null)
-            {
-                Debug.LogError(
-                    $"RoundManager: cannot start round on '{planet.name}' because {GetPlanetReadinessProblem(planet)}.");
-                return false;
-            }
-
-            activeEnv.SetActiveForRound(true);
-            ConfigureSpawnPoints(activeEnv.PlayerSpawnPoints);
-            return true;
         }
 
         public void ServerDepositLoot(NetworkLootItem loot)
@@ -820,30 +644,6 @@ namespace FriendSlop.Round
         {
             lootItems.Clear();
             lootItems.AddRange(FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None));
-        }
-
-        private void ServerCleanupRoundActorsForPlanetTravel()
-        {
-            if (!IsServer) return;
-
-            var loot = FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            for (var i = 0; i < loot.Length; i++)
-            {
-                if (loot[i] != null)
-                    loot[i].ServerDespawnForPlanetTravel();
-            }
-            lootItems.Clear();
-
-            var monsters = FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            for (var i = 0; i < monsters.Length; i++)
-            {
-                var monster = monsters[i];
-                if (monster == null || monster.NetworkObject == null) continue;
-                if (monster.NetworkObject.IsSpawned)
-                    monster.NetworkObject.Despawn(destroy: true);
-                else
-                    Destroy(monster.gameObject);
-            }
         }
 
         private void RespawnPlayersAtPlanet()

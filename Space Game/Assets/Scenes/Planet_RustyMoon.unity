@@ -838,8 +838,18 @@ MonoBehaviour:
   - {fileID: 1218791254}
   - {fileID: 1334007155}
   - {fileID: 1861941472}
-  lootSpawnPoints: []
-  monsterSpawnPoints: []
+  lootSpawnPoints:
+  - {fileID: 752008471}
+  - {fileID: 5384630}
+  - {fileID: 1583651445}
+  - {fileID: 1999398532}
+  - {fileID: 1227661314}
+  - {fileID: 724478158}
+  - {fileID: 1094519698}
+  - {fileID: 414503239}
+  monsterSpawnPoints:
+  - {fileID: 1952000004}
+  - {fileID: 1952000006}
   contentRoot: {fileID: 0}
   sphereWorld: {fileID: 406929875}
   launchpadSurfaceOffset: 0.12
@@ -863,6 +873,7 @@ Transform:
   - {fileID: 2027452051}
   - {fileID: 881511749}
   - {fileID: 385369968}
+  - {fileID: 1952000002}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &901141232
@@ -1496,6 +1507,101 @@ Light:
   m_LightUnit: 1
   m_LuxAtDistance: 1
   m_EnableSpotReflector: 1
+--- !u!1 &1952000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1952000002}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Monster Spawn Points
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1952000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1952000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1952000004}
+  - {fileID: 1952000006}
+  m_Father: {fileID: 901141231}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1952000003
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1952000004}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Monster Spawn 1
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1952000004
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1952000003}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.00079507, y: -0.01990856, z: -0.99900515, w: 0.03989647}
+  m_LocalPosition: {x: 2.127507, y: -26.593837, z: 1.063753}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1952000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1952000005
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1952000006}
+  m_Layer: 0
+  m_Name: Tier 2 Planet Monster Spawn 2
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1952000006
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1952000005}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0.04232241, y: 0.15607781, z: 0.95244262, w: 0.25826649}
+  m_LocalPosition: {x: -12.782808, y: -21.837297, z: 8.521872}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1952000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

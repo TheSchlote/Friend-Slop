@@ -55,9 +55,7 @@ namespace FriendSlop.UI
         {
             if (preferLocalPlayerCamera)
             {
-                var localPlayerCamera = NetworkFirstPersonController.LocalPlayer != null
-                    ? NetworkFirstPersonController.LocalPlayer.PlayerCamera
-                    : null;
+                var localPlayerCamera = LocalPlayerRegistry.CurrentCamera;
                 if (localPlayerCamera != null && localPlayerCamera.isActiveAndEnabled)
                 {
                     return localPlayerCamera.transform;

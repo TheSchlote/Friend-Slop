@@ -51,7 +51,7 @@ namespace FriendSlop.Loot
             var attackerId = rpcParams.Receive.SenderClientId;
             var attacker = NetworkFirstPersonController.FindByClientId(attackerId);
             if (attacker == null || attacker.IsDead || !IsHeldBy(attackerId)) return;
-            if (RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active) return;
+            if (!RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active)) return;
             if (Time.time < _nextServerPunchTime) return;
 
             origin = attacker.GetServerViewOrigin();

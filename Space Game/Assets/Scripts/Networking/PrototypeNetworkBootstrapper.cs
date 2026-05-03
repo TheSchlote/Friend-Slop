@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using FriendSlop.Core;
 using FriendSlop.Hazards;
 using FriendSlop.Loot;
+using FriendSlop.Player;
 using FriendSlop.Round;
 using FriendSlop.SceneManagement;
+using FriendSlop.Ship;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -38,9 +40,12 @@ namespace FriendSlop.Networking
         // SpawnLoot/SpawnMonsters defer until the active planet's env is registered so
         // per-planet scenes (which load asynchronously) can supply spawn anchors via
         // PlanetEnvironment.
-        private bool spawnedLootForActivePlanet;
-        private bool spawnedMonstersForActivePlanet;
+        private PlanetDefinition spawnedLootForPlanet;
+        private PlanetDefinition spawnedMonstersForPlanet;
         private bool subscribedToPlanetRegistered;
+        private bool subscribedToShipRegistered;
+        private bool shipSceneLoadRequested;
+        private RoundManager spawnedRoundManager;
         private static readonly string[] DecorativeLaunchpadColliderNames =
         {
             "Crash Dirt Patch",
@@ -76,6 +81,12 @@ namespace FriendSlop.Networking
                 subscribedToPlanetRegistered = false;
             }
 
+            if (subscribedToShipRegistered)
+            {
+                ShipEnvironment.Registered -= HandleShipEnvironmentRegistered;
+                subscribedToShipRegistered = false;
+            }
+
             if (subscribedManager == null)
             {
                 return;
@@ -106,8 +117,72 @@ namespace FriendSlop.Networking
             }
 
             spawnedForSession = true;
-            SpawnRoundManager();
-            BeginPlanetSpawnFlow();
+            BeginShipSpawnFlow();
+        }
+
+        private void BeginShipSpawnFlow()
+        {
+            if (!subscribedToShipRegistered)
+            {
+                ShipEnvironment.Registered += HandleShipEnvironmentRegistered;
+                subscribedToShipRegistered = true;
+            }
+
+            RequestShipInteriorLoad();
+            TrySpawnRoundManagerWhenShipReady();
+        }
+
+        private void RequestShipInteriorLoad()
+        {
+            if (shipSceneLoadRequested)
+            {
+                return;
+            }
+
+            shipSceneLoadRequested = true;
+
+            var service = ResolveSceneTransitionService();
+            var shipScene = service != null ? service.Catalog?.GetFirstByRole(GameSceneRole.ShipInterior) : null;
+            if (shipScene == null || !shipScene.IsConfigured)
+            {
+                return;
+            }
+
+            var status = service.ServerLoadScene(shipScene);
+            if (status != SceneEventProgressStatus.Started
+                && status != SceneEventProgressStatus.SceneEventInProgress)
+            {
+                Debug.LogWarning($"PrototypeNetworkBootstrapper: could not load ship scene '{shipScene.ScenePath}' ({status}).");
+            }
+        }
+
+        private void HandleShipEnvironmentRegistered(ShipEnvironment env)
+        {
+            if (spawnedRoundManager == null)
+            {
+                TrySpawnRoundManagerWhenShipReady();
+                return;
+            }
+
+            ConfigureRoundManagerShipSpawnPoints(spawnedRoundManager);
+        }
+
+        private void TrySpawnRoundManagerWhenShipReady()
+        {
+            if (spawnedRoundManager != null)
+            {
+                return;
+            }
+
+            var spawns = ResolveShipSpawnPoints();
+            if (!HasAnyLiveTransform(spawns) && HasConfiguredShipScene())
+            {
+                return;
+            }
+
+            spawnedRoundManager = SpawnRoundManager(spawns);
+            if (spawnedRoundManager != null)
+                BeginPlanetSpawnFlow();
         }
 
         private void BeginPlanetSpawnFlow()
@@ -130,39 +205,67 @@ namespace FriendSlop.Networking
 
         private void TrySpawnForActivePlanet()
         {
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             if (rm == null) return;
             var planet = rm.CurrentPlanet;
             if (planet == null) return;
-            var env = PlanetEnvironment.FindFor(planet);
+            var env = PlanetSceneOwnership.FindBindableEnvironment(planet);
             if (env == null) return;
 
-            if (!spawnedLootForActivePlanet)
+            if (spawnedLootForPlanet != planet)
             {
-                spawnedLootForActivePlanet = true;
+                spawnedLootForPlanet = planet;
                 SpawnLoot(env);
             }
 
-            if (!spawnedMonstersForActivePlanet)
+            if (spawnedMonstersForPlanet != planet)
             {
-                spawnedMonstersForActivePlanet = true;
+                spawnedMonstersForPlanet = planet;
                 SpawnMonsters(env);
             }
         }
 
-        private void SpawnRoundManager()
+        private RoundManager SpawnRoundManager(Transform[] resolvedShipSpawnPoints)
         {
             if (roundManagerPrefab == null)
             {
                 Debug.LogError("RoundManager prefab is not assigned.");
-                return;
+                return null;
             }
 
             var round = Instantiate(roundManagerPrefab);
             round.ConfigureSpawnPoints(playerSpawnPoints);
-            round.ConfigureShipSpawnPoints(shipSpawnPoints);
+            round.ConfigureShipSpawnPoints(resolvedShipSpawnPoints);
             round.ConfigureSceneTransitionService(ResolveSceneTransitionService());
             SpawnNetworkObject(round.NetworkObject);
+            return round;
+        }
+
+        private void ConfigureRoundManagerShipSpawnPoints(RoundManager round)
+        {
+            if (round == null || subscribedManager == null || !subscribedManager.IsServer)
+            {
+                return;
+            }
+
+            var spawns = ResolveShipSpawnPoints();
+            if (!HasAnyLiveTransform(spawns))
+            {
+                return;
+            }
+
+            round.ConfigureShipSpawnPoints(spawns);
+            if (!RoundStateUtility.IsShipPhase(round.Phase.Value))
+            {
+                return;
+            }
+
+            for (var i = 0; i < NetworkFirstPersonController.ActivePlayers.Count; i++)
+            {
+                var player = NetworkFirstPersonController.ActivePlayers[i];
+                if (player != null && player.IsSpawned)
+                    round.ServerPlaceNewPlayer(player);
+            }
         }
 
         private NetworkSceneTransitionService ResolveSceneTransitionService()
@@ -181,9 +284,40 @@ namespace FriendSlop.Networking
             return sceneTransitionService;
         }
 
+        private bool HasConfiguredShipScene()
+        {
+            var service = ResolveSceneTransitionService();
+            var shipScene = service != null ? service.Catalog?.GetFirstByRole(GameSceneRole.ShipInterior) : null;
+            return shipScene != null && shipScene.IsConfigured;
+        }
+
+        private Transform[] ResolveShipSpawnPoints()
+        {
+            var ship = ShipEnvironment.Current;
+            if (ship != null && HasAnyLiveTransform(ship.ShipSpawnPoints))
+            {
+                return ship.ShipSpawnPoints;
+            }
+
+            return shipSpawnPoints;
+        }
+
+        private static bool HasAnyLiveTransform(IReadOnlyList<Transform> transforms)
+        {
+            if (transforms == null) return false;
+            for (var i = 0; i < transforms.Count; i++)
+            {
+                if (transforms[i] != null)
+                    return true;
+            }
+
+            return false;
+        }
+
         private void SpawnLoot(PlanetEnvironment activeEnv)
         {
             if (lootPrefabs == null) return;
+            if (HasSceneOwnedLootSpawner(activeEnv)) return;
 
             // Prefer per-planet anchors carried on the env; fall back to the legacy
             // bootstrapper array for any planets still hosted nested in this scene.
@@ -236,6 +370,14 @@ namespace FriendSlop.Networking
                 loot.ServerSetSpawnPose(pos, rot);
                 SpawnNetworkObject(loot.NetworkObject);
             }
+        }
+
+        private static bool HasSceneOwnedLootSpawner(PlanetEnvironment activeEnv)
+        {
+            return activeEnv != null
+                   && activeEnv.Planet != null
+                   && activeEnv.Planet.HasPlanetScene
+                   && activeEnv.GetComponentInChildren<PlanetLootSpawner>(true) != null;
         }
 
         private static Transform FindLaunchpadTransform()
@@ -337,8 +479,10 @@ namespace FriendSlop.Networking
             }
 
             spawnedForSession = false;
-            spawnedLootForActivePlanet = false;
-            spawnedMonstersForActivePlanet = false;
+            spawnedLootForPlanet = null;
+            spawnedMonstersForPlanet = null;
+            spawnedRoundManager = null;
+            shipSceneLoadRequested = false;
             spawnedObjects.Clear();
         }
 

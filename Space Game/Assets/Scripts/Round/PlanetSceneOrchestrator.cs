@@ -33,7 +33,7 @@ namespace FriendSlop.Round
         {
             if (!HasServerAuthority) return;
 
-            var sceneOwner = ResolveSceneOwner(planet, catalog);
+            var sceneOwner = PlanetSceneOwnership.ResolveSceneOwner(planet, catalog);
             var targetPath = sceneOwner != null ? sceneOwner.PlanetScene.ScenePath : string.Empty;
             if (planetSceneReconcileCoroutine != null)
             {
@@ -204,21 +204,5 @@ namespace FriendSlop.Round
             return true;
         }
 
-        private static PlanetDefinition ResolveSceneOwner(PlanetDefinition planet, PlanetCatalog catalog)
-        {
-            if (planet == null) return null;
-            if (planet.HasPlanetScene) return planet;
-            if (catalog == null) return null;
-
-            for (var i = 0; i < catalog.Count; i++)
-            {
-                var candidate = catalog.GetByIndex(i);
-                if (candidate == null) continue;
-                if (candidate == planet) continue;
-                if (candidate.Tier != planet.Tier) continue;
-                if (candidate.HasPlanetScene) return candidate;
-            }
-            return null;
-        }
     }
 }

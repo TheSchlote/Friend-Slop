@@ -37,9 +37,8 @@ namespace FriendSlop.Ship
                 return false;
             }
 
-            if (requiresShipPhase && !RoundStateUtility.IsShipPhase(RoundManager.Instance != null
-                    ? RoundManager.Instance.Phase.Value
-                    : RoundPhase.Lobby))
+            if (requiresShipPhase && !RoundStateUtility.IsShipPhase(
+                    RoundManagerRegistry.CurrentPhaseOrDefault()))
             {
                 return false;
             }
@@ -49,6 +48,11 @@ namespace FriendSlop.Ship
 
         public string GetPrompt(NetworkFirstPersonController player)
         {
+            if (CanStartRoundFromStation())
+            {
+                return $"E start round from {DisplayName}";
+            }
+
             if (player != null && OccupantClientId.Value == player.OwnerClientId)
             {
                 return $"E leave {DisplayName}";
@@ -82,10 +86,17 @@ namespace FriendSlop.Ship
                 return;
             }
 
-            if (requiresShipPhase && !RoundStateUtility.IsShipPhase(RoundManager.Instance != null
-                    ? RoundManager.Instance.Phase.Value
-                    : RoundPhase.Lobby))
+            if (requiresShipPhase && !RoundStateUtility.IsShipPhase(
+                    RoundManagerRegistry.CurrentPhaseOrDefault()))
             {
+                return;
+            }
+
+            if (CanStartRoundFromStation())
+            {
+                var roundManager = RoundManagerRegistry.Current;
+                if (roundManager != null && roundManager.IsServer)
+                    roundManager.ServerStartRound();
                 return;
             }
 
@@ -99,6 +110,12 @@ namespace FriendSlop.Ship
             {
                 OccupantClientId.Value = requestedClientId;
             }
+        }
+
+        private bool CanStartRoundFromStation()
+        {
+            return role == ShipStationRole.Pilot
+                   && RoundManagerRegistry.IsCurrentPhase(RoundPhase.Lobby);
         }
     }
 }

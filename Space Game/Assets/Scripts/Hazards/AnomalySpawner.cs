@@ -21,9 +21,10 @@ namespace FriendSlop.Hazards
         private void Update()
         {
             if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer) return;
-            if (RoundManager.Instance == null) return;
+            var round = RoundManagerRegistry.Current;
+            if (round == null) return;
 
-            var roundActive = RoundManager.Instance.Phase.Value == RoundPhase.Active;
+            var roundActive = round.Phase.Value == RoundPhase.Active;
 
             if (!_wasRoundActive && roundActive)
                 _nextSpawnTime = Time.time + Random.Range(minSpawnInterval * 0.4f, minSpawnInterval);

@@ -106,7 +106,7 @@ namespace FriendSlop.UI
         private static bool IsActiveRound()
         {
             var networkManager = NetworkManager.Singleton;
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             return networkManager != null &&
                    networkManager.IsListening &&
                    round != null &&
@@ -179,7 +179,7 @@ namespace FriendSlop.UI
 
             // Hide glare during loading or when no camera is active.
             var isLoading = _lateJoinLoading;
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             if (round != null && (round.Phase.Value == RoundPhase.Loading || round.Phase.Value == RoundPhase.Transitioning))
                 isLoading = true;
             if (isLoading)
@@ -188,7 +188,7 @@ namespace FriendSlop.UI
                 return;
             }
 
-            var localPlayer = NetworkFirstPersonController.LocalPlayer;
+            var localPlayer = LocalPlayerRegistry.Current;
             var cam = localPlayer?.PlayerCamera;
             if (cam == null || localPlayer.IsDeadLocally)
             {
@@ -234,7 +234,7 @@ namespace FriendSlop.UI
         private void UpdateFade()
         {
             if (_fadeOverlayImage == null) return;
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var targetAlpha = phase == RoundPhase.Transitioning ? 1f : 0f;
             _fadeAlpha = Mathf.MoveTowards(_fadeAlpha, targetAlpha, FadeSpeed * Time.deltaTime);

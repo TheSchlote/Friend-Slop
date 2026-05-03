@@ -10,8 +10,7 @@ namespace FriendSlop.Player
     // Health, damage, death, revive, and the post-death spectate camera.
     // Server owns the health NetworkVariable; ClientRpcs handle the
     // local-only camera detach and blood VFX. Damage flash is fired through
-    // the LocalPlayerDamaged static event in the main partial so UI never
-    // takes a direct dependency on this class.
+    // LocalPlayerRegistry so UI never takes a direct dependency on this class.
     public partial class NetworkFirstPersonController
     {
         [Header("Health")]
@@ -40,7 +39,7 @@ namespace FriendSlop.Player
         private void OnHealthChanged(int previous, int current)
         {
             if (current < previous && current > 0)
-                LocalPlayerDamaged?.Invoke();
+                LocalPlayerRegistry.NotifyDamaged();
         }
 
         public void ServerHeal(int amount)

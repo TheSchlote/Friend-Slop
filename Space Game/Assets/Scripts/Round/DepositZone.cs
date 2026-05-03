@@ -57,8 +57,9 @@ namespace FriendSlop.Round
 
         public void ServerSubmit(NetworkLootItem item)
         {
-            if (!IsServer || RoundManager.Instance == null) return;
-            RoundManager.Instance.ServerDepositLoot(item);
+            var round = RoundManagerRegistry.Current;
+            if (!IsServer || round == null) return;
+            round.ServerDepositLoot(item);
         }
     }
 }

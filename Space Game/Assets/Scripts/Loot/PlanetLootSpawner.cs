@@ -34,6 +34,17 @@ namespace FriendSlop.Loot
             rollsPerSpawnPoint = Mathf.Max(1, rolls);
         }
 
+        public void TrySpawnForActivePlanet()
+        {
+            TrySpawnNow();
+        }
+
+        public void ResetSpawnStateForPlanetTravel()
+        {
+            spawnedObjects.Clear();
+            spawnedThisSession = false;
+        }
+
         private void Awake()
         {
             CachePlanetEnvironment();
@@ -120,7 +131,7 @@ namespace FriendSlop.Loot
         {
             CachePlanetEnvironment();
             if (planetEnvironment == null) return true;
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             return rm != null && rm.IsEnvironmentActiveForCurrentPlanet(planetEnvironment);
         }
 

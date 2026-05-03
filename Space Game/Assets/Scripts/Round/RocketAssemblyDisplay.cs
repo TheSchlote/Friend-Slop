@@ -24,7 +24,7 @@ namespace FriendSlop.Round
 
         private void Update()
         {
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             SetActive(cockpitVisual, round != null && round.HasCockpit.Value);
             SetActive(wingsVisual, round != null && round.HasWings.Value);
             SetActive(engineVisual, round != null && round.HasEngine.Value);

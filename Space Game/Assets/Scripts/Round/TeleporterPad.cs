@@ -54,7 +54,7 @@ namespace FriendSlop.Round
             var nm = NetworkManager.Singleton;
             if (nm == null || !nm.IsServer) return;
 
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             if (rm == null || rm.Phase.Value != RoundPhase.Active) return;
 
             var player = other.GetComponentInParent<NetworkFirstPersonController>();

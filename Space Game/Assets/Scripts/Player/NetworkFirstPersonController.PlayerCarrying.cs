@@ -63,7 +63,7 @@ namespace FriendSlop.Player
             if (carrier.HeldItem != null || carrier.HasHeldPlayer) return;
             if (IsBeingCarried.Value || carrier.IsBeingCarried.Value || carrier.IsDead) return;
             if (!IsDead) return;
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             if (round == null || round.Phase.Value != RoundPhase.Active) return;
             if (!CanServerReachForPickup(carrier, this, ServerPlayerPickupMaxDistance)) return;
             if (IsAncestorInCarrierChain(carrier)) return;

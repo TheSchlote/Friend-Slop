@@ -89,7 +89,7 @@ namespace FriendSlop.Hazards
 
         private void Update()
         {
-            if (!IsServer || _isDead || RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active)
+            if (!IsServer || _isDead || !RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active))
             {
                 _roundActive = false;
                 return;

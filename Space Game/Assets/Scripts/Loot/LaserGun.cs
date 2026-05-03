@@ -88,7 +88,7 @@ namespace FriendSlop.Loot
             var shooterId = rpcParams.Receive.SenderClientId;
             var shooter = NetworkFirstPersonController.FindByClientId(shooterId);
             if (shooter == null || shooter.IsDead || !IsHeldBy(shooterId)) return;
-            if (RoundManager.Instance == null || RoundManager.Instance.Phase.Value != RoundPhase.Active) return;
+            if (!RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active)) return;
             if (_ammo.Value <= 0) return;
             if (Time.time < _nextServerFireTime) return;
 

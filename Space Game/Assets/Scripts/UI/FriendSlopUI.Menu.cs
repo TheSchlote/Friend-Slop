@@ -127,7 +127,7 @@ namespace FriendSlop.UI
 
         private void OnRestartOrTravelClicked()
         {
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             if (rm == null) return;
 
             if (rm.Phase.Value == RoundPhase.Success && rm.GetOfferedNextPlanetChoices().Count > 0 && !rm.HasReachedFinalTier)
@@ -140,7 +140,7 @@ namespace FriendSlop.UI
 
         private void OnCyclePlanetClicked()
         {
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             if (rm == null || rm.Catalog == null) return;
             var choices = rm.GetOfferedNextPlanetChoices();
             if (choices.Count <= 1) return;

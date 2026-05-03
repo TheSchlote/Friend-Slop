@@ -55,6 +55,8 @@ namespace FriendSlop.Round
         [Header("Surface Snap Offsets")]
         [SerializeField, Min(0f)] private float launchpadSurfaceOffset = 0.12f;
         [SerializeField, Min(0f)] private float spawnSurfaceOffset = 0.25f;
+        [SerializeField, Min(0f)] private float lootSurfaceOffset = 0.4f;
+        [SerializeField, Min(0f)] private float monsterSurfaceOffset = 0.7f;
 
         public PlanetDefinition Planet => planet;
         public Transform[] PlayerSpawnPoints => playerSpawnPoints;
@@ -152,6 +154,26 @@ namespace FriendSlop.Round
                     var spawn = playerSpawnPoints[i];
                     if (spawn != null)
                         SnapTransformToSurface(spawn, center, world, spawnSurfaceOffset, alignRotation: true);
+                }
+            }
+
+            if (lootSpawnPoints != null)
+            {
+                for (var i = 0; i < lootSpawnPoints.Length; i++)
+                {
+                    var spawn = lootSpawnPoints[i];
+                    if (spawn != null)
+                        SnapTransformToSurface(spawn, center, world, lootSurfaceOffset, alignRotation: true);
+                }
+            }
+
+            if (monsterSpawnPoints != null)
+            {
+                for (var i = 0; i < monsterSpawnPoints.Length; i++)
+                {
+                    var spawn = monsterSpawnPoints[i];
+                    if (spawn != null)
+                        SnapTransformToSurface(spawn, center, world, monsterSurfaceOffset, alignRotation: true);
                 }
             }
 
