@@ -121,8 +121,7 @@ namespace FriendSlop.Loot
                 return false;
             }
 
-            var activeRound = RoundManagerRegistry.Current;
-            if (activeRound != null && activeRound.Phase.Value != RoundPhase.Active)
+            if (RoundManagerRegistry.Current is { } activeRound && activeRound.Phase.Value != RoundPhase.Active)
             {
                 return false;
             }
