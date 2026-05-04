@@ -40,6 +40,8 @@ namespace FriendSlop.Core
 
         public override void OnNetworkSpawn()
         {
+            DayNightCycleRegistry.Register(this);
+
             var lightObj = GameObject.Find("Tiny Planet Sun");
             if (lightObj != null) _dirLight = lightObj.GetComponent<Light>();
 
@@ -67,6 +69,8 @@ namespace FriendSlop.Core
 
         public override void OnNetworkDespawn()
         {
+            DayNightCycleRegistry.Unregister(this);
+
             // Restore the original skybox material.
             if (_originalSkybox != null)
                 RenderSettings.skybox = _originalSkybox;

@@ -19,7 +19,6 @@ namespace FriendSlop.UI
 
             SetSize(hudRect, new Vector2(hudWidth, 180f));
             SetSize(timerText.rectTransform, new Vector2(hudWidth, 32f));
-            SetSize(carriedText.rectTransform, new Vector2(Mathf.Min(hudWidth, 700f), 30f));
             SetSize(resultText.rectTransform, new Vector2(Mathf.Min(hudWidth, 820f), 42f));
             SetSize(moneyPanelRect, new Vector2(moneyWidth, 44f));
         }
@@ -196,15 +195,14 @@ namespace FriendSlop.UI
                 return;
             }
 
-            if (_dayNightCycle == null)
-                _dayNightCycle = Object.FindFirstObjectByType<DayNightCycle>();
-            if (_dayNightCycle == null)
+            var dayNight = DayNightCycleRegistry.Current;
+            if (dayNight == null)
             {
                 _sunGlareImage.color = new Color(1f, 0.95f, 0.82f, 0f);
                 return;
             }
 
-            var rawToSun  = _dayNightCycle.SunWorldPosition - cam.transform.position;
+            var rawToSun  = dayNight.SunWorldPosition - cam.transform.position;
             var distToSun = rawToSun.magnitude;
             var toSun     = rawToSun / distToSun;
             var lookDot   = Vector3.Dot(cam.transform.forward, toSun);

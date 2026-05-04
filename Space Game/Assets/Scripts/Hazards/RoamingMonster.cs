@@ -7,7 +7,7 @@ using UnityEngine;
 namespace FriendSlop.Hazards
 {
     [RequireComponent(typeof(NetworkObject))]
-    public class RoamingMonster : NetworkBehaviour
+    public partial class RoamingMonster : NetworkBehaviour
     {
         [SerializeField] private float detectionRange = 30f;
         [SerializeField] private float attackDistance = 2f;
@@ -32,13 +32,16 @@ namespace FriendSlop.Hazards
         [SerializeField] private int attackDamage = 20;
         [SerializeField] private int maxHealth = 100;
 
+        // Declaration order matters for NGO: deserializes in declaration order.
+        // Keep _health before _isDead so any future reader of _isDead.OnValueChanged can
+        // also read the matching health value if it ever needs to.
         private NetworkVariable<int> _health = new(100);
+        private NetworkVariable<bool> _isDead = new(false);
 
         private enum State { Roaming, Chasing, Investigating }
 
         private static readonly float[] BodySampleHeights = { 0.25f, 0.5f, 0.75f, 0.95f };
 
-        private bool _isDead;
         private Renderer[] _renderers;
         private CapsuleCollider _capsuleCollider;
 
@@ -63,8 +66,20 @@ namespace FriendSlop.Hazards
 
         public override void OnNetworkSpawn()
         {
-            if (_health.Value <= 0)
+            _isDead.OnValueChanged += OnDeadChanged;
+            if (_isDead.Value)
                 ApplyDeadState();
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            _isDead.OnValueChanged -= OnDeadChanged;
+        }
+
+        private void OnDeadChanged(bool previous, bool current)
+        {
+            if (current) ApplyDeadState();
+            else ApplyAliveState();
         }
 
         private void Awake()
@@ -89,7 +104,7 @@ namespace FriendSlop.Hazards
 
         private void Update()
         {
-            if (!IsServer || _isDead || !RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active))
+            if (!IsServer || _isDead.Value || !RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active))
             {
                 _roundActive = false;
                 return;
@@ -200,27 +215,10 @@ namespace FriendSlop.Hazards
 
         public void ServerTakeDamage(int damage)
         {
-            if (!IsServer || _isDead) return;
+            if (!IsServer || _isDead.Value) return;
             _health.Value = Mathf.Max(0, _health.Value - damage);
             if (_health.Value <= 0)
-            {
-                _isDead = true;
-                DieClientRpc();
-            }
-        }
-
-        [Rpc(SendTo.ClientsAndHost)]
-        private void DieClientRpc()
-        {
-            _isDead = true;
-            ApplyDeadState();
-        }
-
-        [Rpc(SendTo.ClientsAndHost)]
-        private void ReviveClientRpc()
-        {
-            _isDead = false;
-            ApplyAliveState();
+                _isDead.Value = true;
         }
 
         private void ApplyDeadState()
@@ -245,8 +243,7 @@ namespace FriendSlop.Hazards
             }
 
             _health.Value = maxHealth;
-            _isDead = false;
-            ReviveClientRpc();
+            _isDead.Value = false;
 
             transform.position = spawnPosition;
             nextAttackTime = 0f;
@@ -262,228 +259,5 @@ namespace FriendSlop.Hazards
             PickRoamTarget(world);
         }
 
-        private NetworkFirstPersonController FindNearestPlayer(SphereWorld world)
-        {
-            NetworkFirstPersonController bestPlayer = null;
-            var bestDistance = detectionRange;
-
-            var up = _frameUp;
-            var surfaceForward = _frameSurfaceForward;
-
-            foreach (var player in NetworkFirstPersonController.ActivePlayers)
-            {
-                if (player == null || !player.IsSpawned)
-                    continue;
-
-                if (player.IsDead)
-                    continue;
-
-                if (player == _stunnedPlayer && Time.time < _stunnedPlayerUntil)
-                    continue;
-
-                var distance = Vector3.Distance(transform.position, player.transform.position);
-                if (distance >= bestDistance)
-                    continue;
-
-                // Stealth model: more body parts blocked → harder to spot. Crouching shrinks
-                // the sampled body height, so cover hides more of the player.
-                var visibility = ComputeBodyVisibility(world, player);
-                if (visibility <= 0f)
-                    continue;
-
-                if (distance < proximityDetectionRange)
-                {
-                    // Point-blank: still detected as long as something is exposed.
-                    bestDistance = distance;
-                    bestPlayer = player;
-                    continue;
-                }
-
-                var effectiveRange = detectionRange * visibility;
-                if (distance >= effectiveRange)
-                    continue;
-
-                var toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, up);
-                if (toPlayer.sqrMagnitude < 0.001f)
-                    continue;
-
-                if (Vector3.Angle(surfaceForward, toPlayer) > visionAngle * 0.5f)
-                    continue;
-
-                bestDistance = distance;
-                bestPlayer = player;
-            }
-
-            return bestPlayer;
-        }
-
-        private float ComputeBodyVisibility(SphereWorld world, NetworkFirstPersonController player)
-        {
-            if (player == null || world == null) return 0f;
-
-            var origin = transform.position + _frameUp * visionOriginHeight;
-            var up = world.GetUp(player.transform.position);
-            var bodyHeight = Mathf.Max(0.1f, player.CurrentBodyHeight);
-            var visible = 0;
-
-            for (var i = 0; i < BodySampleHeights.Length; i++)
-            {
-                var point = player.transform.position + up * (bodyHeight * BodySampleHeights[i]);
-                if (!Physics.Linecast(origin, point, out var hit))
-                {
-                    visible++;
-                    continue;
-                }
-
-                if (hit.collider != null && hit.collider.transform.root == player.transform.root)
-                    visible++;
-            }
-
-            return (float)visible / BodySampleHeights.Length;
-        }
-
-        private bool CanDetectPlayer(SphereWorld world, NetworkFirstPersonController player)
-        {
-            if (player == null || !player.IsSpawned)
-                return false;
-
-            if (player.IsDead)
-                return false;
-
-            if (player == _stunnedPlayer && Time.time < _stunnedPlayerUntil)
-                return false;
-
-            var distance = Vector3.Distance(transform.position, player.transform.position);
-
-            if (distance < proximityDetectionRange)
-                return true;
-
-            if (distance >= detectionRange)
-                return false;
-
-            var up = _frameUp;
-            var surfaceForward = _frameSurfaceForward;
-
-            var toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, up);
-            if (toPlayer.sqrMagnitude < 0.001f)
-                return false;
-
-            if (Vector3.Angle(surfaceForward, toPlayer) > visionAngle * 0.5f)
-                return false;
-
-            return !IsOccluded(world, player);
-        }
-
-        private bool IsOccluded(SphereWorld world, NetworkFirstPersonController player)
-        {
-            var origin      = transform.position        + _frameUp                                           * visionOriginHeight;
-            var destination = player.transform.position + world.GetUp(player.transform.position) * visionOriginHeight;
-
-            if (!Physics.Linecast(origin, destination, out var hit))
-                return false;
-
-            return hit.collider.transform.root != player.transform.root;
-        }
-
-        private void MoveToward(SphereWorld world, Vector3 targetPosition)
-        {
-            var up = world.GetUp(transform.position);
-            var tangent = Vector3.ProjectOnPlane(targetPosition - transform.position, up);
-            if (tangent.sqrMagnitude < 0.001f)
-            {
-                return;
-            }
-
-            tangent.Normalize();
-            var candidatePosition = transform.position + tangent * moveSpeed * Time.deltaTime;
-            transform.position = world.GetSurfacePoint(world.GetUp(candidatePosition), surfaceHeight);
-            AlignToSurface(world, tangent, Time.deltaTime);
-        }
-
-        // Returns true when the attack landed, triggering a retreat.
-        private bool TryAttack(SphereWorld world, NetworkFirstPersonController player)
-        {
-            if (player.IsDead) return false;
-            if (Time.time < nextAttackTime || Vector3.Distance(transform.position, player.transform.position) > attackDistance)
-                return false;
-
-            nextAttackTime = Time.time + attackCooldown;
-
-            var away = Vector3.ProjectOnPlane(player.transform.position - transform.position, world.GetUp(player.transform.position));
-            if (away.sqrMagnitude < 0.001f)
-                away = player.transform.forward;
-
-            away.Normalize();
-            var impulse = away * knockbackStrength + world.GetUp(player.transform.position) * 3f;
-
-            player.ServerForceDropHeld(impulse);
-            player.StunClientRpc(stunDuration, impulse);
-            player.ServerTakeDamage(attackDamage);
-
-            _stunnedPlayer = player;
-            _stunnedPlayerUntil = Time.time + stunDuration;
-
-            return true;
-        }
-
-        private void PickRoamTarget(SphereWorld world)
-        {
-            if (world == null)
-            {
-                roamTarget = spawnPosition;
-                return;
-            }
-
-            // Pick the offset in the local tangent plane so a near-radial random pick
-            // doesn't collapse back onto spawnPosition after surface projection.
-            var up = world.GetUp(spawnPosition);
-            var tangent = Vector3.ProjectOnPlane(Random.onUnitSphere, up);
-            if (tangent.sqrMagnitude < 0.01f)
-                tangent = Vector3.ProjectOnPlane(Vector3.right, up);
-            if (tangent.sqrMagnitude < 0.01f)
-                tangent = Vector3.ProjectOnPlane(Vector3.forward, up);
-            tangent.Normalize();
-
-            var distance = Random.Range(roamRadius * 0.5f, roamRadius);
-            var offsetPoint = spawnPosition + tangent * distance;
-            roamTarget = world.GetSurfacePoint(world.GetUp(offsetPoint), surfaceHeight);
-        }
-
-        private void PickRetreatTarget(SphereWorld world, Vector3 fromPosition)
-        {
-            var up = world.GetUp(transform.position);
-            var awayDir = Vector3.ProjectOnPlane(transform.position - fromPosition, up);
-            if (awayDir.sqrMagnitude < 0.001f)
-                awayDir = transform.forward;
-            awayDir.Normalize();
-            var offsetPoint = transform.position + awayDir * roamRadius;
-            roamTarget = world.GetSurfacePoint(world.GetUp(offsetPoint), surfaceHeight);
-        }
-
-        private void PickInvestigateTarget(SphereWorld world)
-        {
-            if (world == null)
-            {
-                _investigateTarget = _lastKnownPosition;
-                return;
-            }
-
-            var offsetPoint = _lastKnownPosition + Random.onUnitSphere * investigateWanderRadius;
-            _investigateTarget = world.GetSurfacePoint(world.GetUp(offsetPoint), surfaceHeight);
-        }
-
-        private void AlignToSurface(SphereWorld world, Vector3 forwardHint, float deltaTime)
-        {
-            if (world == null)
-            {
-                return;
-            }
-
-            var up = world.GetUp(transform.position);
-            var targetRotation = world.GetSurfaceRotation(up, forwardHint);
-            transform.rotation = deltaTime >= 1f
-                ? targetRotation
-                : Quaternion.Slerp(transform.rotation, targetRotation, rotationSharpness * deltaTime);
-        }
     }
 }
