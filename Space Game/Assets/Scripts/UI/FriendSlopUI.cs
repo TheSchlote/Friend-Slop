@@ -73,7 +73,6 @@ namespace FriendSlop.UI
 
         // ── Environment effects ───────────────────────────────────────────────
         private Image _sunGlareImage;
-        private DayNightCycle _dayNightCycle;
         private Image _fadeOverlayImage;
         private float _fadeAlpha;
         private const float FadeSpeed = 2.2f;
@@ -117,7 +116,6 @@ namespace FriendSlop.UI
         private Text quotaText;
         private Text timerText;
         private Text promptText;
-        private Text carriedText;
         private Text resultText;
         private InputField joinInput;
         private InputField playerNameInput;
@@ -418,18 +416,9 @@ namespace FriendSlop.UI
             }
 
             var localPlayer = LocalPlayerRegistry.Current;
-            if (localPlayer != null)
-            {
-                promptText.text = localPlayer.Interactor != null ? localPlayer.Interactor.CurrentPrompt : string.Empty;
-                carriedText.text = localPlayer.HeldItem != null
-                    ? $"Carrying: {localPlayer.HeldItem.ItemName} (${localPlayer.HeldItem.Value})"
-                    : string.Empty;
-            }
-            else
-            {
-                promptText.text = string.Empty;
-                carriedText.text = string.Empty;
-            }
+            promptText.text = localPlayer != null && localPlayer.Interactor != null
+                ? localPlayer.Interactor.CurrentPrompt
+                : string.Empty;
 
             UpdateStaminaBar(localPlayer, gameplayPhase);
             UpdateHealthBar(localPlayer, gameplayPhase);

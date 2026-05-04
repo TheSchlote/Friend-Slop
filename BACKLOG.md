@@ -192,3 +192,50 @@ Grooming questions:
 - Should validation run from a menu item, CI, or both?
 - Which warnings should block a merge?
 - Should each planet asset declare its expected minimum content?
+
+## 15. Architecture follow-ups
+
+Tracked engineering work surfaced in the 2026-05-03 audit. Each is its own focused PR — they intentionally were not bundled into [#18](https://github.com/TheSchlote/Friend-Slop/pull/18) so that scope and review stay tight.
+
+### 15a. Pre-emptive splits of files at exact baseline
+
+These runtime files sit at the `ArchitectureGuardrailTests` baseline ceiling, meaning the next added line fails CI. Each split is mechanical (carve into partials by responsibility) and unblocks future feature work in those areas.
+
+- `Assets/Scripts/Loot/NetworkLootItem.cs` (703/703) — split candidates: pickup/drop network flow, deposit/surface logic, slot/inventory state.
+- `Assets/Scripts/Player/PlayerInteractor.cs` (529/529) — split candidates: focus/raycast, pickup/drop input, weapon use.
+- `Assets/Scripts/UI/FriendSlopUI.BuildUi.cs` (517/517) — split per built section (HUD/menu/chat/etc).
+- `Assets/Scripts/Player/NetworkFirstPersonController.cs` (728/739) — only 11 lines from baseline; movement/look/crouch logic is the next obvious extraction.
+
+After each split: drop the file's entry from `ExistingOversizedRuntimeFiles` in `ArchitectureGuardrailTests.cs` if the main file lands under 400.
+
+### 15b. Further `RoundManager` carving
+
+Currently 800/1000 baseline after codex's PlanetSceneOrchestrator + `.PlanetEnvironment` + `.PlanetTravelCleanup` partials. Natural next splits:
+
+- `RoundManager.PlayerPlacement.cs` — `RespawnPlayersAtPlanet`, `ServerMovePlayersToShip`, `ServerTeleportPlayer*` family.
+- `RoundManager.Boarding.cs` — launchpad submit + boarding tracking.
+
+Goal: bring main `RoundManager.cs` under 400 so its baseline can be removed.
+
+### 15c. Asmdef split — D-006
+
+Per [docs/architecture.md](docs/architecture.md) decision D-006: split `FriendSlop.Runtime` into `Core ← Networking ← Gameplay ← UI`. The architecture doc explicitly calls this a "single focused PR." Cheapest first step: carve `FriendSlop.Core` out (pure data: `SphereWorld`, `RoundStateUtility`, `JoinCodeUtility`, `CarrySyncUtility`, `RoundPhase`, `ShipPartType`) so tests can reference Core without pulling Netcode.
+
+### 15d. `RoundManager.Instance` migration
+
+Per [docs/SingletonAudit.md](docs/SingletonAudit.md): "should not be removed in one large sweep." Per-feature carve-off when each zone is touched:
+
+- `LaunchpadZone`, `DepositZone`, `TeleporterPad`, `ShipStation` → spawn-time wiring of a small round-context provider.
+- UI subscribes to round lifecycle events and stops polling `RoundManager.Instance` directly.
+
+Track removal progress by counting `RoundManager.Instance` references in the codebase; goal is 0 in non-test runtime code.
+
+### 15e. `FriendSlopUI` polling rewrite
+
+`RefreshUi()` runs a full layout diff every Update. Pair with the prefab move tracked in section 11: drive each widget from `NetworkVariable.OnValueChanged` instead of polling, so the health bar only updates when health changes (not 60×/sec).
+
+### 15f. Test-coverage backfill
+
+Currently no EditMode coverage for: `NetworkSessionManager` (mock-needed), `FriendSlopUI` partials, `PlayerInteractor`, `NetworkFirstPersonController` health/lifecycle/movement, weapons (`LaserGun`, `BoxingGloves`). The seams that already break are well-covered; gameplay surface that *could* break invisibly is not.
+
+Lowest-hanging fruit: `LaserGun` / `BoxingGloves` — they're small, server-authoritative, and have clear pass/fail predicates.

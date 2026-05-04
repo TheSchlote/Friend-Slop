@@ -18,9 +18,8 @@ namespace FriendSlop.Tests.EditMode
             ["Assets/Scripts/Loot/NetworkLootItem.cs"] = 703,
             ["Assets/Scripts/Networking/NetworkSessionManager.cs"] = 621,
             ["Assets/Scripts/Player/PlayerInteractor.cs"] = 529,
-            ["Assets/Scripts/UI/FriendSlopUI.BuildUi.cs"] = 518,
-            ["Assets/Scripts/UI/FriendSlopUI.cs"] = 496,
-            ["Assets/Scripts/Hazards/RoamingMonster.cs"] = 489,
+            ["Assets/Scripts/UI/FriendSlopUI.BuildUi.cs"] = 517,
+            ["Assets/Scripts/UI/FriendSlopUI.cs"] = 477,
         };
 
         private static readonly HashSet<string> AllowedSingletons = new()

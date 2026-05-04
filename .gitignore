@@ -4,6 +4,13 @@
 #
 .utmp/
 **/.utmp/
+
+# Stray git LFS hooks installed under a literal "dev/null" path on Windows
+# (happens when something attempts core.hooksPath=/dev/null in a Windows shell).
+/dev/
+
+# Claude Code session metadata
+.claude/
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/
