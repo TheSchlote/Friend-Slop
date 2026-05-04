@@ -35,7 +35,7 @@ namespace FriendSlop.Round
 
         private void TrySubscribeToRoundManager()
         {
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             if (rm == null || rm == _subscribedRoundManager) return;
             UnsubscribeFromRoundManager();
             rm.Phase.OnValueChanged += OnRoundPhaseChanged;
@@ -103,7 +103,8 @@ namespace FriendSlop.Round
 
         private void FixedUpdate()
         {
-            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer || RoundManager.Instance == null)
+            var round = RoundManagerRegistry.Current;
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer || round == null)
             {
                 return;
             }
@@ -112,11 +113,12 @@ namespace FriendSlop.Round
             // boarding-presence sync still needs server-side polling, since the launch
             // condition depends on knowing which players are standing on the pad.
             TrySubscribeToRoundManager();
-            SyncBoardedPlayers();
+            SyncBoardedPlayers(round);
         }
 
-        private void SyncBoardedPlayers()
+        private void SyncBoardedPlayers(RoundManager round)
         {
+            if (round == null) return;
             stalePlayerIds.Clear();
             foreach (var clientId in playersInsideSubmitArea)
             {
@@ -137,12 +139,12 @@ namespace FriendSlop.Round
                 {
                     if (playersInsideSubmitArea.Add(clientId))
                     {
-                        RoundManager.Instance.ServerPlayerBoarded(clientId);
+                        round.ServerPlayerBoarded(clientId);
                     }
                 }
                 else if (playersInsideSubmitArea.Remove(clientId))
                 {
-                    RoundManager.Instance.ServerPlayerUnboarded(clientId);
+                    round.ServerPlayerUnboarded(clientId);
                 }
             }
 
@@ -153,7 +155,7 @@ namespace FriendSlop.Round
                     continue;
                 }
 
-                RoundManager.Instance.ServerPlayerUnboarded(staleClientId);
+                round.ServerPlayerUnboarded(staleClientId);
             }
         }
 
@@ -172,8 +174,9 @@ namespace FriendSlop.Round
         public void ServerSubmit(NetworkLootItem item)
         {
             var nm = NetworkManager.Singleton;
-            if (nm == null || !nm.IsServer || RoundManager.Instance == null) return;
-            RoundManager.Instance.ServerSubmitToLaunchpad(item);
+            var round = RoundManagerRegistry.Current;
+            if (nm == null || !nm.IsServer || round == null) return;
+            round.ServerSubmitToLaunchpad(item);
         }
 
         private bool IsPointInsideSubmitArea(Vector3 position)

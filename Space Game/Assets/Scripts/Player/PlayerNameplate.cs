@@ -51,7 +51,7 @@ namespace FriendSlop.Player
 
         private void LateUpdate()
         {
-            var localPlayer = NetworkFirstPersonController.LocalPlayer;
+            var localPlayer = LocalPlayerRegistry.Current;
 
             if (localPlayer == null || controller == localPlayer || nameplateRoot == null)
             {

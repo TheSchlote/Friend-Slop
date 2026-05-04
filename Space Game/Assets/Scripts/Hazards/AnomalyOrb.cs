@@ -168,7 +168,7 @@ namespace FriendSlop.Hazards
             var world = SphereWorld.GetClosest(transform.position);
             if (world == null) return;
 
-            var roundActive = RoundManager.Instance?.Phase.Value == RoundPhase.Active;
+            var roundActive = RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active);
 
             if (_wasRoundActive && !roundActive)
             {

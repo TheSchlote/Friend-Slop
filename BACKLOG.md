@@ -4,15 +4,20 @@ This is the current gameplay and implementation backlog, ordered by the work tha
 
 ## 1. Planet lifecycle and scene ownership
 
-The game is still split between prototype-nested planet content and additively loaded planet scenes. Finish the transition so each playable planet owns its scene, environment, launchpad, teleporters, spawns, loot budget, hazards, and cleanup rules.
+Authored planets have moved into additively loaded planet scenes, but lifecycle ownership still needs hardening around bootstrap/ship responsibilities, travel cleanup, and future planet variants. Keep the transition moving so each playable planet owns its scene, environment, launchpad, teleporters, spawns, loot budget, hazards, and cleanup rules.
+
+Status 2026-05-03: Starter Junk, Rusty Moon, and Violet Giant are now scene-owned. Rusty Moon exposes loot and monster anchors through `PlanetEnvironment`, Violet Giant has moved out of `FriendSlopPrototype.unity`, and validation now rejects scene-owned `PlanetEnvironment`s left nested in the bootstrap scene. `ShipInterior.unity` now owns the ship lobby root, ship stations, ship teleporter, and ship spawn points through `ShipEnvironment`; `FriendSlopPrototype.unity` stays focused on bootstrap/runtime systems. Planet travel cleanup is scoped to the active planet scene when a `PlanetEnvironment` is registered, with the legacy global cleanup path retained for fallback planets. Current-round and local-player lookup now flow through explicit registries instead of production code calling `RoundManager.Instance` or `NetworkFirstPersonController.LocalPlayer`. Keep the bootstrapper legacy planet fallback fields until they get a dedicated removal pass.
 
 Key files:
 - `Space Game/Assets/Scripts/Round/RoundManager.cs`
+- `Space Game/Assets/Scripts/Round/RoundManagerRegistry.cs`
+- `Space Game/Assets/Scripts/Player/LocalPlayerRegistry.cs`
 - `Space Game/Assets/Scripts/Networking/PrototypeNetworkBootstrapper.cs`
 - `Space Game/Assets/Scripts/Round/PlanetEnvironment.cs`
+- `Space Game/Assets/Scripts/Ship/ShipEnvironment.cs`
 
 Grooming questions:
-- Should the bootstrap scene contain only the ship/lobby plus managers?
+- Which remaining bootstrap scene objects should move into dedicated runtime/persistent scenes?
 - Should any planets remain nested in `FriendSlopPrototype.unity`?
 - What should happen to carried/deposited loot when traveling?
 
@@ -48,7 +53,7 @@ Ship stations currently support claiming/releasing occupancy, but station roles 
 
 Key files:
 - `Space Game/Assets/Scripts/Ship/ShipStation.cs`
-- `Space Game/Assets/Scenes/FriendSlopPrototype.unity`
+- `Space Game/Assets/Scenes/ShipInterior.unity`
 
 Grooming questions:
 - Which station controls travel?

@@ -162,8 +162,8 @@ namespace FriendSlop.UI
             GameplayInputState.RegisterBlockProvider(this, IsBlockingGameplayInput);
 
             NetworkSessionManager.SessionEnded += HandleSessionEnded;
-            NetworkFirstPersonController.LocalPlayerDamaged += HandleLocalPlayerDamaged;
-            NetworkFirstPersonController.LocalPlayerJoinedActiveRound += HandleLocalPlayerJoinedActiveRound;
+            LocalPlayerRegistry.Damaged += HandleLocalPlayerDamaged;
+            LocalPlayerRegistry.JoinedActiveRound += HandleLocalPlayerJoinedActiveRound;
             NetworkFirstPersonController.ChatMessageReceived += OnChatMessageReceived;
             RoundManager.LocalTeleporterFlashRequested += HandleTeleporterFlashRequested;
         }
@@ -171,8 +171,8 @@ namespace FriendSlop.UI
         private void OnDisable()
         {
             NetworkSessionManager.SessionEnded -= HandleSessionEnded;
-            NetworkFirstPersonController.LocalPlayerDamaged -= HandleLocalPlayerDamaged;
-            NetworkFirstPersonController.LocalPlayerJoinedActiveRound -= HandleLocalPlayerJoinedActiveRound;
+            LocalPlayerRegistry.Damaged -= HandleLocalPlayerDamaged;
+            LocalPlayerRegistry.JoinedActiveRound -= HandleLocalPlayerJoinedActiveRound;
             NetworkFirstPersonController.ChatMessageReceived -= OnChatMessageReceived;
             RoundManager.LocalTeleporterFlashRequested -= HandleTeleporterFlashRequested;
             _chatInputFocused = false;
@@ -224,7 +224,7 @@ namespace FriendSlop.UI
             if (!menuTogglePressed) return;
 
             var networkManager = NetworkManager.Singleton;
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             var connected = networkManager != null && networkManager.IsListening;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             var gameplayPhase = connected && RoundStateUtility.AllowsGameplayInput(phase);
@@ -251,7 +251,7 @@ namespace FriendSlop.UI
             UnityEngine.PlayerPrefs.Save();
             if (value == _lastSyncedName) return;
             _lastSyncedName = value;
-            NetworkFirstPersonController.LocalPlayer?.SetNameServerRpc(value);
+            LocalPlayerRegistry.Current?.SetNameServerRpc(value);
         }
 
         private void DetectDisconnection()
@@ -286,7 +286,7 @@ namespace FriendSlop.UI
             if (playerNameInput != null && playerNameInput.isFocused) return true;
             if (joinInput != null && joinInput.isFocused) return true;
 
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             var phase = round != null ? round.Phase.Value : RoundPhase.Lobby;
             if (phase == RoundPhase.Loading || phase == RoundPhase.Transitioning || _lateJoinLoading) return true;
 
@@ -303,7 +303,7 @@ namespace FriendSlop.UI
         {
             var networkManager = NetworkManager.Singleton;
             var session = SessionManager;
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             var connected = networkManager != null && networkManager.IsListening;
             var isHost = networkManager != null && networkManager.IsHost;
             var canCancelSessionOperation = session != null && session.CanCancelSessionOperation;
@@ -417,7 +417,7 @@ namespace FriendSlop.UI
                 resultText.text = connected ? string.Empty : "Host or join to begin.";
             }
 
-            var localPlayer = NetworkFirstPersonController.LocalPlayer;
+            var localPlayer = LocalPlayerRegistry.Current;
             if (localPlayer != null)
             {
                 promptText.text = localPlayer.Interactor != null ? localPlayer.Interactor.CurrentPrompt : string.Empty;

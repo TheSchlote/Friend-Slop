@@ -29,17 +29,20 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsNotNull(Object.FindAnyObjectByType<FriendSlopUI>(), "FriendSlopUI should exist in the prototype scene.");
             Assert.IsNotNull(Object.FindAnyObjectByType<NetworkSceneTransitionService>(), "NetworkSceneTransitionService should exist in the prototype scene.");
             Assert.IsNotNull(Object.FindAnyObjectByType<PrototypeNetworkBootstrapper>(), "Prototype bootstrapper should exist in the prototype scene.");
+            AssertBootstrapDoesNotOwnShipInterior();
             // Tier 1 launchpad / ship-part assertions used to live here, but the planet now
             // ships in its own additively-loaded scene. They run after host start, once the
             // server has triggered the Planet_StarterJunk additive load.
-            AssertShipInteriorLayout();
 
             yield return StartLocalHostAndWaitForRoundManager();
+            yield return WaitForShipInteriorSceneLoaded();
             yield return null;
 
             Assert.IsTrue(NetworkManager.Singleton.IsListening, "Local host should start during the smoke test.");
-            Assert.IsNotNull(RoundManager.Instance, "RoundManager should spawn after the local host starts.");
-            Assert.AreEqual(RoundPhase.Lobby, RoundManager.Instance.Phase.Value, "Host startup should begin in the walkable ship lobby.");
+            Assert.IsNotNull(RoundManagerRegistry.Current, "RoundManager should spawn after the local host starts.");
+            Assert.AreEqual(RoundPhase.Lobby, RoundManagerRegistry.Current.Phase.Value, "Host startup should begin in the walkable ship lobby.");
+            AssertShipInteriorSceneLoaded();
+            AssertShipInteriorLayout();
             AssertPlayerInsideShipInterior();
             Assert.IsFalse(FriendSlopUI.BlocksGameplayInput, "The ship lobby should be walkable without opening the session menu.");
             Assert.AreEqual(1, Object.FindObjectsByType<RoundManager>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
@@ -61,10 +64,11 @@ namespace FriendSlop.Tests.PlayMode
             var firstMonsterCount = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
             Assert.Greater(firstLootCount, 0, "Host startup should spawn loot.");
             Assert.Greater(firstMonsterCount, 0, "Host startup should spawn monsters.");
-            yield return StartRoundAndWaitForActive();
+            yield return StartRoundFromPilotStationAndWaitForActive();
             Assert.IsFalse(FriendSlopUI.BlocksGameplayInput,
                 "Gameplay input should be enabled as soon as the active round begins.");
             AssertPlayerOnPlanetSurface();
+            AssertShipInteriorOutsidePlanetCameraRange();
 
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -84,6 +88,7 @@ namespace FriendSlop.Tests.PlayMode
             yield return StartLocalClientAndCancel();
 
             yield return StartLocalHostAndWaitForRoundManager();
+            yield return WaitForShipInteriorSceneLoaded();
             yield return WaitForActivePlanetSceneLoaded();
             yield return WaitForActivePlanetSpawnsPopulated();
 
@@ -130,7 +135,7 @@ namespace FriendSlop.Tests.PlayMode
 
         private static bool HasActivePlanetEnvironment()
         {
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             if (rm == null) return false;
             var planet = rm.CurrentPlanet;
             if (planet == null) return false;
@@ -140,7 +145,7 @@ namespace FriendSlop.Tests.PlayMode
 
         private static Scene AssertActivePlanetSceneLoaded()
         {
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             Assert.IsNotNull(rm, "RoundManager should exist before validating planet scene ownership.");
             var planet = rm.CurrentPlanet;
             Assert.IsNotNull(planet, "RoundManager should have a current planet.");
@@ -176,6 +181,17 @@ namespace FriendSlop.Tests.PlayMode
             }
         }
 
+        private static IEnumerator WaitForShipInteriorSceneLoaded()
+        {
+            for (var frame = 0; frame < 600; frame++)
+            {
+                if (Object.FindAnyObjectByType<ShipEnvironment>() != null) yield break;
+                yield return null;
+            }
+
+            Assert.Fail("ShipInterior should load and register a ShipEnvironment after host start.");
+        }
+
         private static IEnumerator LoadPrototypeScene()
         {
             var operation = SceneManager.LoadSceneAsync("FriendSlopPrototype", LoadSceneMode.Single);
@@ -199,12 +215,12 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsNotNull(sessionManager, "NetworkSessionManager should exist before host startup.");
             sessionManager.StartLocalHost();
 
-            for (var frame = 0; frame < 120 && RoundManager.Instance == null; frame++)
+            for (var frame = 0; frame < 600 && RoundManagerRegistry.Current == null; frame++)
             {
                 yield return null;
             }
 
-            Assert.IsNotNull(RoundManager.Instance, "RoundManager should spawn after local host startup.");
+            Assert.IsNotNull(RoundManagerRegistry.Current, "RoundManager should spawn after local host startup.");
         }
 
         private static IEnumerator ShutdownAndWaitForSessionCleanup()
@@ -219,17 +235,30 @@ namespace FriendSlop.Tests.PlayMode
             }
         }
 
-        private static IEnumerator StartRoundAndWaitForActive()
+        private static IEnumerator StartRoundFromPilotStationAndWaitForActive()
         {
-            Assert.IsNotNull(RoundManager.Instance, "RoundManager should exist before starting a round.");
-            RoundManager.Instance.ServerStartRound();
+            var round = RoundManagerRegistry.Current;
+            Assert.IsNotNull(round, "RoundManager should exist before starting a round.");
+            Assert.AreEqual(RoundPhase.Lobby, round.Phase.Value,
+                "Pilot station start path should be exercised from the ship lobby phase.");
 
-            for (var frame = 0; frame < 180 && RoundManager.Instance.Phase.Value != RoundPhase.Active; frame++)
+            var player = LocalPlayerRegistry.Current;
+            Assert.IsNotNull(player, "Local player should exist before interacting with the pilot station.");
+
+            var pilotConsole = GameObject.Find("Pilot Console");
+            Assert.IsNotNull(pilotConsole, "Pilot console should exist before starting a round from the ship.");
+            var station = pilotConsole.GetComponent<ShipStation>();
+            Assert.IsNotNull(station, "Pilot console should expose a ShipStation interaction.");
+            Assert.AreEqual("E start round from Pilot Console", station.GetPrompt(player));
+
+            station.Interact(player);
+
+            for (var frame = 0; frame < 180 && round.Phase.Value != RoundPhase.Active; frame++)
             {
                 yield return null;
             }
 
-            Assert.AreEqual(RoundPhase.Active, RoundManager.Instance.Phase.Value,
+            Assert.AreEqual(RoundPhase.Active, round.Phase.Value,
                 "Round should leave loading and become active.");
         }
 
@@ -319,8 +348,13 @@ namespace FriendSlop.Tests.PlayMode
         private static void AssertShipInteriorLayout()
         {
             var ship = GameObject.Find("Bigger-On-The-Inside Ship Interior");
-            Assert.IsNotNull(ship, "A dev ship interior should exist in the prototype scene.");
+            Assert.IsNotNull(ship, "A dev ship interior should exist in the loaded ShipInterior scene.");
             Assert.IsNotNull(ship.GetComponent<FlatGravityVolume>(), "Ship interior should use flat gravity instead of planet snapping.");
+
+            var env = ship.GetComponent<ShipEnvironment>();
+            Assert.IsNotNull(env, "Ship interior should expose a ShipEnvironment contract.");
+            Assert.IsNotNull(env.ShipSpawnPoints, "ShipEnvironment should expose spawn points.");
+            Assert.GreaterOrEqual(env.ShipSpawnPoints.Length, 4, "Ship lobby should support the current max player count.");
 
             var pilotConsole = GameObject.Find("Pilot Console");
             Assert.IsNotNull(pilotConsole, "Ship should include a pilot console placeholder.");
@@ -335,9 +369,32 @@ namespace FriendSlop.Tests.PlayMode
             Assert.GreaterOrEqual(shipSpawns.transform.childCount, 4, "Ship lobby should support the current max player count.");
         }
 
+        private static void AssertBootstrapDoesNotOwnShipInterior()
+        {
+            Assert.IsNull(GameObject.Find("Bigger-On-The-Inside Ship Interior"),
+                "Bootstrap scene should not own the ship root before ShipInterior is loaded.");
+            Assert.IsNull(Object.FindAnyObjectByType<ShipEnvironment>(),
+                "Bootstrap scene should not contain a ShipEnvironment.");
+            Assert.AreEqual(0, Object.FindObjectsByType<ShipStation>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
+                "Bootstrap scene should not contain ship stations.");
+        }
+
+        private static void AssertShipInteriorSceneLoaded()
+        {
+            const string path = "Assets/Scenes/ShipInterior.unity";
+            var scene = SceneManager.GetSceneByPath(path);
+            Assert.IsTrue(scene.IsValid(), $"ShipInterior scene should resolve by path '{path}'.");
+            Assert.IsTrue(scene.isLoaded, "ShipInterior scene should be loaded additively after host start.");
+
+            var env = Object.FindAnyObjectByType<ShipEnvironment>();
+            Assert.IsNotNull(env, "ShipInterior should register a ShipEnvironment.");
+            Assert.AreEqual(scene.path, env.gameObject.scene.path,
+                "ShipEnvironment should be owned by the ShipInterior scene, not bootstrap.");
+        }
+
         private static void AssertPlayerInsideShipInterior()
         {
-            var player = NetworkFirstPersonController.LocalPlayer;
+            var player = LocalPlayerRegistry.Current;
             Assert.IsNotNull(player, "Local player should exist after host startup.");
             Assert.IsTrue(FlatGravityVolume.TryGetContaining(player.transform.position, out _),
                 "Local player should spawn inside the ship's flat gravity volume while waiting in the lobby.");
@@ -345,7 +402,7 @@ namespace FriendSlop.Tests.PlayMode
 
         private static void AssertPlayerOnPlanetSurface()
         {
-            var player = NetworkFirstPersonController.LocalPlayer;
+            var player = LocalPlayerRegistry.Current;
             Assert.IsNotNull(player, "Local player should exist after starting the round.");
             Assert.IsFalse(FlatGravityVolume.TryGetContaining(player.transform.position, out _),
                 "Starting the round should move the player out of the ship interior.");
@@ -353,6 +410,20 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsNotNull(world, "A planet SphereWorld should exist after starting the round.");
             Assert.LessOrEqual(Mathf.Abs(world.GetSurfaceDistance(player.transform.position)), 0.5f,
                 "Starting the round should place the player on the planet surface.");
+        }
+
+        private static void AssertShipInteriorOutsidePlanetCameraRange()
+        {
+            var player = LocalPlayerRegistry.Current;
+            Assert.IsNotNull(player, "Local player should exist before validating ship visibility from a planet.");
+
+            var ship = GameObject.Find("Bigger-On-The-Inside Ship Interior");
+            Assert.IsNotNull(ship, "ShipInterior should stay loaded while players are on a planet.");
+
+            var farClip = player.PlayerCamera != null ? player.PlayerCamera.farClipPlane : 1000f;
+            var distance = Vector3.Distance(player.transform.position, ship.transform.position);
+            Assert.Greater(distance, farClip + 100f,
+                "ShipInterior should live outside the planet camera range so ship geometry is not visible in the sky.");
         }
 
         private static void AssertSpawnPointInNorthernHemisphere(string objectName)

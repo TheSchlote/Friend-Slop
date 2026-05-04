@@ -121,7 +121,7 @@ namespace FriendSlop.Loot
                 return false;
             }
 
-            if (RoundManager.Instance != null && RoundManager.Instance.Phase.Value != RoundPhase.Active)
+            if (RoundManagerRegistry.Current is { } activeRound && activeRound.Phase.Value != RoundPhase.Active)
             {
                 return false;
             }
@@ -194,7 +194,7 @@ namespace FriendSlop.Loot
                 return;
             }
 
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             if (round == null || round.Phase.Value != RoundPhase.Active)
             {
                 return;
@@ -379,7 +379,7 @@ namespace FriendSlop.Loot
             surface = null;
             if (!IsHeldBy(senderId) || IsDeposited.Value) return false;
 
-            var round = RoundManager.Instance;
+            var round = RoundManagerRegistry.Current;
             if (round == null || round.Phase.Value != RoundPhase.Active) return false;
 
             if (!TryGetCachedCarrier(senderId, out var carrier)) return false;

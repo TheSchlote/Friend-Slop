@@ -242,7 +242,7 @@ namespace FriendSlop.Core
 
             // Local sun elevation: dot of the player's surface normal against the sun direction.
             // Each client computes this independently — night-side players get a negative value.
-            var localPlayer = NetworkFirstPersonController.LocalPlayer;
+            var localPlayer = LocalPlayerRegistry.Current;
             var playerPos   = localPlayer != null && localPlayer.IsSpawned ? localPlayer.transform.position : Vector3.zero;
             var localSunElevation  = playerPos.sqrMagnitude > 0.01f
                 ? Vector3.Dot(playerPos.normalized, sunDir)

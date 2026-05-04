@@ -65,7 +65,7 @@ namespace FriendSlop.Core
 
         private void TrySubscribeRoundManager()
         {
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             if (rm == null) return;
             rm.Phase.OnValueChanged += OnPhaseChanged;
             _subscribed = true;
@@ -74,7 +74,7 @@ namespace FriendSlop.Core
         private void UnsubscribeRoundManager()
         {
             if (!_subscribed) return;
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             if (rm != null) rm.Phase.OnValueChanged -= OnPhaseChanged;
             _subscribed = false;
         }

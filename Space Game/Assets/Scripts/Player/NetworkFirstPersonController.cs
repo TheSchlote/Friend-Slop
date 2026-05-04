@@ -1,4 +1,3 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using FriendSlop.Core;
@@ -15,16 +14,6 @@ namespace FriendSlop.Player
     public partial class NetworkFirstPersonController : NetworkBehaviour
     {
         public static readonly List<NetworkFirstPersonController> ActivePlayers = new();
-        public static NetworkFirstPersonController LocalPlayer { get; private set; }
-
-        // Raised on the local owner's machine when the local player takes non-fatal damage.
-        // UI subscribes to drive the damage flash without this class reaching into FriendSlop.UI.
-        public static event Action LocalPlayerDamaged;
-
-        // Raised on the local owner's machine when the local player joins a round mid-flight
-        // (round phase is Active when the player spawns). UI subscribes to show the late-join
-        // loading overlay.
-        public static event Action LocalPlayerJoinedActiveRound;
 
         [Header("References")]
         [SerializeField] private Camera playerCamera;
@@ -187,7 +176,7 @@ namespace FriendSlop.Player
                         other.SyncNameToClientRpc(other._displayName, sendParams);
                 }
 
-                var roundManager = RoundManager.Instance;
+                var roundManager = RoundManagerRegistry.Current;
                 if (roundManager != null)
                     roundManager.ServerPlaceNewPlayer(this);
                 else
@@ -196,13 +185,13 @@ namespace FriendSlop.Player
 
             if (IsOwner)
             {
-                LocalPlayer = this;
+                LocalPlayerRegistry.Register(this);
                 ConfigureLocalPlayer(true);
                 _health.OnValueChanged += OnHealthChanged;
                 var savedName = UnityEngine.PlayerPrefs.GetString("PlayerName", "Player");
                 SetNameServerRpc(savedName);
 
-                var rm = RoundManager.Instance;
+                var rm = RoundManagerRegistry.Current;
                 if (rm != null)
                 {
                     rm.Phase.OnValueChanged += OnRoundPhaseChanged;
@@ -210,7 +199,7 @@ namespace FriendSlop.Player
                     if (rm.Phase.Value == RoundPhase.Loading)
                         StartCoroutine(WaitAndReportReady());
                     else if (rm.Phase.Value == RoundPhase.Active)
-                        LocalPlayerJoinedActiveRound?.Invoke();
+                        LocalPlayerRegistry.NotifyJoinedActiveRound();
                 }
             }
             else
@@ -601,7 +590,7 @@ namespace FriendSlop.Player
                 if (!IsSpawned)
                     yield break;
 
-                var roundManager = RoundManager.Instance;
+                var roundManager = RoundManagerRegistry.Current;
                 if (roundManager != null)
                 {
                     roundManager.ServerPlaceNewPlayer(this);
@@ -707,7 +696,7 @@ namespace FriendSlop.Player
         {
             yield return new WaitForSeconds(1.5f);
             if (!IsSpawned) yield break;
-            var rm = RoundManager.Instance;
+            var rm = RoundManagerRegistry.Current;
             if (rm != null && rm.Phase.Value == RoundPhase.Loading)
                 rm.ReportLoadedServerRpc();
         }

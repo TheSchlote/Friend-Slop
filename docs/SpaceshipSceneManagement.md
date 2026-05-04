@@ -1,15 +1,19 @@
 # Spaceship and Scene Management
 
-## Current Audit (2026-05-02)
+## Current Audit (2026-05-03)
 
-- Build Settings currently enable three scenes: `Assets/Scenes/FriendSlopPrototype.unity`, `Assets/Scenes/Planet_StarterJunk.unity`, and `Assets/Scenes/Planet_RustyMoon.unity`.
-- `Assets/SceneDefinitions/MainGameSceneCatalog.asset` registers only the two dedicated planet scenes: `Planet_StarterJunk_Scene.asset` and `Planet_RustyMoon_Scene.asset`.
+- Build Settings currently enable five scenes: `Assets/Scenes/FriendSlopPrototype.unity`, `Assets/Scenes/ShipInterior.unity`, `Assets/Scenes/Planet_StarterJunk.unity`, `Assets/Scenes/Planet_RustyMoon.unity`, and `Assets/Scenes/Planet_VioletGiant.unity`.
+- `Assets/SceneDefinitions/MainGameSceneCatalog.asset` registers the dedicated ship scene (`ShipInterior_Scene.asset`) plus the three dedicated planet scenes: `Planet_StarterJunk_Scene.asset`, `Planet_RustyMoon_Scene.asset`, and `Planet_VioletGiant_Scene.asset`.
 - `Planet_StarterJunk.unity` contains a `PlanetEnvironment` for `Tier1_StarterJunk.asset` with 4 player spawn points, 14 loot spawn points, 1 monster spawn point, a launchpad reference, a content root, and a `SphereWorld` reference. `Tier1_StarterJunk.asset` has `planetScene` assigned to `Planet_StarterJunk_Scene.asset`.
-- `Planet_RustyMoon.unity` contains a `PlanetEnvironment` for `Tier2_RustyMoon.asset` with 4 player spawn points, a launchpad reference, and a `SphereWorld` reference, but no loot or monster spawn anchors yet. `Tier2_RustyMoon.asset` has `planetScene` assigned to `Planet_RustyMoon_Scene.asset`.
-- `FriendSlopPrototype.unity` still contains nested planet content: a `PlanetEnvironment` named `Tier 3 Planet` for `Tier3_VioletGiant.asset`, with 4 player spawn points, a launchpad reference, and a `SphereWorld` reference. It has no loot or monster spawn anchors.
-- `PrototypeNetworkBootstrapper` in the bootstrap scene still carries the legacy loot-prefab list, but its player, loot, and monster spawn arrays are serialized as null scene references. Runtime spawning therefore depends on the active `PlanetEnvironment` anchors for split scenes.
-- `PlanetDefinition` scene assignment status: populated for `Tier1_StarterJunk.asset` and `Tier2_RustyMoon.asset`; null for `Tier2_DeepHaul.asset` (`Cobalt Trench`), `Tier2_QuickStrike.asset` (`Volt Foundry`), `Tier2_GhostShift.asset` (`Wraith Halo`), and `Tier3_VioletGiant.asset`.
-- Immediate migration implication: Tier 1 is already largely split and should be verified/kept as the baseline. Remaining scene-split work is to finish anchors/content for `Planet_RustyMoon`, decide whether Tier 2 variants share that scene or become unique scenes, and extract the nested Tier 3 `Violet Giant` out of `FriendSlopPrototype`.
+- `Planet_RustyMoon.unity` contains a `PlanetEnvironment` for `Tier2_RustyMoon.asset` with 4 player spawn points, 8 loot spawn anchors exposed on both `PlanetEnvironment` and `PlanetLootSpawner`, 2 monster spawn anchors, a launchpad reference, a return teleporter, and a `SphereWorld` reference. `Tier2_RustyMoon.asset` has `planetScene` assigned to `Planet_RustyMoon_Scene.asset`.
+- `Planet_VioletGiant.unity` now owns the former nested Tier 3 content: a `PlanetEnvironment` for `Tier3_VioletGiant.asset` with 4 player spawn points, 2 monster spawn anchors, a launchpad reference, a return teleporter, and a `SphereWorld` reference. `Tier3_VioletGiant.asset` has `planetScene` assigned to `Planet_VioletGiant_Scene.asset`.
+- `ShipInterior.unity` owns the former bootstrap ship root: `Bigger-On-The-Inside Ship Interior`, its `ShipEnvironment`, ship spawn points, ship stations, flat gravity volume, and the ship-side teleporter targeting the active planet.
+- `FriendSlopPrototype.unity` no longer contains a `PlanetEnvironment` or ship interior root; it owns bootstrap/runtime systems such as `NetworkManager`, `NetworkSessionManager`, `FriendSlopUI`, `NetworkSceneTransitionService`, and `PrototypeNetworkBootstrapper`.
+- `PrototypeNetworkBootstrapper` in the bootstrap scene still carries the legacy loot-prefab list, but its player, ship, loot, and monster spawn arrays are serialized as empty/null scene references. Runtime ship placement discovers `ShipEnvironment` after `ShipInterior` loads, planet spawning prefers active `PlanetEnvironment` anchors for split scenes, and scene-owned `PlanetLootSpawner` instances own their own loot pools.
+- Planet travel cleanup now despawns loot and monsters only from the active planet scene when the active `PlanetEnvironment` is known. If no environment is registered, the old global cleanup behavior remains as the legacy fallback.
+- Runtime code resolves the active round through `RoundManagerRegistry.Current` and the local player through `LocalPlayerRegistry.Current`; the old `RoundManager.Instance` and `NetworkFirstPersonController.LocalPlayer` facades have been removed from runtime code.
+- `PlanetDefinition` scene assignment status: populated for `Tier1_StarterJunk.asset`, `Tier2_RustyMoon.asset`, and `Tier3_VioletGiant.asset`; null for `Tier2_DeepHaul.asset` (`Cobalt Trench`), `Tier2_QuickStrike.asset` (`Volt Foundry`), and `Tier2_GhostShift.asset` (`Wraith Halo`) because those remain Tier 2 mission variants that resolve through the shared Rusty Moon scene owner.
+- Immediate migration implication: all currently authored tier-owner planets and the current ship lobby are scene-owned. Remaining scene-split work is to keep hardening validation/orchestration, keep Tier 2 variant UX explicit, and decide when any variant needs unique scene content.
 
 ## Tier 2 Scene Decision (2026-05-02)
 
@@ -20,12 +24,12 @@
 
 ## Current Vertical Slice
 
-- The prototype still boots through `Assets/Scenes/FriendSlopPrototype.unity`, but Tier 1 and one Tier 2 planet now have dedicated additive scene assets.
-- A generated dev ship interior now exists inside that scene so the lobby is walkable immediately.
+- The prototype still boots through `Assets/Scenes/FriendSlopPrototype.unity`, but the ship lobby and authored planets now have dedicated additive scene assets.
+- The generated dev ship interior now lives in `Assets/Scenes/ShipInterior.unity` and is loaded by the bootstrapper for the network session before the round manager is spawned.
 - `RoundManager` treats `Lobby`, `Success`, `Failed`, and `AllDead` as ship phases, and `Active` as the planet phase.
 - Ship stations are reusable networked interactables so pilot controls, holographic boards, module bays, customization benches, and minigames can grow as separate systems.
 - The first scene-management foundation is in code under `Assets/Scripts/SceneManagement`: scene definitions, a scene catalog, path validation, and a server-only Netcode transition service.
-- The split is incomplete: `FriendSlopPrototype.unity` still owns ship/lobby systems and one nested Tier 3 planet.
+- The split is still transitional: `FriendSlopPrototype.unity` remains the bootstrap scene and still carries legacy planet fallback data, but authored ship and planet content are now outside it.
 
 ## Target Scene Layout
 
@@ -48,7 +52,7 @@
 
 ## Next Implementation Step
 
-- Finish separating `Bootstrap` and `ShipInterior` responsibilities inside or beyond `FriendSlopPrototype`.
-- Complete per-planet anchor/content ownership for `Planet_RustyMoon`.
-- Decide whether Tier 2 catalog entries are variants of `Planet_RustyMoon` or unique scenes.
-- Move remaining nested planet content out of `FriendSlopPrototype` while keeping the same spawn/station contracts.
+- Keep tightening bootstrap responsibilities now that `ShipInterior` is additive: session/UI/orchestration stay in bootstrap, authored ship content stays in `ShipInterior`.
+- Keep planet-scene validation green as more scene-owned content is added.
+- Decide when a Tier 2 variant should graduate from shared `Planet_RustyMoon` ownership into a unique scene.
+- Continue preserving bootstrapper legacy planet fallbacks until they have a dedicated removal pass.

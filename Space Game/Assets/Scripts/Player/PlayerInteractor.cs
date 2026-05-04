@@ -313,7 +313,7 @@ namespace FriendSlop.Player
 
             if (!hasHeldItem && !hasHeldPlayer)
             {
-                var round = RoundManager.Instance;
+                var round = RoundManagerRegistry.Current;
                 if (round != null && round.Phase.Value == RoundPhase.Active)
                 {
                     var target = hit.collider.GetComponentInParent<NetworkFirstPersonController>();

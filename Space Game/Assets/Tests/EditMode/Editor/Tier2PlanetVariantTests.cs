@@ -1,4 +1,3 @@
-using System.Reflection;
 using FriendSlop.Round;
 using NUnit.Framework;
 using UnityEditor;
@@ -39,17 +38,9 @@ namespace FriendSlop.Tests.EditMode
             Assert.IsNotNull(variant.Objective,
                 $"{variant.name} should declare an explicit objective because it shares scene content.");
 
-            var owner = ResolveSceneOwner(variant, catalog);
+            var owner = PlanetSceneOwnership.ResolveSceneOwner(variant, catalog);
             Assert.AreSame(rustyMoon, owner,
                 $"{variant.name} should resolve to Rusty Moon as its scene owner.");
-        }
-
-        private static PlanetDefinition ResolveSceneOwner(PlanetDefinition planet, PlanetCatalog catalog)
-        {
-            var method = typeof(PlanetSceneOrchestrator).GetMethod("ResolveSceneOwner",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            Assert.IsNotNull(method, "PlanetSceneOrchestrator should expose a private scene-owner resolver.");
-            return (PlanetDefinition)method.Invoke(null, new object[] { planet, catalog });
         }
     }
 }

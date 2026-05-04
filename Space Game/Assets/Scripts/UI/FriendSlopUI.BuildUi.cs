@@ -237,7 +237,7 @@ namespace FriendSlop.UI
             cancelButton.gameObject.SetActive(false);
             startButton = CreateButton("Start Round", menuRoot.transform, Vector2.zero, () =>
             {
-                RoundManager.Instance?.RequestStartRoundServerRpc();
+                RoundManagerRegistry.Current?.RequestStartRoundServerRpc();
                 LockGameplayCursor();
             });
             restartButton = CreateButton("Restart Round", menuRoot.transform, Vector2.zero, OnRestartOrTravelClicked);
