@@ -241,14 +241,19 @@ namespace FriendSlop.Loot
             var origin = player.PlayerCamera != null
                 ? player.PlayerCamera.transform.position
                 : player.transform.position + player.transform.up * 1.1f;
-            var target = GetServerPickupTargetPoint();
+            var target = GetServerPickupTargetPoint(origin);
             if ((target - origin).sqrMagnitude > ServerPickupMaxDistance * ServerPickupMaxDistance)
                 return false;
 
             return HasClearPickupLine(player.transform.root, origin, transform.root, target);
         }
 
-        private Vector3 GetServerPickupTargetPoint()
+        // Returns the point on the item closest to the camera. We previously used the bounds
+        // center, but for flat items resting on a curved planet that center sits at (or just
+        // below) the surface — the LOS raycast then hits the planet right before reaching the
+        // destination and silently rejects the pickup. Aiming at the closest surface point of
+        // the bounds keeps the ray endpoint above the ground and the ray itself in air.
+        private Vector3 GetServerPickupTargetPoint(Vector3 origin)
         {
             var hasBounds = false;
             var bounds = default(Bounds);
@@ -270,7 +275,7 @@ namespace FriendSlop.Loot
                 }
             }
 
-            return hasBounds ? bounds.center : transform.position;
+            return hasBounds ? bounds.ClosestPoint(origin) : transform.position;
         }
 
         private static bool HasClearPickupLine(Transform playerRoot, Vector3 origin, Transform itemRoot, Vector3 target)
@@ -580,6 +585,9 @@ namespace FriendSlop.Loot
         private void OnCollisionEnter(Collision collision)
         {
             if (!IsServer || IsCarried.Value || IsDeposited.Value) return;
+
+            TryWakeFromCollision(collision);
+
             if (Time.time < _monsterHitCooldown) return;
             if (body == null || body.linearVelocity.magnitude < 3f) return;
 
