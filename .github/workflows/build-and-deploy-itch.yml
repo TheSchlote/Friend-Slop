@@ -191,7 +191,7 @@ jobs:
           projectPath: ${{ env.UNITY_PROJECT_PATH }}
           unityVersion: ${{ env.UNITY_VERSION }}
           testMode: EditMode
-          testFilter: FriendSlop.Tests.EditMode.PlanetSceneValidatorTests
+          customParameters: -testFilter "FriendSlop.Tests.EditMode.PlanetSceneValidatorTests"
           artifactsPath: scene-validation-results
           githubToken: ${{ secrets.GITHUB_TOKEN }}
 

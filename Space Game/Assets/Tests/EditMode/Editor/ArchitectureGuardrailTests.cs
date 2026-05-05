@@ -15,7 +15,7 @@ namespace FriendSlop.Tests.EditMode
         {
             ["Assets/Scripts/Round/RoundManager.cs"] = 1000,
             ["Assets/Scripts/Player/NetworkFirstPersonController.cs"] = 739,
-            ["Assets/Scripts/Loot/NetworkLootItem.cs"] = 703,
+            ["Assets/Scripts/Loot/NetworkLootItem.cs"] = 620,
             ["Assets/Scripts/Networking/NetworkSessionManager.cs"] = 621,
             ["Assets/Scripts/Player/PlayerInteractor.cs"] = 529,
             ["Assets/Scripts/UI/FriendSlopUI.BuildUi.cs"] = 517,
