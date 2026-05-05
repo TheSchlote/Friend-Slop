@@ -658,6 +658,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1238399258}
   - component: {fileID: 1238399257}
+  - component: {fileID: 1238399260}
   m_Layer: 0
   m_Name: Tier 3 Planet
   m_TagString: Untagged
@@ -1348,6 +1349,30 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1953000002}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1238399260
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1238399256}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 22bb33cc44dd55ee66ff778899001122, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Hazards.MeteorShower
+  meteorPrefab: {fileID: 5500110000000007, guid: 99aa00bb11cc22dd33ee44ff55667788, type: 3}
+  planetEnvironment: {fileID: 1238399257}
+  sphereWorld: {fileID: 1264299493}
+  minSpawnInterval: 0.35
+  maxSpawnInterval: 0.8
+  meteorsPerWave: 5
+  startupDelay: 2
+  spawnAltitude: 42
+  playerTargetingChance: 0.18
+  playerTargetJitterMinRadius: 5
+  playerTargetJitterRadius: 12
+  playerTargetDirectHitChance: 0.05
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

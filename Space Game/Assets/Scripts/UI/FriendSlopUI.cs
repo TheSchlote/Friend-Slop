@@ -22,8 +22,8 @@ namespace FriendSlop.UI
         private const float MaxMenuWidth = 620f;
         private const float MinDisconnectedMenuHeight = 540f;
         private const float MaxDisconnectedMenuHeight = 640f;
-        private const float MinConnectedMenuHeight = 400f;
-        private const float MaxConnectedMenuHeight = 500f;
+        private const float MinConnectedMenuHeight = 480f;
+        private const float MaxConnectedMenuHeight = 580f;
         private const float MinButtonWidth = 300f;
         private const float MaxButtonWidth = 380f;
         private const float MinButtonHeight = 42f;
