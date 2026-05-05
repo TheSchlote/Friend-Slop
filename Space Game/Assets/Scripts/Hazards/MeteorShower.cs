@@ -1,4 +1,5 @@
 using FriendSlop.Core;
+using FriendSlop.Player;
 using FriendSlop.Round;
 using Unity.Netcode;
 using UnityEngine;
@@ -23,6 +24,20 @@ namespace FriendSlop.Hazards
 
         [Header("Spawn Geometry")]
         [SerializeField, Min(1f)] private float spawnAltitude = 38f;
+
+        [Header("Player Targeting")]
+        // Fraction of meteors that aim at or near a random active player's current position.
+        // The remainder spawn at a uniformly random direction. 0 = pure random, 1 = always aim.
+        [SerializeField, Range(0f, 1f)] private float playerTargetingChance = 0.3f;
+        // Inner radius of the jitter ring around a targeted player. Meteors rarely land
+        // closer than this, so a player standing still doesn't get hit dead-on every time.
+        [SerializeField, Min(0f)] private float playerTargetJitterMinRadius = 2f;
+        // Outer radius of the jitter ring. Most player-targeted meteors land somewhere in
+        // the [min, max] annulus around the player, biased outward by area-uniform sampling.
+        [SerializeField, Min(0f)] private float playerTargetJitterRadius = 8f;
+        // Probability that a player-targeted meteor ignores the inner radius and lands
+        // right on top of the player. Keep low - this is the rare "scary" hit.
+        [SerializeField, Range(0f, 1f)] private float playerTargetDirectHitChance = 0.12f;
 
         private float _nextSpawnTime;
         private bool _wasActive;
@@ -96,7 +111,7 @@ namespace FriendSlop.Hazards
             var world = sphereWorld != null ? sphereWorld : SphereWorld.GetClosest(transform.position);
             if (world == null) return;
 
-            var direction = PickSpawnDirection();
+            var direction = PickSpawnDirection(world);
             var spawnPos = world.GetSurfacePoint(direction, spawnAltitude);
 
             var meteor = Instantiate(meteorPrefab, spawnPos, Quaternion.identity);
@@ -111,7 +126,70 @@ namespace FriendSlop.Hazards
             meteor.ServerInitialize();
         }
 
-        private static Vector3 PickSpawnDirection()
+        private Vector3 PickSpawnDirection(SphereWorld world)
+        {
+            // Weighted choice: half the time aim at (or near) a random active player; the
+            // rest of the time pick a uniformly random surface direction.
+            if (Random.value < playerTargetingChance)
+            {
+                if (TryPickPlayerTargetDirection(world, out var targeted))
+                    return targeted;
+            }
+            return RandomUnitDirection();
+        }
+
+        private bool TryPickPlayerTargetDirection(SphereWorld world, out Vector3 direction)
+        {
+            direction = default;
+            var players = NetworkFirstPersonController.ActivePlayers;
+            if (players == null || players.Count == 0) return false;
+
+            // Reservoir-style sampling, skipping nulls/dead/unspawned. Avoids allocating a
+            // filtered list every spawn while still distributing fairly.
+            NetworkFirstPersonController chosen = null;
+            var live = 0;
+            for (var i = 0; i < players.Count; i++)
+            {
+                var p = players[i];
+                if (p == null || !p.IsSpawned || p.IsDead) continue;
+                live++;
+                if (Random.Range(0, live) == 0) chosen = p;
+            }
+            if (chosen == null) return false;
+
+            var center = world.Center;
+            var aim = chosen.transform.position;
+            // Annulus jitter on the surface tangent plane: pick a direction, then a radius
+            // in [min, max] sampled area-uniformly so the spread feels natural rather than
+            // ringed. A small fraction of meteors skip the inner radius and land on top of
+            // the player to keep the targeting threatening.
+            if (playerTargetJitterRadius > 0f)
+            {
+                var up = world.GetUp(aim);
+                var tangent = Vector3.Cross(up, Vector3.right);
+                if (tangent.sqrMagnitude < 0.001f) tangent = Vector3.Cross(up, Vector3.forward);
+                tangent.Normalize();
+                var bitangent = Vector3.Cross(up, tangent).normalized;
+
+                var minR = Random.value < playerTargetDirectHitChance
+                    ? 0f
+                    : Mathf.Min(playerTargetJitterMinRadius, playerTargetJitterRadius);
+                var maxR = Mathf.Max(minR, playerTargetJitterRadius);
+                // Area-uniform radius: sqrt(uniform(minR^2, maxR^2)).
+                var radius = Mathf.Sqrt(Random.Range(minR * minR, maxR * maxR));
+                var angle = Random.Range(0f, Mathf.PI * 2f);
+                var offX = Mathf.Cos(angle) * radius;
+                var offY = Mathf.Sin(angle) * radius;
+                aim += tangent * offX + bitangent * offY;
+            }
+
+            var dir = aim - center;
+            if (dir.sqrMagnitude < 0.001f) return false;
+            direction = dir.normalized;
+            return true;
+        }
+
+        private static Vector3 RandomUnitDirection()
         {
             var dir = Random.onUnitSphere;
             return dir.sqrMagnitude > 0.01f ? dir.normalized : Vector3.up;

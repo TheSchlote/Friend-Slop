@@ -1,4 +1,5 @@
 using FriendSlop.Core;
+using FriendSlop.Effects;
 using FriendSlop.Player;
 using FriendSlop.Round;
 using Unity.Netcode;
@@ -15,14 +16,19 @@ namespace FriendSlop.Hazards
     public class MeteorHazard : NetworkBehaviour
     {
         [Header("Motion")]
-        [SerializeField, Min(1f)] private float fallSpeed = 28f;
+        [SerializeField, Min(1f)] private float fallSpeed = 16f;
         [SerializeField, Min(0f)] private float surfaceImpactOffset = 0.3f;
         // Hard timeout in case a meteor never reaches the surface (e.g. SphereWorld unloaded).
-        [SerializeField, Min(1f)] private float maxLifetime = 12f;
+        [SerializeField, Min(1f)] private float maxLifetime = 18f;
 
         [Header("Impact")]
-        [SerializeField, Min(0f)] private float blastRadius = 4.5f;
-        [SerializeField, Min(0)] private int blastDamage = 60;
+        // Damage AOE - intentionally larger than the visual telegraph below so hugging the
+        // edge of the warning circle isn't a guaranteed safe spot.
+        [SerializeField, Min(0f)] private float blastRadius = 8f;
+        [SerializeField, Min(0)] private int blastDamage = 110;
+        // Visual-only telegraph radius; kept smaller than blastRadius so the warning disc
+        // size stays readable while damage actually reaches further.
+        [SerializeField, Min(0f)] private float telegraphRadius = 4.5f;
 
         [Header("Visuals")]
         [SerializeField] private Color glowColor = new Color(1f, 0.55f, 0.2f, 1f);
@@ -145,15 +151,7 @@ namespace FriendSlop.Hazards
         [ClientRpc]
         private void ImpactClientRpc(Vector3 impactPoint, Vector3 impactNormal)
         {
-            // Lightweight client-side flash. Visual richness can be improved later via VFX
-            // graph or particle system; the AOE damage itself is already authoritative.
-            var go = new GameObject("MeteorImpactFlash");
-            go.transform.position = impactPoint;
-            var light = go.AddComponent<Light>();
-            light.color = glowColor;
-            light.intensity = glowIntensity * 6f;
-            light.range = blastRadius * 3f;
-            Destroy(go, 0.35f);
+            MeteorExplosionEffect.Spawn(impactPoint, impactNormal, blastRadius, glowColor);
         }
 
         private void SetupVisuals()
@@ -212,7 +210,9 @@ namespace FriendSlop.Hazards
             // round face lies flat on the surface and its height axis points outward.
             go.transform.rotation = world.GetSurfaceRotation(up, world.transform.forward);
             // Cylinder primitive: 1m diameter, 2m tall by default. Flatten Y to a thin disc.
-            var diameter = blastRadius * 2f;
+            // Sized off telegraphRadius (visual) rather than blastRadius (damage) so the
+            // disc size doesn't grow when we tune damage falloff distance.
+            var diameter = telegraphRadius * 2f;
             go.transform.localScale = new Vector3(diameter, 0.01f, diameter);
 
             var rend = go.GetComponent<Renderer>();
