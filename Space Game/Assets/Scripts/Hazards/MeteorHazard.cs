@@ -22,12 +22,16 @@ namespace FriendSlop.Hazards
         [SerializeField, Min(1f)] private float maxLifetime = 18f;
 
         [Header("Impact")]
-        // Damage AOE - intentionally larger than the visual telegraph below so hugging the
-        // edge of the warning circle isn't a guaranteed safe spot.
-        [SerializeField, Min(0f)] private float blastRadius = 8f;
-        [SerializeField, Min(0)] private int blastDamage = 110;
-        // Visual-only telegraph radius; kept smaller than blastRadius so the warning disc
-        // size stays readable while damage actually reaches further.
+        // Damage AOE - matches telegraphRadius so the red warning circle reads as a
+        // truthful "this is where the damage lands" indicator.
+        [SerializeField, Min(0f)] private float blastRadius = 4.5f;
+        [SerializeField, Min(0)] private int blastDamage = 70;
+        // Minimum fraction of blastDamage applied to any player inside the AOE, regardless
+        // of distance. Keeps glancing rim hits meaningful instead of letting players hug
+        // the warning circle's edge for trivial damage.
+        private const float MinDamageFloor = 0.4f;
+        // Visual telegraph radius; keep equal to blastRadius unless deliberately tuning
+        // damage to be wider/narrower than the warning disc.
         [SerializeField, Min(0f)] private float telegraphRadius = 4.5f;
 
         [Header("Visuals")]
@@ -134,11 +138,11 @@ namespace FriendSlop.Hazards
                     var distSqr = (player.transform.position - impactPoint).sqrMagnitude;
                     if (distSqr > radiusSqr) continue;
 
-                    // Quadratic falloff so a direct hit at the impact point is near-lethal
-                    // while glancing hits at the rim only chip health. Squaring the linear
-                    // falloff biases damage strongly toward the center of the blast.
+                    // Quadratic falloff biased toward the center, but with a 40% floor so
+                    // any clip on the AOE still hurts. Pure quadratic let rim hits trivialize
+                    // standing in the warning - now the warning circle commits you to real damage.
                     var linear = 1f - Mathf.Sqrt(distSqr) / Mathf.Max(0.01f, blastRadius);
-                    var falloff = Mathf.Clamp01(linear * linear);
+                    var falloff = Mathf.Lerp(MinDamageFloor, 1f, Mathf.Clamp01(linear * linear));
                     var damage = Mathf.Max(1, Mathf.RoundToInt(blastDamage * falloff));
                     player.ServerTakeDamage(damage);
                 }
