@@ -43,6 +43,9 @@ namespace FriendSlop.Round
         public NetworkVariable<int> CurrentTier = new(1);
         public NetworkVariable<int> CurrentPlanetCatalogIndex = new(-1);
         public NetworkVariable<int> SelectedNextPlanetCatalogIndex = new(-1);
+        // Set by survival-style objectives once the survival timer expires, giving players a
+        // grace period to reach the launchpad. Replicated so HUDs can swap to "EXTRACT" copy.
+        public NetworkVariable<bool> IsExtractionWindow = new(false);
 
         // Catalog indexes the host is currently offered as next-planet choices. The server
         // re-rolls this on each Success. When the next tier has more than MaxNextPlanetChoices
@@ -241,6 +244,25 @@ namespace FriendSlop.Round
             ServerAdvanceToNextPlanet();
         }
 
+        // Test-mode entry point: jump to any catalog planet regardless of tier or
+        // progression state. Reuses ServerTransitionToPlanet so scene loading, cleanup,
+        // and the loading screen all match the normal travel flow.
+        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+        public void RequestStartTestRoundServerRpc(int catalogIndex, RpcParams rpcParams = default)
+        {
+            if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
+                return;
+            if (Phase.Value == RoundPhase.Active
+                || Phase.Value == RoundPhase.Loading
+                || Phase.Value == RoundPhase.Transitioning) return;
+
+            var planet = GetCatalogPlanet(catalogIndex);
+            if (planet == null || planetCatalog == null) return;
+
+            if (_transitionCoroutine != null) StopCoroutine(_transitionCoroutine);
+            _transitionCoroutine = StartCoroutine(ServerTransitionToPlanet(planet, catalogIndex));
+        }
+
         public PlanetCatalog Catalog => planetCatalog;
         public int NextTier => Mathf.Min(CurrentTier.Value + 1, PlanetCatalog.MaxTier);
         public bool HasReachedFinalTier => CurrentTier.Value >= PlanetCatalog.MaxTier;
@@ -261,6 +283,17 @@ namespace FriendSlop.Round
             if (!IsServer) return;
             roundLengthSeconds = Mathf.Max(0f, seconds);
             TimeRemaining.Value = roundLengthSeconds;
+        }
+
+        // Called by survival-style objectives when the survival timer expires and a grace
+        // window should run before final resolution. Idempotent: re-entry while the window
+        // is already open is a no-op so Evaluate can safely call this every server tick.
+        public void ServerOpenExtractionGrace(float seconds)
+        {
+            if (!IsServer) return;
+            if (IsExtractionWindow.Value) return;
+            IsExtractionWindow.Value = true;
+            ServerSetTimer(Mathf.Max(0.1f, seconds));
         }
 
         public List<PlanetDefinition> GetNextTierCandidates()
@@ -463,6 +496,7 @@ namespace FriendSlop.Round
             HasWings.Value = false;
             HasEngine.Value = false;
             RocketAssembled.Value = false;
+            IsExtractionWindow.Value = false;
             boardedPlayerIds.Clear();
             PlayersBoarded.Value = 0;
 

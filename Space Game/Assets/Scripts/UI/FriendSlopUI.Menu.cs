@@ -93,13 +93,18 @@ namespace FriendSlop.UI
             var primaryButtonY = showJoinCodePanel ? -96f : -48f;
             var secondaryButtonY = primaryButtonY - buttonHeight - buttonGap;
             var tertiaryButtonY = secondaryButtonY - buttonHeight - buttonGap;
+            var quaternaryButtonY = tertiaryButtonY - buttonHeight - buttonGap;
+            EnsureTestModeBuilt();
             if (isHost && phase == RoundPhase.Lobby)
             {
                 SetPosition(startButton.GetComponent<RectTransform>(), new Vector2(0f, primaryButtonY));
-                SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, secondaryButtonY));
-                SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, tertiaryButtonY));
+                // Test Mode sits directly below Start Round; everything else shifts down a slot.
+                RefreshTestMode(connected, isHost, phase, buttonWidth, buttonHeight, buttonGap, secondaryButtonY);
+                SetPosition(shutdownButton.GetComponent<RectTransform>(), new Vector2(0f, tertiaryButtonY));
+                SetPosition(quitButton.GetComponent<RectTransform>(), new Vector2(0f, quaternaryButtonY));
                 return;
             }
+            RefreshTestMode(connected, isHost, phase, buttonWidth, buttonHeight, buttonGap, secondaryButtonY);
 
             if (isHost && (phase == RoundPhase.Success || phase == RoundPhase.Failed || phase == RoundPhase.AllDead))
             {
