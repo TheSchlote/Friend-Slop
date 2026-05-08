@@ -121,10 +121,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.UNITY_PROJECT_PATH }}/Library
-          key: Library-FriendSlop-${{ runner.os }}-PlayMode-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
+          key: Library-FriendSlop-${{ runner.os }}-PlayMode-v2-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
           restore-keys: |
-            Library-FriendSlop-${{ runner.os }}-PlayMode-
-            Library-FriendSlop-${{ runner.os }}-
+            Library-FriendSlop-${{ runner.os }}-PlayMode-v2-
 
       - name: Run PlayMode smoke tests
         uses: game-ci/unity-test-runner@v4
