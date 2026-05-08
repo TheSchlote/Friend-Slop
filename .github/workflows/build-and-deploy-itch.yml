@@ -139,6 +139,7 @@ jobs:
           artifactsPath: playmode-test-results
           githubToken: ${{ secrets.GITHUB_TOKEN }}
           useHostNetwork: true
+          customParameters: -nographics -norenderthread
 
       - name: Upload PlayMode test results
         if: always()
