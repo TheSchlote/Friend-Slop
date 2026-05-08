@@ -9,7 +9,7 @@ using UnityEngine.InputSystem;
 namespace FriendSlop.Player
 {
     [RequireComponent(typeof(NetworkFirstPersonController))]
-    public class PlayerInteractor : NetworkBehaviour
+    public partial class PlayerInteractor : NetworkBehaviour
     {
         [SerializeField] private float interactDistance = 3.2f;
         [SerializeField] private float interactRadius = 0.35f;
@@ -36,22 +36,6 @@ namespace FriendSlop.Player
         public string CurrentPrompt { get; private set; }
         public float ChargePercent => _isCharging ? Mathf.Clamp01((Time.time - _chargeStartTime) / maxChargeDuration) : 0f;
         public bool IsCharging => _isCharging;
-
-        // Deposit-hold state. Players press F to deposit the active item; for non-objective
-        // items the hold has to last DepositHoldSeconds before the RPC fires. Cancel
-        // conditions: F released, player leaves the zone, item swapped, dropped, or carried.
-        private float _depositHoldStartTime = -1f;
-        private NetworkLootItem _depositHoldItem;
-        public float DepositHoldPercent
-        {
-            get
-            {
-                if (_depositHoldItem == null || _depositHoldItem.DepositHoldSeconds <= 0f) return 0f;
-                if (_depositHoldStartTime < 0f) return 0f;
-                return Mathf.Clamp01((Time.time - _depositHoldStartTime) / _depositHoldItem.DepositHoldSeconds);
-            }
-        }
-        public bool IsDepositHolding => _depositHoldStartTime >= 0f && _depositHoldItem != null;
 
         private void Awake()
         {
@@ -95,70 +79,6 @@ namespace FriendSlop.Player
                 else if (focusedPlayer != null)
                     focusedPlayer.RequestPickupByPlayerServerRpc();
             }
-        }
-
-        private void HandleDepositInput(Keyboard keyboard)
-        {
-            var activeItem = controller.HeldItem;
-            var hasActiveItem = activeItem != null && activeItem.IsHeldBy(OwnerClientId);
-
-            if (!hasActiveItem)
-            {
-                CancelDepositHold();
-                return;
-            }
-
-            // Re-evaluate the surface every frame so walking out of the zone cancels
-            // the hold immediately, no matter the cause (player teleport, zone disable).
-            var surface = ItemDepositSurface.FindFor(controller, activeItem);
-            if (surface == null)
-            {
-                CancelDepositHold();
-                return;
-            }
-
-            // Item swap mid-hold: treat as a new deposit attempt instead of awarding the
-            // old item's progress to the new one.
-            if (_depositHoldItem != null && _depositHoldItem != activeItem)
-                CancelDepositHold();
-
-            var holdSeconds = activeItem.DepositHoldSeconds;
-
-            if (keyboard.fKey.wasPressedThisFrame)
-            {
-                if (holdSeconds <= 0f)
-                {
-                    activeItem.RequestDepositServerRpc();
-                    CancelDepositHold(notifyServer: false);
-                    return;
-                }
-
-                activeItem.BeginDepositHoldServerRpc();
-                _depositHoldStartTime = Time.time;
-                _depositHoldItem = activeItem;
-                return;
-            }
-
-            if (!keyboard.fKey.isPressed)
-            {
-                CancelDepositHold();
-                return;
-            }
-
-            // F is held: tick the timer and fire when complete.
-            if (_depositHoldItem == null) return;
-            if (Time.time - _depositHoldStartTime < holdSeconds) return;
-
-            activeItem.RequestDepositServerRpc();
-            CancelDepositHold(notifyServer: false);
-        }
-
-        private void CancelDepositHold(bool notifyServer = true)
-        {
-            if (notifyServer && _depositHoldItem != null && _depositHoldItem.IsHeldBy(OwnerClientId))
-                _depositHoldItem.CancelDepositHoldServerRpc();
-            _depositHoldStartTime = -1f;
-            _depositHoldItem = null;
         }
 
         private void HandleInventorySlotInput(Keyboard keyboard)
@@ -398,113 +318,6 @@ namespace FriendSlop.Player
 
             prompt = $"Hold F to {label} {item.ItemName} ({holdSeconds:0.#}s)  |  Q drop";
             return true;
-        }
-
-        private void UpdateHeldItemPose(NetworkLootItem heldItem)
-        {
-            var cameraTransform = controller.PlayerCamera.transform;
-            var up = FlatGravityVolume.GetGravityUp(cameraTransform.position);
-            Vector3 targetPosition;
-            Quaternion targetRotation;
-
-            if (heldItem is LaserGun)
-            {
-                // Lower-right gun hold; Euler(90) around X rotates the capsule's Y-axis (long axis)
-                // to point forward, so the barrel faces where the player is looking.
-                targetPosition = cameraTransform.position
-                    + cameraTransform.forward * 1.2f
-                    + cameraTransform.right * 0.3f
-                    - cameraTransform.up * 0.25f;
-                targetRotation = Quaternion.LookRotation(cameraTransform.forward, up)
-                    * Quaternion.Euler(90f, 0f, 0f);
-            }
-            else
-            {
-                var distance = heldItem.CarryDistance;
-                targetPosition = cameraTransform.position + cameraTransform.forward * distance + (-up) * 0.15f;
-                var carriedForward = Vector3.ProjectOnPlane(cameraTransform.forward, up);
-                if (carriedForward.sqrMagnitude < 0.001f)
-                    carriedForward = Vector3.ProjectOnPlane(cameraTransform.up, up);
-                if (carriedForward.sqrMagnitude < 0.001f)
-                    carriedForward = Vector3.ProjectOnPlane(transform.forward, up);
-                if (carriedForward.sqrMagnitude < 0.001f)
-                    carriedForward = Vector3.Cross(up, Vector3.right);
-                if (carriedForward.sqrMagnitude < 0.001f)
-                    carriedForward = Vector3.Cross(up, Vector3.forward);
-                targetRotation = Quaternion.LookRotation(carriedForward.normalized, up);
-            }
-
-            heldItem.PreviewCarriedPose(targetPosition, targetRotation);
-            if (!CarrySyncUtility.ShouldSendPose(
-                    _hasCarrySyncPose,
-                    Time.time,
-                    _nextCarrySyncTime,
-                    _lastCarrySyncPosition,
-                    _lastCarrySyncRotation,
-                    targetPosition,
-                    targetRotation,
-                    carrySyncPositionThreshold,
-                    carrySyncAngleThreshold))
-            {
-                return;
-            }
-
-            heldItem.MoveCarriedServerRpc(targetPosition, targetRotation);
-            MarkCarryPoseSent(targetPosition, targetRotation);
-        }
-
-        private void UpdateHeldPlayerPose()
-        {
-            var cameraTransform = controller.PlayerCamera.transform;
-            var carrierPosition = controller.transform.position;
-            var up = FlatGravityVolume.GetGravityUp(carrierPosition);
-            var forward = Vector3.ProjectOnPlane(cameraTransform.forward, up);
-            if (forward.sqrMagnitude < 0.001f) forward = Vector3.ProjectOnPlane(transform.forward, up);
-            if (forward.sqrMagnitude < 0.001f) forward = Vector3.Cross(up, Vector3.right);
-            if (forward.sqrMagnitude > 0.001f) forward.Normalize();
-
-            // Park the held player in front of the carrier, lifted to ~3/4 of the carrier's
-            // current body height so they hover at chest/shoulder height instead of being
-            // dragged through the surface. Using CurrentBodyHeight lets crouching lower them
-            // proportionally too.
-            var carrierHeight = Mathf.Max(0.5f, controller.CurrentBodyHeight);
-            var liftOffset = up * (carrierHeight * 0.75f);
-            var targetPosition = carrierPosition + forward * carryPlayerDistance + liftOffset;
-
-            // Match the carrier's facing so the held player keeps the same relative pose as
-            // the carrier turns. We deliberately do NOT snap to the planet surface anymore -
-            // the held player is in the air, so a surface snap would just re-introduce drift.
-            var targetRotation = Quaternion.LookRotation(forward, up);
-            if (!CarrySyncUtility.ShouldSendPose(
-                    _hasCarrySyncPose,
-                    Time.time,
-                    _nextCarrySyncTime,
-                    _lastCarrySyncPosition,
-                    _lastCarrySyncRotation,
-                    targetPosition,
-                    targetRotation,
-                    carrySyncPositionThreshold,
-                    carrySyncAngleThreshold))
-            {
-                return;
-            }
-
-            controller.MoveHeldPlayerServerRpc(targetPosition, targetRotation);
-            MarkCarryPoseSent(targetPosition, targetRotation);
-        }
-
-        private void ResetCarrySync()
-        {
-            _hasCarrySyncPose = false;
-            _nextCarrySyncTime = 0f;
-        }
-
-        private void MarkCarryPoseSent(Vector3 targetPosition, Quaternion targetRotation)
-        {
-            _lastCarrySyncPosition = targetPosition;
-            _lastCarrySyncRotation = targetRotation;
-            _hasCarrySyncPose = true;
-            _nextCarrySyncTime = Time.time + Mathf.Max(0.01f, carrySyncInterval);
         }
 
         private static IFriendSlopInteractable FindInteractable(Collider hitCollider)

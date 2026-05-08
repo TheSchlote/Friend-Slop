@@ -15,6 +15,24 @@ namespace FriendSlop.Round
 
         public int Count => planets != null ? planets.Count : 0;
 
+        public int HighestAuthoredTier
+        {
+            get
+            {
+                var highest = MinTier;
+                if (planets == null) return highest;
+
+                for (var i = 0; i < planets.Count; i++)
+                {
+                    var planet = planets[i];
+                    if (planet != null && planet.Tier > highest)
+                        highest = planet.Tier;
+                }
+
+                return Mathf.Clamp(highest, MinTier, MaxTier);
+            }
+        }
+
         public List<PlanetDefinition> GetPlanetsForTier(int tier)
         {
             var list = new List<PlanetDefinition>();

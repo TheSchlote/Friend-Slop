@@ -28,6 +28,20 @@ namespace FriendSlop.Tests.EditMode
             AssertVariantUsesSharedScene(catalog, rustyMoon, GhostShiftPath);
         }
 
+        [Test]
+        public void Tier2Variants_DisplayAsMissionsOnSharedWorld()
+        {
+            var catalog = AssetDatabase.LoadAssetAtPath<PlanetCatalog>(CatalogPath);
+            var rustyMoon = AssetDatabase.LoadAssetAtPath<PlanetDefinition>(RustyMoonPath);
+            var deepHaul = AssetDatabase.LoadAssetAtPath<PlanetDefinition>(DeepHaulPath);
+
+            var variantLabel = PlanetDisplayUtility.FormatPlanetLabel(deepHaul, catalog);
+            var ownerLabel = PlanetDisplayUtility.FormatPlanetLabel(rustyMoon, catalog);
+
+            StringAssert.Contains("mission on Rusty Moon", variantLabel);
+            StringAssert.DoesNotContain("mission", ownerLabel);
+        }
+
         private static void AssertVariantUsesSharedScene(PlanetCatalog catalog, PlanetDefinition rustyMoon, string assetPath)
         {
             var variant = AssetDatabase.LoadAssetAtPath<PlanetDefinition>(assetPath);

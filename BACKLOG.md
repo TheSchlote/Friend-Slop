@@ -8,6 +8,8 @@ Authored planets have moved into additively loaded planet scenes, but lifecycle 
 
 Status 2026-05-03: Starter Junk, Rusty Moon, and Violet Giant are now scene-owned. Rusty Moon exposes loot and monster anchors through `PlanetEnvironment`, Violet Giant has moved out of `FriendSlopPrototype.unity`, and validation now rejects scene-owned `PlanetEnvironment`s left nested in the bootstrap scene. `ShipInterior.unity` now owns the ship lobby root, ship stations, ship teleporter, and ship spawn points through `ShipEnvironment`; `FriendSlopPrototype.unity` stays focused on bootstrap/runtime systems. Planet travel cleanup is scoped to the active planet scene when a `PlanetEnvironment` is registered, with the legacy global cleanup path retained for fallback planets. Current-round and local-player lookup now flow through explicit registries instead of production code calling `RoundManager.Instance` or `NetworkFirstPersonController.LocalPlayer`. Keep the bootstrapper legacy planet fallback fields until they get a dedicated removal pass.
 
+Status 2026-05-08: PlayMode smoke now covers the host-side ship lobby -> active planet -> success return-to-ship flow. The true multi-client version of this transition test is still pending.
+
 Key files:
 - `Space Game/Assets/Scripts/Round/RoundManager.cs`
 - `Space Game/Assets/Scripts/Round/RoundManagerRegistry.cs`
@@ -36,6 +38,8 @@ Grooming questions:
 ## 3. Progression ending and loop rules
 
 `PlanetCatalog.MaxTier` supports up to tier 10, but authored content currently reaches tier 3. Define the win state, run loop, replay behavior, and whether final-tier success ends the expedition or keeps cycling.
+
+Status 2026-05-08: runtime final-tier detection now uses the highest authored tier in the active `PlanetCatalog`, not the placeholder `PlanetCatalog.MaxTier`. Current catalog content therefore ends at tier 3. Final-tier success records a completed expedition, shows expedition-complete UI copy, and the host action returns the session to the tier-1 ship lobby instead of replaying the final planet.
 
 Key files:
 - `Space Game/Assets/Scripts/Round/PlanetCatalog.cs`
@@ -206,6 +210,8 @@ These runtime files sit at the `ArchitectureGuardrailTests` baseline ceiling, me
 - `Assets/Scripts/UI/FriendSlopUI.BuildUi.cs` (517/517) — split per built section (HUD/menu/chat/etc).
 - `Assets/Scripts/Player/NetworkFirstPersonController.cs` (728/739) — only 11 lines from baseline; movement/look/crouch logic is the next obvious extraction.
 
+Status 2026-05-08: `NetworkLootItem.cs`, `PlayerInteractor.cs`, `FriendSlopUI.BuildUi.cs`, `NetworkFirstPersonController.cs`, and `NetworkSessionManager.cs` have been carved below the default line limit and removed from the oversized baseline.
+
 After each split: drop the file's entry from `ExistingOversizedRuntimeFiles` in `ArchitectureGuardrailTests.cs` if the main file lands under 400.
 
 ### 15b. Further `RoundManager` carving
@@ -217,9 +223,13 @@ Currently 800/1000 baseline after codex's PlanetSceneOrchestrator + `.PlanetEnvi
 
 Goal: bring main `RoundManager.cs` under 400 so its baseline can be removed.
 
+Status 2026-05-08: `RoundManager.cs` is below the default line limit after carving progression/travel, boarding, and player-placement responsibilities into partials. Its oversized baseline entry has been removed.
+
 ### 15c. Asmdef split — D-006
 
 Per [docs/architecture.md](docs/architecture.md) decision D-006: split `FriendSlop.Runtime` into `Core ← Networking ← Gameplay ← UI`. The architecture doc explicitly calls this a "single focused PR." Cheapest first step: carve `FriendSlop.Core` out (pure data: `SphereWorld`, `RoundStateUtility`, `JoinCodeUtility`, `CarrySyncUtility`, `RoundPhase`, `ShipPartType`) so tests can reference Core without pulling Netcode.
+
+Status 2026-05-06: the first `FriendSlop.Core` foundation assembly exists and owns the D-006 utility types. Remaining work: split the rest of `FriendSlop.Runtime` into Networking and Gameplay assemblies, then tighten assembly references around the final dependency graph.
 
 ### 15d. `RoundManager.Instance` migration
 
@@ -233,6 +243,8 @@ Track removal progress by counting `RoundManager.Instance` references in the cod
 ### 15e. `FriendSlopUI` polling rewrite
 
 `RefreshUi()` runs a full layout diff every Update. Pair with the prefab move tracked in section 11: drive each widget from `NetworkVariable.OnValueChanged` instead of polling, so the health bar only updates when health changes (not 60×/sec).
+
+Status 2026-05-08: first cleanup slice done. `FriendSlopUI` state/constants moved into `FriendSlopUI.State.cs`, bringing the root coordinator under the default file-size limit and removing its oversized baseline exception. The first polling rewrite slice is also in place: full menu/layout refreshes are dirty/timed and driven by round `NetworkVariable` changes, while loading progress and live HUD widgets stay on a lightweight per-frame path. Remaining work: convert individual HUD widgets such as health/stamina to direct player-state events instead of per-frame reads.
 
 ### 15f. Test-coverage backfill
 
