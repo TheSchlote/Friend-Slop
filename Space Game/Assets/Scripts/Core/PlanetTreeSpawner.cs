@@ -20,6 +20,13 @@ namespace FriendSlop.Core
         [SerializeField] private float spawnAreaExclusionDeg = 18f;
         [SerializeField] private float trunkSinkDepth = 0.08f;
 
+        // Per-planet authoring: trees take fixed colors. Previously these were
+        // derived from PlanetColorRandomizer's session-rolled gradient; that system
+        // is gone, so trunk/leaf colors are explicit fields and the planet's actual
+        // surface color is owned by IcebergPlanetTint or PlanetTerrainGenerator.
+        [SerializeField] private Color trunkColor = new(0.28f, 0.16f, 0.05f);
+        [SerializeField] private Color leafColor = new(0.18f, 0.52f, 0.12f);
+
         // Synced seed — server writes a new non-zero value each Active round,
         // 0 means no trees. All clients (including late joiners) derive identical
         // placements from it.
@@ -29,7 +36,6 @@ namespace FriendSlop.Core
             NetworkVariableWritePermission.Server);
 
         private SphereWorld _world;
-        private PlanetColorRandomizer _colorizer;
         private readonly List<GameObject> _trees = new();
         private readonly List<Material> _treeMaterials = new();
         private bool _subscribed;
@@ -39,7 +45,6 @@ namespace FriendSlop.Core
         public override void OnNetworkSpawn()
         {
             _world = GetComponent<SphereWorld>();
-            _colorizer = GetComponent<PlanetColorRandomizer>();
 
             _seed.OnValueChanged += OnSeedChanged;
 
@@ -124,7 +129,6 @@ namespace FriendSlop.Core
             Random.InitState(seed);
 
             var exclusions = BuildExclusionList();
-            ResolveColors(out var trunkColor, out var leafColor);
             var trunkMat = MakeOpaqueMat(trunkColor);
             var leafMat  = MakeOpaqueMat(leafColor);
             _treeMaterials.Add(trunkMat);
@@ -287,32 +291,7 @@ namespace FriendSlop.Core
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
         }
 
-        // --- Material / color helpers ---
-
-        private void ResolveColors(out Color trunkColor, out Color leafColor)
-        {
-            if (_colorizer == null)
-            {
-                trunkColor = new Color(0.28f, 0.16f, 0.05f);
-                leafColor  = new Color(0.18f, 0.52f, 0.12f);
-                return;
-            }
-
-            var south = _colorizer.SouthColor;
-            var north = _colorizer.NorthColor;
-
-            Color.RGBToHSV(south, out _, out _, out var vS);
-            Color.RGBToHSV(north, out _, out _, out var vN);
-
-            var darker  = vS <= vN ? south : north;
-            var lighter = vS <= vN ? north : south;
-
-            Color.RGBToHSV(darker,  out var hD, out var sD, out var vD);
-            trunkColor = Color.HSVToRGB(hD, Mathf.Clamp01(sD * 0.65f), Mathf.Clamp01(vD * 0.55f));
-
-            Color.RGBToHSV(lighter, out var hL, out var sL, out var vL);
-            leafColor = Color.HSVToRGB(hL, Mathf.Clamp01(sL * 0.9f), Mathf.Clamp01(vL * 1.15f));
-        }
+        // --- Material helpers ---
 
         private static Material MakeOpaqueMat(Color color)
         {

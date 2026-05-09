@@ -44,6 +44,15 @@ namespace FriendSlop.Hazards
         {
             if (anomalyPrefabs.Length == 0) return;
 
+            // Per-planet opt-out: PlanetDefinition.SuppressAnomalies is the data-driven
+            // gate for "no anomalies on this planet" - test sandboxes and any future
+            // cozy/cinematic planets flip it on and the global spawner skips them. Per-
+            // scene AnomalySpawner instances (Ice Planet's IceMine spawner, etc.) are
+            // separate components and ignore this check.
+            var round = RoundManagerRegistry.Current;
+            var activePlanet = round != null ? round.CurrentPlanet : null;
+            if (activePlanet != null && activePlanet.SuppressAnomalies) return;
+
             var liveCount = 0;
             foreach (var active in _activeOrbs)
             {

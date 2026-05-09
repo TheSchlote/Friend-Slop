@@ -25,6 +25,7 @@ namespace FriendSlop.Editor
         private const string QuickStrikeScenePath = "Assets/Scenes/Planet_QuickStrike.unity";
         private const string VioletGiantScenePath = "Assets/Scenes/Planet_VioletGiant.unity";
         private const string IcePlanetScenePath = "Assets/Scenes/Planet_IcePlanet.unity";
+        private const string HillsAndValleysScenePath = "Assets/Scenes/Planet_HillsAndValleys.unity";
         private const string SceneCatalogPath = "Assets/SceneDefinitions/MainGameSceneCatalog.asset";
         private const string ShipInteriorSceneDefinitionPath = "Assets/SceneDefinitions/ShipInterior_Scene.asset";
         private const string VioletGiantSceneDefinitionPath = "Assets/SceneDefinitions/Planet_VioletGiant_Scene.asset";
@@ -61,6 +62,7 @@ namespace FriendSlop.Editor
             RepairPlanetScene(QuickStrikeScenePath, null);
             RepairPlanetScene(VioletGiantScenePath, null);
             RepairPlanetScene(IcePlanetScenePath, null);
+            RepairPlanetScene(HillsAndValleysScenePath, null);
             AssetDatabase.SaveAssets();
         }
 
