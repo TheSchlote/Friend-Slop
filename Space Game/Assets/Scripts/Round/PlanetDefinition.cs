@@ -27,6 +27,21 @@ namespace FriendSlop.Round
         [Header("Scene (optional - per-planet scene asset)")]
         [SerializeField] private GameSceneDefinition planetScene;
 
+        // When true, this planet is hidden from the normal tier-progression menus and is
+        // only reachable via the host's Test Mode picker. Pair with flatTestWorld for the
+        // built-in flat sandbox; the flag is also the hook for any future test-only planets
+        // (asset bundles, smoke tests, etc.).
+        [Header("Test Mode")]
+        [SerializeField] private bool testModeOnly;
+        // When true, RoundManager builds the planet's environment procedurally at runtime
+        // (flat ground, launchpad, ship-return teleporter, four spawns). No scene file or
+        // nested GameObjects required - the env exists only while the planet is selected.
+        [SerializeField] private bool flatTestWorld;
+        // Optional showcase the flat test world spawns next to the launchpad - one
+        // display-only instance of each prefab so authors can eyeball every loot item,
+        // hazard, and anomaly model in one place. Ignored on non-flat-test-world planets.
+        [SerializeField] private TestWorldDisplaySet displaySet;
+
         public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
         public string Description => description;
         public int Tier => Mathf.Clamp(tier, 1, PlanetCatalog.MaxTier);
@@ -37,5 +52,10 @@ namespace FriendSlop.Round
         public RoundObjective Objective => objective;
         public GameSceneDefinition PlanetScene => planetScene;
         public bool HasPlanetScene => planetScene != null && planetScene.IsConfigured;
+        // FlatTestWorld implies TestModeOnly; the explicit flag covers test-only planets
+        // that aren't the procedural flat world.
+        public bool IsTestModeOnly => testModeOnly || flatTestWorld;
+        public bool IsFlatTestWorld => flatTestWorld;
+        public TestWorldDisplaySet DisplaySet => displaySet;
     }
 }

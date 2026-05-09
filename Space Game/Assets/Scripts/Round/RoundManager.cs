@@ -87,6 +87,10 @@ namespace FriendSlop.Round
             EnsurePlanetSceneOrchestrator();
             // NetworkList must exist before OnNetworkSpawn so the server's first writes replicate.
             NextPlanetChoiceIndices = new NetworkList<int>();
+            // Build runtime envs for catalog planets that have no scene file (flat test
+            // world etc.). Must happen before the first ApplyActivePlanetEnvironment so the
+            // env is in AllEnvironments when the host opens Test Mode.
+            EnsureFlatTestWorldEnvironments();
         }
 
         public override void OnDestroy()
@@ -425,8 +429,8 @@ namespace FriendSlop.Round
             // registered. Otherwise the round can become active while players are still
             // on the ship and the compass has no launchpad target.
             // Same fallback as ApplyActivePlanetEnvironment: accept an exact match OR
-            // any same-tier env, so catalog entries without their own scene (DeepHaul,
-            // GhostShift, etc.) succeed once the fallback scene's env registers.
+            // any same-tier env, so catalog entries without their own scene still
+            // succeed once a same-tier scene's env registers.
             const float maxEnvWaitSeconds = PlanetSceneOrchestrator.SceneEventRetrySeconds + 8f;
             var envWaitStart = Time.time;
             while (PlanetSceneOwnership.FindRoundReadyEnvironment(next) == null

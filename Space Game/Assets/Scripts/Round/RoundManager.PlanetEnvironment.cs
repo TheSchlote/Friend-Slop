@@ -13,9 +13,8 @@ namespace FriendSlop.Round
         {
             // A planet scene that just additively loaded brings its env with it. Two
             // cases trigger a re-bind: the registered env is the active planet's env,
-            // or it's a same-tier env that the active planet falls back to (catalog
-            // entries without their own dedicated environment, like DeepHaul borrowing
-            // Rusty Moon's scene).
+            // or it's a same-tier env that the active planet falls back to when a
+            // catalog entry has no dedicated scene of its own.
             if (env == null || env.Planet == null) return;
             var current = CurrentPlanet;
             if (current == null) return;

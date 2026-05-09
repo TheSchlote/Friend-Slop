@@ -9,10 +9,24 @@ namespace FriendSlop.Core
 
         [SerializeField] private float radius = 18f;
         [SerializeField] private float gravityAcceleration = 18f;
+        // Linear deceleration (units/sec) applied to a player's tangential velocity once
+        // they release input. 0 = snap-stop (default; how every planet behaved before ice
+        // was introduced). Higher = longer slide before they come to rest. Read by the
+        // player controller when grounded on this world; non-player physics ignore it.
+        [SerializeField] private float surfaceSlideDecel;
 
         public float Radius => radius;
         public float GravityAcceleration => gravityAcceleration;
+        public float SurfaceSlideDecel => Mathf.Max(0f, surfaceSlideDecel);
         public Vector3 Center => transform.position;
+
+        // Runtime configuration hooks for procedurally-built sphere worlds (e.g. the flat
+        // test world). Editor builders go through SerializedObject so they can persist
+        // values into prefabs/scenes; runtime callers don't need persistence and can mutate
+        // the fields directly.
+        public void SetRadius(float value) => radius = Mathf.Max(0.01f, value);
+        public void SetGravityAcceleration(float value) => gravityAcceleration = Mathf.Max(0f, value);
+        public void SetSurfaceSlideDecel(float value) => surfaceSlideDecel = Mathf.Max(0f, value);
 
         private void OnEnable()
         {

@@ -65,6 +65,10 @@ namespace FriendSlop.Player
         private bool lastWantsJump;
         private bool lastWantsSprint;
         private bool lastBlockedGameplayInput;
+        // World-space tangential velocity carried frame-to-frame on slippery surfaces so
+        // the player coasts after releasing input. Always Vector3.zero on non-slippery
+        // worlds (SphereWorld.SurfaceSlideDecel == 0), preserving the original snap-stop.
+        private Vector3 _slipCoastVelocity;
 
 
         public NetworkVariable<bool> IsCrouching = new(
@@ -390,7 +394,10 @@ namespace FriendSlop.Player
             var isSprinting = wantsSprintInput && isMoving && !staminaExhausted && currentStamina > 0f;
             UpdateStamina(isSprinting);
             IsSprinting = isSprinting;
-            var speed = (isSprinting ? sprintSpeed : walkSpeed) * carryingMultiplier * crouchMultiplier;
+            // Decrement the ice-mine slow before reading the multiplier so a slow that
+            // expires mid-frame doesn't clamp speed for one extra tick.
+            TickIceSlow(Time.deltaTime);
+            var speed = (isSprinting ? sprintSpeed : walkSpeed) * carryingMultiplier * crouchMultiplier * IceSlowSpeedMultiplier;
             lastMoveInput = input;
             lastSphereGrounded = isGrounded;
             lastWantsJump = wantsJump;
@@ -411,6 +418,31 @@ namespace FriendSlop.Player
             else
             {
                 radialSpeed = Mathf.Max(radialSpeed - gravity * Time.deltaTime, -terminalFallSpeed);
+            }
+
+            // Slippery surface coast: Ice Planet sets SphereWorld.SurfaceSlideDecel > 0 so
+            // releasing input doesn't snap the player to a stop. We capture the tangential
+            // move while input is held, then linearly decelerate it to zero in air-free
+            // frames. Non-icy planets keep decel=0 and the original snap-stop, so this
+            // branch is a no-op everywhere except on dedicated slippery worlds. Only
+            // affects the player; loot/monster physics ignore it.
+            var slideDecel = world != null ? world.SurfaceSlideDecel : 0f;
+            var canSlide = slideDecel > 0f && isGrounded && _stunTimer <= 0f;
+            if (!canSlide)
+            {
+                _slipCoastVelocity = Vector3.zero;
+            }
+            else if (isMoving)
+            {
+                _slipCoastVelocity = move;
+            }
+            else if (_slipCoastVelocity.sqrMagnitude > 0.0001f)
+            {
+                _slipCoastVelocity = Vector3.MoveTowards(_slipCoastVelocity, Vector3.zero, slideDecel * Time.deltaTime);
+                // Re-project so the coast follows the curvature as the player drifts
+                // around the sphere instead of pointing into space.
+                _slipCoastVelocity = Vector3.ProjectOnPlane(_slipCoastVelocity, up);
+                move = _slipCoastVelocity;
             }
 
             characterController.Move((move + up * radialSpeed + knockbackVelocity) * Time.deltaTime);
@@ -614,6 +646,11 @@ namespace FriendSlop.Player
 
             radialSpeed = 0f;
             knockbackVelocity = Vector3.zero;
+            _slipCoastVelocity = Vector3.zero;
+            // Death/respawn/planet-hop should clear ongoing status effects so a slow you
+            // picked up on Ice Planet doesn't follow you back to the ship.
+            _iceSlowTimer = 0f;
+            _iceSlowFactor = 1f;
         }
 
         private static Vector3 GetSurfaceSafeTeleportPosition(Vector3 position)

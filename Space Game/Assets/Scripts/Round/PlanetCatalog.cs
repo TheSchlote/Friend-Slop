@@ -15,6 +15,9 @@ namespace FriendSlop.Round
 
         public int Count => planets != null ? planets.Count : 0;
 
+        // Tier lookups deliberately exclude test-mode-only planets so normal progression
+        // never offers them. Test Mode reaches those planets via GetByIndex / AllPlanets,
+        // which is unfiltered.
         public List<PlanetDefinition> GetPlanetsForTier(int tier)
         {
             var list = new List<PlanetDefinition>();
@@ -22,7 +25,7 @@ namespace FriendSlop.Round
             for (var i = 0; i < planets.Count; i++)
             {
                 var planet = planets[i];
-                if (planet != null && planet.Tier == tier)
+                if (planet != null && planet.Tier == tier && !planet.IsTestModeOnly)
                     list.Add(planet);
             }
             return list;
@@ -34,7 +37,7 @@ namespace FriendSlop.Round
             for (var i = 0; i < planets.Count; i++)
             {
                 var planet = planets[i];
-                if (planet != null && planet.Tier == tier)
+                if (planet != null && planet.Tier == tier && !planet.IsTestModeOnly)
                     return planet;
             }
             return null;

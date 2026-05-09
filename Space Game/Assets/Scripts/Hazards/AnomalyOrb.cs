@@ -27,6 +27,12 @@ namespace FriendSlop.Hazards
         [SerializeField] private int healAmount = 50;
         [SerializeField] private bool stunOnContact = false;
         [SerializeField] private float stunDuration = 2f;
+        // Ice-style slow: on contact, the player moves slower and sees an icy screen
+        // overlay for slowDuration seconds. slowFactor is the *retained* fraction of
+        // base speed (0.7 = 30% slower). Used by the Ice Planet's IceMine anomaly.
+        [SerializeField] private bool slowOnContact = false;
+        [SerializeField] private float slowDuration = 7f;
+        [SerializeField, Range(0.05f, 1f)] private float slowFactor = 0.7f;
 
         [Header("Hover")]
         [SerializeField] private float hoverHeight = 1f;
@@ -200,6 +206,7 @@ namespace FriendSlop.Hazards
                     if (healOnContact)   contacted.ServerHeal(healAmount);
                     if (damageOnContact) contacted.ServerTakeDamage(contactDamage);
                     if (stunOnContact)   contacted.StunClientRpc(stunDuration, Vector3.zero);
+                    if (slowOnContact)   contacted.ApplyIceSlowClientRpc(slowDuration, slowFactor);
                     NetworkObject.Despawn();
                     return;
                 }
