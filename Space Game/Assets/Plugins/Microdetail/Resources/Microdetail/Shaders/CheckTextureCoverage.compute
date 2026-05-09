@@ -1,0 +1,23 @@
+#pragma kernel CSMain
+
+struct TextureCheckResult
+{
+    int FilledCoverage;
+    int FilledTint;
+};
+
+Texture2D<float4> CoverageTarget;
+Texture2D<float4> TintTarget;
+RWStructuredBuffer<TextureCheckResult> Result;
+
+[numthreads(8, 8, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    float4 currentCoverage = CoverageTarget.Load(int3(id.xy, 0));
+    if (currentCoverage.r > 0.01f)
+        InterlockedAdd(Result[0].FilledCoverage, 1);
+
+    float4 currentTint = TintTarget.Load(int3(id.xy, 0));
+    if (distance(currentTint, 1.0f) > 0.001f)
+        InterlockedAdd(Result[0].FilledTint, 1);
+}

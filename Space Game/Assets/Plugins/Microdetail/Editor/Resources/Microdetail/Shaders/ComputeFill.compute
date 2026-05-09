@@ -1,0 +1,85 @@
+#pragma kernel ComputeFill
+
+#include "../../../../Resources/Microdetail/Shaders/Common.cginc"
+
+Texture3D<float> SDF;
+float3 SDFSize;
+RWTexture3D<float> SDFResult;
+SamplerState LinearClampSampler;
+
+bool Raymarch(float3 origin, float3 direction)
+{
+    float3 position = origin;
+    float3 normalizedDirection = normalize(direction);
+
+    for (int index = 0; index < 128; index++)
+    {
+        float distance = SDF.SampleLevel(LinearClampSampler, position / SDFSize, 0).r * FIXED_POINT_DECODE_SCALER ;
+        if (distance < 1.0f)
+            return true;
+
+        position += normalizedDirection * distance;
+        if (any(position < 0.0f) || any(position > SDFSize))
+            return false;
+    }
+
+    return false;
+}
+
+#define RAYS_COUNT 8
+
+float3 hash33(float3 p)
+{
+    p = frac(p * float3(0.1031f, 0.21f, 0.512f));
+    p *= dot(p, p.yzx + 33.33f);
+    return frac((p.xxy + p.yzz) * p.zyx);
+}
+
+float Sample(float3 uv)
+{
+    float this = SDF.SampleLevel(LinearClampSampler, uv.xyz / SDFSize, 0);
+    if (this * FIXED_POINT_DECODE_SCALER < 0.25f)
+        return this;
+    
+    float hitsCount = 0.0f;
+    for (uint i = 0; i < RAYS_COUNT; i++)
+    {
+        float3 direction = hash33(uv + i * float3(1.23441f, 1.1123f, 1.00231f)) - 0.5f;
+        if (length(direction) < 0.01f)
+            continue;
+        
+        direction = normalize(direction);
+        
+        if (!Raymarch(uv.xyz, direction))
+            continue;
+
+        hitsCount++;
+    }
+
+    if (RAYS_COUNT == 0)
+        return this;
+    
+    return (hitsCount / RAYS_COUNT) > 0.99f ? 0 : this;
+}
+
+[numthreads(8, 8, 8)]
+void ComputeFill(uint3 id : SV_DispatchThreadID)
+{
+    float stepsCount = 3.0f;
+    float step = 1.0f / stepsCount;
+    float halfStep = step * 0.5f;
+
+    float total = 0.0f;
+    for (float x = halfStep; x < 1.0f; x += step)
+    {
+        for (float y = halfStep; y < 1.0f; y += step)
+        {
+            for (float z = halfStep; z < 1.0f; z += step)
+            {
+                total += Sample(id.xyz + float3(x, y, z));
+            }
+        }
+    }
+    
+    SDFResult[id.xyz] = (total / pow(stepsCount, 3));
+}

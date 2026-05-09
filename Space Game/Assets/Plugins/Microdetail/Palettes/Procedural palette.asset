@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-3357750613693708275
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Grass
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: ffd4310d015990140ab8c924687ad6b5, type: 2}
+    seed:
+      x: 0
+      y: 0
+    samplesPerUnitArea: 2048
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39c841f137f682a4ab1aaa3aa0550a46, type: 3}
+  m_Name: Procedural palette
+  m_EditorClassIdentifier: 
+  selectedIndex: 1
+  layers:
+  - {fileID: -3357750613693708275}
+  - {fileID: 5499723736659037589}
+--- !u!114 &5499723736659037589
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Moss
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 1563bb0b04a2ef54896d2e67078847b7, type: 2}
+    seed:
+      x: -827.7352
+      y: -930.11755
+    samplesPerUnitArea: 128

@@ -317,6 +317,7 @@ GameObject:
   - component: {fileID: 406929880}
   - component: {fileID: 406929881}
   - component: {fileID: 406929882}
+  - component: {fileID: 406929883}
   m_Layer: 0
   m_Name: Tier 4 Planet Sphere
   m_TagString: Untagged
@@ -489,6 +490,14 @@ MonoBehaviour:
   triplanarTileScale: 0.25
   detailStrength: 0.5
   terrainAmbientBoost: 0.25
+  rockColorBlend: 0
+  dirtColorBlend: 1
+  grassColorBlend: 1
+  peakColorBlend: 0
+  rockColorTexture: {fileID: 0}
+  dirtColorTexture: {fileID: 2800000, guid: c7b7c30782c0a604b89fc7be4afd420f, type: 3}
+  grassColorTexture: {fileID: 2800000, guid: 8d6b5e1d88f760d40a266351aa17a9cd, type: 3}
+  peakColorTexture: {fileID: 0}
   minPoolCount: 6
   maxPoolCount: 10
   poolCandidateSamples: 256
@@ -554,6 +563,40 @@ MonoBehaviour:
   planetEnvironment: {fileID: 901141230}
   rocksParent: {fileID: 0}
   rocksParentName: Rocks
+--- !u!114 &406929883
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 406929873}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f9a0b1c2d345678901234abcdef1f315, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Round.PlanetTreeScatterer
+  targetTreeCount: 120
+  candidateSamples: 800
+  rockBandWeight: 0
+  dirtBandWeight: 0.2
+  grassBandWeight: 1
+  peakBandWeight: 0
+  minTrunkHeight: 1
+  maxTrunkHeight: 2.4
+  minTrunkRadius: 0.07
+  maxTrunkRadius: 0.16
+  minCanopyRadius: 0.65
+  maxCanopyRadius: 1.55
+  trunkSinkDepth: 0.08
+  trunkColor: {r: 0.28, g: 0.16, b: 0.05, a: 1}
+  canopyColor: {r: 0.18, g: 0.52, b: 0.12, a: 1}
+  minSpacingDeg: 1.5
+  launchpadExclusionDeg: 22
+  sphereWorld: {fileID: 406929875}
+  terrain: {fileID: 406929881}
+  planetEnvironment: {fileID: 901141230}
+  treesParent: {fileID: 0}
+  treesParentName: Trees
 --- !u!1 &414503238
 GameObject:
   m_ObjectHideFlags: 0

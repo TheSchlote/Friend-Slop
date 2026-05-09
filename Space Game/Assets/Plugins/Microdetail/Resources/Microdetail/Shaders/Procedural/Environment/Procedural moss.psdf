@@ -1,0 +1,83 @@
+sampler2D _Albedo;
+
+float sphereSDF(float3 p, float r)
+ {
+    return length(p) - r;
+}
+
+float hash(float3 p) {
+    p = frac(p * 0.1031);
+    p *= dot(p, p.yzx + 33.33);
+    return frac((p.x + p.y) * p.z);
+}
+
+float smoothNoise(float3 p) {
+    float3 i = floor(p);
+    float3 f = frac(p);
+    float3 u = f * f * (3.0 - 2.0 * f);
+
+    return lerp(lerp(lerp(hash(i + float3(0, 0, 0)), hash(i + float3(1, 0, 0)), u.x),
+                      lerp(hash(i + float3(0, 1, 0)), hash(i + float3(1, 1, 0)), u.x), u.y),
+                 lerp(lerp(hash(i + float3(0, 0, 1)), hash(i + float3(1, 0, 1)), u.x),
+                      lerp(hash(i + float3(0, 1, 1)), hash(i + float3(1, 1, 1)), u.x), u.y), u.z);
+}
+
+inline float3 GetVolumeSize()
+{
+    return float3(3.0f, 1.0f, 3.0f);
+}
+
+inline float SampleSDF(float4 uvwl)
+{
+	float frequencyA = 300.0f; 
+	float3 noiseUV = uvwl.xyz * float3(frequencyA, 0.0f, frequencyA);
+	float displacementA = smoothNoise(noiseUV) - 0.5f;
+	
+	float3 noiseBUV = uvwl.xyz * 10.0f;
+	
+	return sphereSDF((uvwl.xyz - 0.5f) + displacementA * 0.4f, 0.15f + smoothNoise(noiseBUV) * 0.35f);
+}
+
+inline float GetValueScaler()
+{
+    return float3(1.0f / 3.0f, 1.0f, 1.0f / 3.0f);
+}
+
+inline void Sample(float4 uvwl, out float3 albedo, out float metallic, out float smoothness, out float AO)
+{
+	albedo = tex2D(_Albedo, uvwl.xz).rgb;
+	metallic = 0.0f;
+	smoothness = 0.0f;
+	AO = 0.0f;
+}
+
+inline float GetThickness(float lodFactor)
+{
+    return 0.001f;
+}
+
+inline float GetMinHitDistance()
+{
+    return 0.01f;
+}
+
+inline float GetStepSize(float sdf, float lodFactor)
+{
+    if (sdf < 0.0f)
+        return sdf;
+
+#if defined(MICRODETAIL_PREVIEW)
+	return sdf;
+#endif
+
+    return max(sdf, 0.1f);
+}
+
+inline int GetMaxIterationsCount()
+{
+#if defined(MICRODETAIL_PREVIEW)
+	return 20;
+#endif
+
+    return 12;
+}

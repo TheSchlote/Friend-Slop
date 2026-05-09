@@ -20,6 +20,14 @@ Shader "FriendSlop/PlanetTerrainTriplanar"
         _BandSharpness ("Band Sharpness", Range(0, 1)) = 0.7
         _DetailStrength ("Detail Strength", Range(0, 1)) = 0.5
         _AmbientBoost ("Ambient Boost", Range(0, 1)) = 0.25
+        // Per-band color blend: 0 = use the elevation gradient color modulated by the
+        // texture's luminance (good for grayscale procedural details). 1 = use the
+        // texture's RGB directly as the band albedo (good for full-color authored
+        // textures like grass/dirt). Default: rock/peak procedural, dirt/grass full color.
+        _RockColorBlend  ("Rock Color Blend",  Range(0, 1)) = 0
+        _DirtColorBlend  ("Dirt Color Blend",  Range(0, 1)) = 1
+        _GrassColorBlend ("Grass Color Blend", Range(0, 1)) = 1
+        _PeakColorBlend  ("Peak Color Blend",  Range(0, 1)) = 0
     }
 
     SubShader
@@ -61,6 +69,10 @@ Shader "FriendSlop/PlanetTerrainTriplanar"
                 float _BandSharpness;
                 float _DetailStrength;
                 float _AmbientBoost;
+                float _RockColorBlend;
+                float _DirtColorBlend;
+                float _GrassColorBlend;
+                float _PeakColorBlend;
             CBUFFER_END
 
             TEXTURE2D(_GradientTex); SAMPLER(sampler_GradientTex);
@@ -118,6 +130,17 @@ Shader "FriendSlop/PlanetTerrainTriplanar"
                 return lX * absN.x + lY * absN.y + lZ * absN.z;
             }
 
+            float3 SampleTriplanarRGB(TEXTURE2D_PARAM(tex, samp), float3 wpos, float3 absN, float scale)
+            {
+                float2 uvX = wpos.zy * scale;
+                float2 uvY = wpos.xz * scale;
+                float2 uvZ = wpos.xy * scale;
+                float3 cX = SAMPLE_TEXTURE2D(tex, samp, uvX).rgb;
+                float3 cY = SAMPLE_TEXTURE2D(tex, samp, uvY).rgb;
+                float3 cZ = SAMPLE_TEXTURE2D(tex, samp, uvZ).rgb;
+                return cX * absN.x + cY * absN.y + cZ * absN.z;
+            }
+
             half4 frag(Varyings IN) : SV_Target
             {
                 float3 wpos  = IN.positionWS;
@@ -151,21 +174,29 @@ Shader "FriendSlop/PlanetTerrainTriplanar"
                 float weightPeak  = ramp23;
 
                 float scale = _TriplanarTileScale;
-                float lRock  = SampleTriplanarLuminance(_RockTex,  sampler_RockTex,  wpos, absN, scale);
-                float lDirt  = SampleTriplanarLuminance(_DirtTex,  sampler_DirtTex,  wpos, absN, scale);
-                float lGrass = SampleTriplanarLuminance(_GrassTex, sampler_GrassTex, wpos, absN, scale);
-                float lPeak  = SampleTriplanarLuminance(_PeakTex,  sampler_PeakTex,  wpos, absN, scale);
-
-                float detailL = lRock * weightRock + lDirt * weightDirt + lGrass * weightGrass + lPeak * weightPeak;
+                // Sample full RGB once per band so the same texture can drive either
+                // gradient-modulation (luminance from .r, used when ColorBlend == 0)
+                // or full albedo (RGB used when ColorBlend == 1) without re-sampling.
+                float3 rockRGB  = SampleTriplanarRGB(_RockTex,  sampler_RockTex,  wpos, absN, scale);
+                float3 dirtRGB  = SampleTriplanarRGB(_DirtTex,  sampler_DirtTex,  wpos, absN, scale);
+                float3 grassRGB = SampleTriplanarRGB(_GrassTex, sampler_GrassTex, wpos, absN, scale);
+                float3 peakRGB  = SampleTriplanarRGB(_PeakTex,  sampler_PeakTex,  wpos, absN, scale);
 
                 // Sample the 2x256 elevation strip at uv.x = 0.5 (centered horizontally).
                 float3 gradientRGB = SAMPLE_TEXTURE2D(_GradientTex, sampler_GradientTex, float2(0.5, t)).rgb;
 
-                // Detail acts as a brightness modulator centered on 1.0 so a 50%
-                // gray detail leaves the gradient alone. Strength=0 returns pure
-                // gradient; strength=1 makes the detail fully drive luminance.
-                float detailMod = lerp(1.0, detailL * 2.0, _DetailStrength);
-                half3 albedo = gradientRGB * detailMod;
+                // Per-band color: lerp between (gradient × luminance modulation) and
+                // (texture RGB directly) using the band's ColorBlend. Procedural
+                // grayscale detail (ColorBlend == 0) reads as a brightness modulator
+                // centered on 1.0; authored color textures (ColorBlend == 1) replace
+                // the gradient color outright. Detail strength only affects the
+                // gradient-modulation path.
+                float3 rockColor  = lerp(gradientRGB * lerp(1.0, rockRGB.r  * 2.0, _DetailStrength), rockRGB,  _RockColorBlend);
+                float3 dirtColor  = lerp(gradientRGB * lerp(1.0, dirtRGB.r  * 2.0, _DetailStrength), dirtRGB,  _DirtColorBlend);
+                float3 grassColor = lerp(gradientRGB * lerp(1.0, grassRGB.r * 2.0, _DetailStrength), grassRGB, _GrassColorBlend);
+                float3 peakColor  = lerp(gradientRGB * lerp(1.0, peakRGB.r  * 2.0, _DetailStrength), peakRGB,  _PeakColorBlend);
+
+                half3 albedo = rockColor * weightRock + dirtColor * weightDirt + grassColor * weightGrass + peakColor * weightPeak;
 
                 // Lighting: main light + soft shadows + SH ambient + small constant
                 // boost so dark sides aren't pitch black on the procedural planet.

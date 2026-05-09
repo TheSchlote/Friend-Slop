@@ -1,0 +1,466 @@
+#pragma kernel CSMain
+
+#pragma multi_compile __ MICRODETAIL_WIND
+#pragma multi_compile __ MICRODETAIL_TERRAIN_BLENDING
+#pragma multi_compile __ MICRODETAIL_TINT
+
+#include "UnityIndirect.cginc"
+#include "Noise.cginc"
+#include "Structures.cginc"
+#include "Common.cginc"
+#include <UnityCG.cginc>
+
+float WindFactor = 0.0f;
+int WindOctavesCount = 0;
+StructuredBuffer<WindOctaveParameters> WindOctavesParameters;
+
+float3 InitialRotation;
+uint MaximumItemsCount;
+float SamplesPerChunk;
+float FlipChance;
+float2 NormalShift;
+float4 RotationRanges;
+uint2 MicrodetailControlTextureSize;
+float3 TerrainPosition;
+float3 TerrainSize;
+float TerrainNormalAlignFactor;
+float3 MicrodetailResolution;
+float3 NormalizedSize;
+float3 CenterShift;
+float Time;
+int HeightmapSize;
+int2 StartIndex;
+int ImpostorGridSize;
+
+float MaxRenderDistance;
+Texture2D<float> FadeOverDistance;
+Texture2D<float4> TintOverSize;
+Texture2D<float4> RandomTint;
+Texture2D<float> SizeMap;
+
+float2 Seed;
+
+struct StatisticInfo
+{
+    uint DesiredCount;
+};
+
+StructuredBuffer<ViewParameters> ViewInfo;
+
+RWStructuredBuffer<Transformation> Transformations;
+RWStructuredBuffer<MicrodetailProperties> SurfaceProperties;
+RWStructuredBuffer<IndirectDrawIndexedArgs> Index;
+RWStructuredBuffer<StatisticInfo> Statistics;
+Texture2D<float> SplatTexture;
+Texture2D<float4> HeightMap;
+Texture2D<float4> TintMap;
+SamplerState sampler_linear_clamp;
+SamplerState sampler_point_clamp;
+
+inline float SampleHeightTexture(float2 uv)
+{
+    return UnpackHeightmap(HeightMap[floor(uv * HeightmapSize + 0.01f)]);
+}
+
+#include "Terrain.cginc"
+
+inline Transformation CreateTransformationMatrix(float3 normal, float normalFactor, float3 eulerAngles,
+#if defined(MICRODETAIL_WIND)
+    float4x4 windMatrix,
+#endif
+    float3 position, float3 scale, float3 size, float normalShift)
+{
+    normal = normalize(lerp(float3(0.0f, 1.0f, 0.0f), normal, normalFactor));
+
+    float3 yDirection = normalize(normal);
+    float3 xDirection = -normalize(cross(float3(0.0f, 0.0f, -1.0f), yDirection));
+    float3 zDirection = -normalize(cross(yDirection, xDirection));
+
+    float4x4 scalingMatrix = float4x4(
+            scale.x, 0.0f,   0.0f,   0.0f,
+            0.0f,   scale.y, 0.0f,   0.0f,
+            0.0f,   0.0f,   scale.z, 0.0f,
+            0.0f,   0.0f,   0.0f,   1.0f
+        );
+
+    eulerAngles += InitialRotation;
+
+    float cx = cos(eulerAngles.x); 
+    float sx = sin(eulerAngles.x); 
+    float cy = cos(eulerAngles.y); 
+    float sy = sin(eulerAngles.y); 
+    float cz = cos(eulerAngles.z); 
+    float sz = sin(eulerAngles.z);
+
+    float4x4 Rx = float4x4(
+            1,  0,   0,  0,
+            0,  cx, -sx, 0,
+            0,  sx,  cx, 0,
+            0,  0,   0,  1
+        );
+
+    float4x4 Ry = float4x4(
+            cy,  0,  sy,  0,
+            0,   1,  0,   0,
+            -sy, 0,  cy,  0,
+            0,   0,  0,   1
+        );
+
+    float4x4 Rz = float4x4(
+            cz, -sz, 0,  0,
+            sz,  cz, 0,  0,
+            0,   0,  1,  0,
+            0,   0,  0,  1
+        );
+
+    float4x4 rotationMatrix = mul(mul(Rz, Ry), Rx);
+
+#if defined(MICRODETAIL_WIND)
+    rotationMatrix = mul(windMatrix, rotationMatrix);
+#endif
+
+    float4x4 alignmentMatrix = float4x4(
+            xDirection.x, xDirection.y, xDirection.z, 0.0f,
+            yDirection.x, yDirection.y, yDirection.z, 0.0f,
+            zDirection.x, zDirection.y, zDirection.z, 0.0f,
+            0.0f,         0.0f,         0.0f,         1.0f
+        );
+
+    float4x4 transformationMatrix = mul(alignmentMatrix, mul(rotationMatrix, scalingMatrix));
+
+    float3 shift = mul(alignmentMatrix, mul(rotationMatrix, float4(CenterShift * size, 0.0f))).xyz;
+    float3 finalPosition = position - shift + normal * normalShift;
+
+    transformationMatrix[0][3] = finalPosition.x;
+    transformationMatrix[1][3] = finalPosition.y;
+    transformationMatrix[2][3] = finalPosition.z;
+    
+    Transformation result;
+    result.Transformation = transformationMatrix;
+
+    return result;
+}
+
+#define THREADS_COUNT 16
+
+inline bool IsInFrustum(float3 position, ViewParameters frustum)
+{
+    for (int index = 0; index < 6; index++)
+    {
+        FrustumPlane plane = frustum.Planes[index];
+        float3 difference = plane.Position - position;
+        if (dot(difference, plane.Normal) > 0.0f)
+            return false;
+    }
+
+    return true;
+}
+
+static uint RNG_A = 1664525u;
+static uint RNG_C = 1013904223u;
+
+float Rand01(inout uint state)
+{
+    state = state * RNG_A + RNG_C;
+    return (float)(state >> 8) * (1.0 / 16777216.0);
+}
+
+inline float copysign(float a, float b)
+{
+    return abs(a) * sign(b);
+}
+
+inline float InvertLinearCDF(float A, float B, float uUnscaled)
+{
+    if (abs(B) < 1e-8)
+        return saturate(uUnscaled / max(A, 1e-20));
+
+    float a = 0.5 * B;
+    float b = A;
+    float c = -uUnscaled;
+
+    float disc = max(b * b - 4.0f * a * c, 0.0f);
+    float sqrtD = sqrt(disc);
+
+    float q = -0.5f * (b + copysign(sqrtD, b));
+    float x1 = q / a;
+    float x2 = c / q;
+
+    return saturate((x1 >= 0.0f && x1 <= 1.0f) ? x1 : x2);
+}
+
+struct PrecalculatedSamplingParameters
+{
+    float4 ABCD;
+    float3 ABZ;
+};
+
+inline PrecalculatedSamplingParameters PrecalculateSamplingParameters(float w00, float w10, float w01, float w11)
+{
+    float a = w00;
+    float b = w10 - w00;
+    float c = w01 - w00;
+    float d = w11 - w10 - w01 + w00;
+
+    struct PrecalculatedSamplingParameters parameters;
+    parameters.ABCD = float4(a, b, c, d);
+    float A = a + 0.5f * c;
+    float B = b + 0.5f * d;
+
+    float Z = A + 0.5f * B;
+
+    parameters.ABZ = float3(A, B, Z);
+
+    return parameters;
+}
+
+inline float2 SampleBilinear(PrecalculatedSamplingParameters parameters, inout uint rngState)
+{
+    float a = parameters.ABCD.x;
+    float b = parameters.ABCD.y;
+    float c = parameters.ABCD.z;
+    float d = parameters.ABCD.w;
+
+    float A = parameters.ABZ.x;
+    float B = parameters.ABZ.y;
+    float Z = parameters.ABZ.z;
+
+    float u = Rand01(rngState) * Z;
+    float x = InvertLinearCDF(A, B, u);
+
+    float alpha = a + b * x;
+    float beta  = c + d * x;
+
+    float denominator = alpha + 0.5f * beta;
+    denominator = max(denominator, 1e-20);
+
+    float v = Rand01(rngState) * denominator;
+    float y = InvertLinearCDF(alpha, beta, v);
+
+    return float2(x, y);
+}
+
+float4x4 CreateRotationMatrix(float3 axis, float angle)
+{
+    if (all(abs(axis) < 0.001f))
+        return float4x4(
+            1.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 1.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f);
+    
+    axis = normalize(axis);
+
+    float c = cos(angle);
+    float s = sin(angle);
+    float t = 1.0 - c;
+
+    float x = axis.x;
+    float y = axis.y;
+    float z = axis.z;
+
+    return float4x4(
+        t * x * x + c,        t * x * y - s * z,    t * x * z + s * y,    0.0,
+        t * x * y + s * z,    t * y * y + c,        t * y * z - s * x,    0.0,
+        t * x * z - s * y,    t * y * z + s * x,    t * z * z + c,        0.0,
+        0.0,                  0.0,                  0.0,                  1.0
+    );
+}
+
+float3 WorldToScreenPosition(float3 worldPosition)
+{
+    float4 ndcPosition = mul(ViewInfo[0].WorldToScreenMatrix, float4(worldPosition, 1.0f));
+    ndcPosition /= ndcPosition.w;
+
+    float3 viewportConvertedBack = float3(
+            (ndcPosition.x * 0.5f + 0.5f),
+            (ndcPosition.y * 0.5f + 0.5f), 
+            ndcPosition.z
+        );
+
+    viewportConvertedBack.xy *= ViewInfo[0].ScreenSize;
+
+    return viewportConvertedBack;
+}
+
+[numthreads(THREADS_COUNT, 1, THREADS_COUNT)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    int2 position = id.xz + StartIndex;
+    if (any((uint2)position > MicrodetailControlTextureSize))
+        return;
+
+    float textureValue = SplatTexture[position];
+    if (textureValue < 0.001f)
+        return;
+    
+#if defined(MICRODETAIL_TERRAIN_BLENDING)
+    float3 n00 = CalculateNormal(HeightMap, position, HeightmapSize, TerrainSize);
+    float3 n01 = CalculateNormal(HeightMap, position + int2(0, 1), HeightmapSize, TerrainSize);
+    float3 n10 = CalculateNormal(HeightMap, position + int2(1, 0), HeightmapSize, TerrainSize);
+    float3 n11 = CalculateNormal(HeightMap, position + int2(1, 1), HeightmapSize, TerrainSize);
+#endif
+    
+    FrustumPlane nearPlane = ViewInfo[0].Planes[0];
+    float2 tileUV = float2(position.x + 0.5f, position.y + 0.5f) / MicrodetailControlTextureSize;
+    float3 tilePosition = float3(tileUV.x, 0.0f, tileUV.y) * TerrainSize + TerrainPosition;
+    TerrainTriangleSampleResult tileHeight = SampleTerrain(tilePosition.xz, TerrainPosition, TerrainSize, HeightmapSize);
+    tilePosition.y += tileHeight.Height;
+
+    if (!IsInFrustum(tilePosition, ViewInfo[0]))
+        return;
+    
+    float distanceToCamera = abs(dot(tilePosition - nearPlane.Position, nearPlane.Normal));
+
+    float2 splatTexelSize = 1.0f / MicrodetailControlTextureSize;
+    float2 samplingPosition = tileUV;
+    float splatSample00 = SplatTexture.SampleLevel(sampler_linear_clamp, samplingPosition + float2(0.0f, 0.0f), 0.0f);
+    float splatSample01 = SplatTexture.SampleLevel(sampler_linear_clamp, samplingPosition + float2(0.0f, splatTexelSize.y), 0.0f);
+    float splatSample11 = SplatTexture.SampleLevel(sampler_linear_clamp, samplingPosition + float2(splatTexelSize.x, splatTexelSize.y), 0.0f);
+    float splatSample10 = SplatTexture.SampleLevel(sampler_linear_clamp, samplingPosition + float2(splatTexelSize.x, 0.0f), 0.0f);
+    
+    float averageSplat = (splatSample00 + splatSample01 + splatSample10 + splatSample11) * 0.25f;
+    if (averageSplat < 0.01f)
+        return;
+    
+    float dissolveDistance = 10.0f;
+    float closerSamplesScaler = FadeOverDistance.SampleLevel(sampler_linear_clamp, distanceToCamera / MaxRenderDistance, 0.0f);
+    float samplesScaler = FadeOverDistance.SampleLevel(sampler_linear_clamp, (distanceToCamera - dissolveDistance) / MaxRenderDistance, 0.0f);
+    float farPlaneDissolveFactor = 1.0f - saturate((distanceToCamera + dissolveDistance - MaxRenderDistance) / dissolveDistance);
+    float scaledSamplesPerChunk = SamplesPerChunk * samplesScaler * averageSplat;
+    float previousScaledSamplesPerChunk = SamplesPerChunk * closerSamplesScaler * averageSplat;
+    float samplesToTake = max(previousScaledSamplesPerChunk, scaledSamplesPerChunk);
+    float chunkCountDifference = max(abs(previousScaledSamplesPerChunk - scaledSamplesPerChunk), 1.0f);
+    float startFadeIndex = min(previousScaledSamplesPerChunk, scaledSamplesPerChunk);
+
+    if (samplesToTake < 1.0001f)
+    {
+        if (hash12(position + Seed) >= scaledSamplesPerChunk)
+            return;
+    }
+
+    int samplesCount = (int)max(samplesToTake, 1.0f);
+    float2 cellRandomness = hash22(position + Seed);
+
+    int maxResolution = max(MicrodetailResolution.x, max(MicrodetailResolution.y, MicrodetailResolution.z));
+
+    float lod = log2(maxResolution / 20.0f);
+    float minLod = max(lod, 0.0f);
+    
+    float scaler = max(lerp(1.0f, 2.0f, (ViewInfo[0].ScreenSize.x / 2560.0f) - 0.5f), 0.0f);
+
+#if defined(MICRODETAIL_TINT)
+    float4 colorSample00 = TintMap.SampleLevel(sampler_linear_clamp, tileUV + float2(0.0f, 0.0f), 0.0f);
+    float4 colorSample01 = TintMap.SampleLevel(sampler_linear_clamp, tileUV + float2(0.0f, splatTexelSize.y), 0.0f);
+    float4 colorSample11 = TintMap.SampleLevel(sampler_linear_clamp, tileUV + float2(splatTexelSize.x, splatTexelSize.y), 0.0f);
+    float4 colorSample10 = TintMap.SampleLevel(sampler_linear_clamp, tileUV + float2(splatTexelSize.x, 0.0f), 0.0f);
+#endif
+    
+    uint baseIndex = 0;
+    InterlockedAdd(Index[0].instanceCount, samplesCount, baseIndex);
+    int desiredCount = samplesCount;
+    if (baseIndex + samplesCount >= MaximumItemsCount)
+    {
+        InterlockedAdd(Index[0].instanceCount, -samplesCount, baseIndex);
+        desiredCount = samplesCount;
+        samplesCount = 0;
+    }
+
+    PrecalculatedSamplingParameters samplingParameters = PrecalculateSamplingParameters(splatSample00, splatSample01, splatSample10, splatSample11);
+    uint placementRNG = (uint)(cellRandomness.x * 123) ^ (uint)(cellRandomness.y * 12434312);
+    for (int index = 0; index < samplesCount; index++)
+    {
+        float dissolveFactor = 1.0f;
+        if (index >= startFadeIndex)
+            dissolveFactor = saturate(1.0f - (index - startFadeIndex) / chunkCountDifference);
+
+        dissolveFactor *= farPlaneDissolveFactor;
+        
+        float2 entryID = cellRandomness + position + index;
+        
+        float2 entryShift = position + SampleBilinear(samplingParameters, placementRNG);
+
+        float2 uv = entryShift / MicrodetailControlTextureSize;
+        
+        float3 worldPosition = float3(uv.x, 0.0f, uv.y) * TerrainSize + TerrainPosition;
+        
+        TerrainTriangleSampleResult sampledTerrain = SampleTerrain(worldPosition.xz, TerrainPosition, TerrainSize, HeightmapSize);
+        worldPosition.y += sampledTerrain.Height;
+
+#if defined(MICRODETAIL_WIND)
+        float2 wind = 0.0f;
+        for (int windIndex = 0; windIndex < WindOctavesCount; windIndex++)
+        {
+            WindOctaveParameters octaveParameters = WindOctavesParameters[windIndex];
+            float2 windPosition = worldPosition.xz * octaveParameters.Amplitude + float2(windIndex, windIndex) * float2(1.2341f, 34.3425f);
+            float baseOctaveTime = octaveParameters.Frequency * Time;
+            float2 octaveTime = float2(baseOctaveTime, baseOctaveTime + 1.2343f);
+            wind += float2(PerlinNoise2D(windPosition + octaveTime), PerlinNoise2D(windPosition + 1.234112f + octaveTime)) * octaveParameters.Strength;
+        }
+
+        wind *= WindFactor;
+        float3 windRotation = cross(float3(0.0f, 1.0f, 0.0f), float3(wind.x, 0.0f, wind.y));
+        float4x4 windMatrix = CreateRotationMatrix(windRotation, length(windRotation));
+#endif
+        
+        float flipRandom = hash12(entryID * 1.5112f);
+        float3 rotationRandoms = hash32(entryID * 1.324f);
+        float rotationX = lerp(-RotationRanges.x, RotationRanges.y, rotationRandoms.x) + (flipRandom <= FlipChance ? 3.14159f : 0.0f);
+        float rotationY = lerp(RotationRanges.z, RotationRanges.w, rotationRandoms.y);
+        float rotationZ = lerp(-RotationRanges.x, RotationRanges.y, rotationRandoms.z);
+        float scaleRandom = hash12(entryID * 2.5123f);
+        float sampledScale = SizeMap.SampleLevel(sampler_linear_clamp, scaleRandom, 0.0f);
+
+        float normalShift = lerp(NormalShift.x, NormalShift.y, hash11(entryID * 311.3412f)) * sampledScale * dissolveFactor;
+
+        Transformation transformation = CreateTransformationMatrix(sampledTerrain.Normal,
+            TerrainNormalAlignFactor,
+            float3(rotationX, rotationY, rotationZ),
+#if defined(MICRODETAIL_WIND)
+            windMatrix,
+#endif
+            worldPosition,
+            sampledScale * dissolveFactor,
+            NormalizedSize * sampledScale * dissolveFactor,
+            normalShift);
+
+        MicrodetailProperties properties;
+
+        float2 inCellUV = frac(entryShift);
+        
+#if defined(MICRODETAIL_TINT)
+        float4 textureTint = lerp(lerp(colorSample00, colorSample01, inCellUV.y), lerp(colorSample10, colorSample11, inCellUV.y), inCellUV.x);
+#endif
+
+        float4 randomTint = RandomTint.SampleLevel(sampler_linear_clamp, frac(entryID.x + entryID.y * 1.234f), 0.0f);
+        float4 sizeTint = TintOverSize.SampleLevel(sampler_linear_clamp, scaleRandom, 0.0f);
+        
+#if defined(MICRODETAIL_TINT)
+        properties.Tint = PackFloat4ToUint(float4((sizeTint * randomTint * textureTint).rgb, dissolveFactor));
+#else
+        properties.Tint = PackFloat4ToUint(float4((sizeTint * randomTint).rgb, dissolveFactor));
+#endif
+
+        float3 cameraUp = normalize(mul((float3x3)ViewInfo[0].CameraToWorld, float3(0.0f, 1.0f, 0.0f)));
+        float3 shiftedPosition = worldPosition + cameraUp * sampledScale;
+
+        float3 screenPosition = WorldToScreenPosition(worldPosition);
+        float3 shiftedScreenPosition = WorldToScreenPosition(shiftedPosition);
+
+        float pixelsAmount = distance(screenPosition.xy, shiftedScreenPosition.xy);
+
+        float nativeLod = log2(max(maxResolution / pixelsAmount, 1.0f));
+        properties.Lod = clamp(pow(nativeLod, scaler), 0.0f, minLod);
+
+#if defined(MICRODETAIL_TERRAIN_BLENDING)
+        float3 normalBlendA = lerp(n00, n01, sampledTerrain.ChunkUV.y);
+        float3 normalBlendB = lerp(n10, n11, sampledTerrain.ChunkUV.y);
+        properties.Normal = PackFloat4ToUint(float4(normalize(lerp(normalBlendA, normalBlendB, sampledTerrain.ChunkUV.x)) + 1.0f, 0.0f) * 0.5f);
+#endif
+
+        SurfaceProperties[baseIndex + index] = properties;
+        Transformations[baseIndex + index] = transformation;
+    }
+    
+    InterlockedAdd(Statistics[0].DesiredCount, desiredCount);
+}

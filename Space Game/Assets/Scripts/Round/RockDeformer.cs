@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace FriendSlop.Round
@@ -32,9 +33,23 @@ namespace FriendSlop.Round
         [SerializeField] private MeshCollider meshCollider;
         [SerializeField] private MeshRenderer meshRenderer;
 
-        // Tweak rock surface tint in one place; defaults to a warm dark gray that
-        // reads as a discrete object alongside the planet's elevation rock band
-        // (which is cool dark gray). Static so all rocks share one material - the
+        // Authored override material. When set on the prefab, every rock instance
+        // uses this material (the prefab's reference is shared via sharedMaterial,
+        // so 80 rocks still share one material under the hood). When null, falls
+        // back to the procedural runtime-built material below so rocks always
+        // render even if no override is wired.
+        [Header("Surface")]
+        [SerializeField] private Material rockMaterialOverride;
+        // Multiplies the spherical UVs we compute per-vertex from the original unit
+        // normal. 1 = texture wraps the rock once; >1 = texture tiles more, giving
+        // finer detail on a small object. Cylindrical-from-normals UVs have a seam
+        // at the back of the sphere (where atan2 wraps from -π to π); for a rock
+        // it reads as a thin streak on one azimuth, which is acceptable noise.
+        [SerializeField, Range(0.25f, 4f)] private float uvTilingScale = 1.5f;
+
+        // Procedural fallback when no override material is assigned. Defaults to a
+        // warm dark gray that reads as a discrete object alongside the planet's
+        // elevation rock band. Static so all rocks share one material - the
         // deformed geometry + lighting carry the visual variety.
         private static readonly Color SharedRockColor = new(0.42f, 0.40f, 0.40f, 1f);
         private const float SharedRockSmoothness = 0.10f;
@@ -89,8 +104,12 @@ namespace FriendSlop.Round
                 (float)(rng.NextDouble() * 1000.0));
 
             var geom = IcosphereMesh.Build(subdivisions);
-            var verts = new Vector3[geom.Vertices.Length];
-            for (var i = 0; i < verts.Length; i++)
+            // Use lists so we can append duplicated seam-crossing vertices below.
+            var vertsList = new List<Vector3>(geom.Vertices.Length);
+            // Raw UVs (before applying uvTilingScale) — computed in [0, 1] so the
+            // 0/1 wrap test is just `delta > 0.5`.
+            var rawUvsList = new List<Vector2>(geom.Vertices.Length);
+            for (var i = 0; i < geom.Vertices.Length; i++)
             {
                 var n = geom.Vertices[i];
                 var stretched = new Vector3(n.x * axisScale.x, n.y * axisScale.y, n.z * axisScale.z);
@@ -98,25 +117,96 @@ namespace FriendSlop.Round
                 // noise to surface positions consistently regardless of axisScale.
                 var noiseSample = SampleNoise3D(n * noiseFrequency + noiseOffset);
                 var disp = (noiseSample * 2f - 1f) * noiseAmplitude;
-                verts[i] = stretched * (baseRadius * (1f + disp));
+                vertsList.Add(stretched * (baseRadius * (1f + disp)));
+
+                // Cylindrical-spherical UVs from the unit normal direction.
+                var u = Mathf.Atan2(n.z, n.x) / (Mathf.PI * 2f) + 0.5f;
+                var v = Mathf.Asin(Mathf.Clamp(n.y, -1f, 1f)) / Mathf.PI + 0.5f;
+                rawUvsList.Add(new Vector2(u, v));
             }
 
+            // Seam fix: walk triangles, find ones whose vertices straddle the
+            // longitude wrap (u differs by > 0.5), and duplicate the wrong-side
+            // vertex with u + 1. Without this, triangles at the back of the sphere
+            // interpolate across the entire texture width, producing the zigzag
+            // band the user reported. Cache duplicates so multiple triangles
+            // sharing the same wrong-side vertex share the same split.
+            var trisList = new List<int>(geom.Triangles.Length);
+            var seamSplitCache = new Dictionary<int, int>();
+            for (var t = 0; t < geom.Triangles.Length; t += 3)
+            {
+                var i0 = geom.Triangles[t];
+                var i1 = geom.Triangles[t + 1];
+                var i2 = geom.Triangles[t + 2];
+                var u0 = rawUvsList[i0].x;
+                var u1 = rawUvsList[i1].x;
+                var u2 = rawUvsList[i2].x;
+                var maxU = Mathf.Max(u0, Mathf.Max(u1, u2));
+                if (maxU - u0 > 0.5f) i0 = GetOrCreateSeamSplit(i0, vertsList, rawUvsList, seamSplitCache);
+                if (maxU - u1 > 0.5f) i1 = GetOrCreateSeamSplit(i1, vertsList, rawUvsList, seamSplitCache);
+                if (maxU - u2 > 0.5f) i2 = GetOrCreateSeamSplit(i2, vertsList, rawUvsList, seamSplitCache);
+                trisList.Add(i0);
+                trisList.Add(i1);
+                trisList.Add(i2);
+            }
+
+            // Apply tiling scale now that the seam is split. Multiplying earlier
+            // would have changed the seam-detection threshold above.
+            var finalUvs = new Vector2[rawUvsList.Count];
+            for (var i = 0; i < finalUvs.Length; i++) finalUvs[i] = rawUvsList[i] * uvTilingScale;
+
             var mesh = new Mesh { name = "ProceduralRock" };
-            mesh.SetVertices(verts);
-            mesh.SetTriangles(geom.Triangles, 0);
+            mesh.SetVertices(vertsList);
+            mesh.SetUVs(0, finalUvs);
+            mesh.SetTriangles(trisList, 0);
             mesh.RecalculateNormals();
+            // Tangents are required for the URP/Lit shader's normal-map sampling.
+            // Skipping this leaves M_YFRM_05's normal map driving lighting with a
+            // default identity, which reads as a flat surface even when the material
+            // is correctly assigned.
+            mesh.RecalculateTangents();
             mesh.RecalculateBounds();
 
             meshFilter.sharedMesh = mesh;
             if (meshCollider != null) meshCollider.sharedMesh = mesh;
 
-            EnsureSharedMaterial();
-            if (meshRenderer != null && _sharedRockMaterial != null)
+            // Override wins when assigned (authored Yughues / similar material).
+            // Fallback path runs only if no override is wired, so the prefab keeps
+            // rendering even in scenes that don't have the override package.
+            if (meshRenderer != null)
             {
-                meshRenderer.sharedMaterial = _sharedRockMaterial;
+                if (rockMaterialOverride != null)
+                {
+                    meshRenderer.sharedMaterial = rockMaterialOverride;
+                }
+                else
+                {
+                    EnsureSharedMaterial();
+                    if (_sharedRockMaterial != null)
+                        meshRenderer.sharedMaterial = _sharedRockMaterial;
+                }
             }
 
             _built = true;
+        }
+
+        // Returns the duplicate index for a seam-crossing vertex, creating one on
+        // first encounter. The duplicate sits at the same world position as the
+        // original but with u shifted by +1 so triangles spanning the longitude
+        // wrap interpolate continuously instead of across the entire texture.
+        private static int GetOrCreateSeamSplit(
+            int originalIndex,
+            List<Vector3> verts,
+            List<Vector2> rawUvs,
+            Dictionary<int, int> cache)
+        {
+            if (cache.TryGetValue(originalIndex, out var existing)) return existing;
+            var newIndex = verts.Count;
+            verts.Add(verts[originalIndex]);
+            var origUv = rawUvs[originalIndex];
+            rawUvs.Add(new Vector2(origUv.x + 1f, origUv.y));
+            cache[originalIndex] = newIndex;
+            return newIndex;
         }
 
         private static void EnsureSharedMaterial()

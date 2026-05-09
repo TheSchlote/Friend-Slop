@@ -72,9 +72,25 @@ namespace FriendSlop.Round
         [SerializeField, Range(0.01f, 1f)] private float triplanarTileScale = 0.25f;
         // Detail strength: 0 = pure gradient color, 1 = detail luminance fully drives
         // surface brightness (mean preserved at the gradient color, range expanded).
+        // Only affects bands whose ColorBlend is 0 (procedural grayscale path).
         [SerializeField, Range(0f, 1f)] private float detailStrength = 0.5f;
         // Constant ambient added on top of SH so dark sides aren't pitch black.
         [SerializeField, Range(0f, 1f)] private float terrainAmbientBoost = 0.25f;
+        // Per-band color blend: 0 = use the elevation gradient modulated by texture
+        // luminance (good for procedural grayscale detail). 1 = use the texture's
+        // RGB directly as the band albedo (good for full-color authored textures
+        // like grass/dirt). Defaults: rock/peak procedural, dirt/grass full color.
+        [SerializeField, Range(0f, 1f)] private float rockColorBlend = 0f;
+        [SerializeField, Range(0f, 1f)] private float dirtColorBlend = 1f;
+        [SerializeField, Range(0f, 1f)] private float grassColorBlend = 1f;
+        [SerializeField, Range(0f, 1f)] private float peakColorBlend = 0f;
+        // Per-band texture overrides. When null, the procedural baker fills the slot.
+        // When assigned, the authored texture replaces the procedural one for that
+        // band - usually paired with ColorBlend = 1 so the authored RGB drives albedo.
+        [SerializeField] private Texture2D rockColorTexture;
+        [SerializeField] private Texture2D dirtColorTexture;
+        [SerializeField] private Texture2D grassColorTexture;
+        [SerializeField] private Texture2D peakColorTexture;
 
         [Header("Pool Selection")]
         [SerializeField, Min(0)] private int minPoolCount = 4;
@@ -519,10 +535,13 @@ namespace FriendSlop.Round
                 // (cached cross-instance for a one-time bake).
                 var mat = new Material(triplanarShader) { name = "ProceduralPlanetTerrainMaterial" };
                 mat.SetTexture("_GradientTex", gradientTex);
-                mat.SetTexture("_RockTex",  PlanetDetailTextureBaker.GetRock());
-                mat.SetTexture("_DirtTex",  PlanetDetailTextureBaker.GetDirt());
-                mat.SetTexture("_GrassTex", PlanetDetailTextureBaker.GetGrass());
-                mat.SetTexture("_PeakTex",  PlanetDetailTextureBaker.GetPeak());
+                // Per-band texture: authored override if set, otherwise the procedural
+                // luminance bake. Pair authored textures with ColorBlend = 1 so their
+                // RGB drives the band albedo directly.
+                mat.SetTexture("_RockTex",  rockColorTexture  != null ? (Texture)rockColorTexture  : PlanetDetailTextureBaker.GetRock());
+                mat.SetTexture("_DirtTex",  dirtColorTexture  != null ? (Texture)dirtColorTexture  : PlanetDetailTextureBaker.GetDirt());
+                mat.SetTexture("_GrassTex", grassColorTexture != null ? (Texture)grassColorTexture : PlanetDetailTextureBaker.GetGrass());
+                mat.SetTexture("_PeakTex",  peakColorTexture  != null ? (Texture)peakColorTexture  : PlanetDetailTextureBaker.GetPeak());
                 mat.SetFloat("_TriplanarTileScale", triplanarTileScale);
                 mat.SetFloat("_BandBoundary01", bandBoundary01);
                 mat.SetFloat("_BandBoundary12", bandBoundary12);
@@ -530,6 +549,10 @@ namespace FriendSlop.Round
                 mat.SetFloat("_BandSharpness", bandSharpness);
                 mat.SetFloat("_DetailStrength", detailStrength);
                 mat.SetFloat("_AmbientBoost", terrainAmbientBoost);
+                mat.SetFloat("_RockColorBlend",  rockColorBlend);
+                mat.SetFloat("_DirtColorBlend",  dirtColorBlend);
+                mat.SetFloat("_GrassColorBlend", grassColorBlend);
+                mat.SetFloat("_PeakColorBlend",  peakColorBlend);
                 rend.material = mat;
             }
             else
