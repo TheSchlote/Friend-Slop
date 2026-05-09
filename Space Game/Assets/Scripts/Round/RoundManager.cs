@@ -93,6 +93,10 @@ namespace FriendSlop.Round
             EnsurePlanetSceneOrchestrator();
             // NetworkList must exist before OnNetworkSpawn so the server's first writes replicate.
             NextPlanetChoiceIndices = new NetworkList<int>();
+            // Build runtime envs for catalog planets that have no scene file (flat test
+            // world etc.). Must happen before the first ApplyActivePlanetEnvironment so the
+            // env is in AllEnvironments when the host opens Test Mode.
+            EnsureFlatTestWorldEnvironments();
         }
 
         public override void OnDestroy()

@@ -30,6 +30,10 @@ namespace FriendSlop.Round
         public TeleporterTarget Destination => destination;
         public float PerPlayerCooldownSeconds => perPlayerCooldownSeconds;
 
+        // Runtime configuration hook for procedurally-built pads (e.g. flat test world).
+        // Editor builders use SerializedObject; runtime callers don't need persistence.
+        public void SetDestination(TeleporterTarget value) => destination = value;
+
         private void Reset()
         {
             var col = GetComponent<Collider>();

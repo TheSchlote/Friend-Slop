@@ -70,7 +70,8 @@ namespace FriendSlop.Networking
                 var loot = Instantiate(prefab, pos, rot);
                 MoveToActivePlanetScene(loot.gameObject, activeEnv);
                 loot.ServerSetSpawnPose(pos, rot);
-                SpawnNetworkObject(loot.NetworkObject);
+                SpawnNetworkObject(loot.NetworkObject, destroyWithScene: true);
+                MoveToActivePlanetScene(loot.gameObject, activeEnv);
             }
         }
 
@@ -137,7 +138,8 @@ namespace FriendSlop.Networking
 
                 var monster = Instantiate(monsterPrefab, spawnPoint.position, spawnPoint.rotation);
                 MoveToActivePlanetScene(monster.gameObject, activeEnv);
-                SpawnNetworkObject(monster.NetworkObject);
+                SpawnNetworkObject(monster.NetworkObject, destroyWithScene: true);
+                MoveToActivePlanetScene(monster.gameObject, activeEnv);
             }
         }
 

@@ -64,6 +64,10 @@ namespace FriendSlop.Player
         private bool lastWantsJump;
         private bool lastWantsSprint;
         private bool lastBlockedGameplayInput;
+        // World-space tangential velocity carried frame-to-frame on slippery surfaces so
+        // the player coasts after releasing input. Always Vector3.zero on non-slippery
+        // worlds (SphereWorld.SurfaceSlideDecel == 0), preserving the original snap-stop.
+        private Vector3 _slipCoastVelocity;
 
 
         public NetworkVariable<bool> IsCrouching = new(
