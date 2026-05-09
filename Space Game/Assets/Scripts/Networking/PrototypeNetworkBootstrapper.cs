@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using FriendSlop.Core;
 using FriendSlop.Hazards;
@@ -45,6 +46,7 @@ namespace FriendSlop.Networking
         private bool subscribedToPlanetRegistered;
         private bool subscribedToShipRegistered;
         private bool shipSceneLoadRequested;
+        private bool waitingForActivePlanetScene;
         private RoundManager spawnedRoundManager;
 
         private void Awake()
@@ -205,6 +207,11 @@ namespace FriendSlop.Networking
             if (planet == null) return;
             var env = PlanetSceneOwnership.FindBindableEnvironment(planet);
             if (env == null) return;
+            if (!IsEnvironmentSceneLoaded(env))
+            {
+                QueueSpawnForActivePlanetWhenSceneLoaded();
+                return;
+            }
 
             if (spawnedLootForPlanet != planet)
             {
@@ -217,6 +224,36 @@ namespace FriendSlop.Networking
                 spawnedMonstersForPlanet = planet;
                 SpawnMonsters(env);
             }
+        }
+
+        private void QueueSpawnForActivePlanetWhenSceneLoaded()
+        {
+            if (waitingForActivePlanetScene) return;
+            waitingForActivePlanetScene = true;
+            StartCoroutine(SpawnForActivePlanetWhenSceneLoaded());
+        }
+
+        private IEnumerator SpawnForActivePlanetWhenSceneLoaded()
+        {
+            for (var frame = 0; frame < 600; frame++)
+            {
+                var rm = RoundManagerRegistry.Current;
+                var env = rm != null ? PlanetSceneOwnership.FindBindableEnvironment(rm.CurrentPlanet) : null;
+                if (IsEnvironmentSceneLoaded(env))
+                    break;
+
+                yield return null;
+            }
+
+            waitingForActivePlanetScene = false;
+            TrySpawnForActivePlanet();
+        }
+
+        private static bool IsEnvironmentSceneLoaded(PlanetEnvironment env)
+        {
+            if (env == null) return false;
+            var scene = env.gameObject.scene;
+            return scene.IsValid() && scene.isLoaded;
         }
 
         private RoundManager SpawnRoundManager(Transform[] resolvedShipSpawnPoints)
@@ -308,14 +345,14 @@ namespace FriendSlop.Networking
             return false;
         }
 
-        private void SpawnNetworkObject(NetworkObject networkObject)
+        private void SpawnNetworkObject(NetworkObject networkObject, bool destroyWithScene = false)
         {
             if (networkObject == null)
             {
                 return;
             }
 
-            networkObject.Spawn();
+            networkObject.Spawn(destroyWithScene);
             spawnedObjects.Add(networkObject);
         }
 

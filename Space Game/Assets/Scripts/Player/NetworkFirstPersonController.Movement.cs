@@ -110,7 +110,8 @@ namespace FriendSlop.Player
             var isSprinting = wantsSprintInput && isMoving && !staminaExhausted && currentStamina > 0f;
             UpdateStamina(isSprinting);
             IsSprinting = isSprinting;
-            var speed = (isSprinting ? sprintSpeed : walkSpeed) * carryingMultiplier * crouchMultiplier;
+            TickIceSlow(Time.deltaTime);
+            var speed = (isSprinting ? sprintSpeed : walkSpeed) * carryingMultiplier * crouchMultiplier * IceSlowSpeedMultiplier;
             lastMoveInput = input;
             lastSphereGrounded = isGrounded;
             lastWantsJump = wantsJump;
@@ -131,6 +132,23 @@ namespace FriendSlop.Player
             else
             {
                 radialSpeed = Mathf.Max(radialSpeed - gravity * Time.deltaTime, -terminalFallSpeed);
+            }
+
+            var slideDecel = world != null ? world.SurfaceSlideDecel : 0f;
+            var canSlide = slideDecel > 0f && isGrounded && _stunTimer <= 0f;
+            if (!canSlide)
+            {
+                _slipCoastVelocity = Vector3.zero;
+            }
+            else if (isMoving)
+            {
+                _slipCoastVelocity = move;
+            }
+            else if (_slipCoastVelocity.sqrMagnitude > 0.0001f)
+            {
+                _slipCoastVelocity = Vector3.MoveTowards(_slipCoastVelocity, Vector3.zero, slideDecel * Time.deltaTime);
+                _slipCoastVelocity = Vector3.ProjectOnPlane(_slipCoastVelocity, up);
+                move = _slipCoastVelocity;
             }
 
             characterController.Move((move + up * radialSpeed + knockbackVelocity) * Time.deltaTime);
@@ -236,6 +254,9 @@ namespace FriendSlop.Player
 
             radialSpeed = 0f;
             knockbackVelocity = Vector3.zero;
+            _slipCoastVelocity = Vector3.zero;
+            _iceSlowTimer = 0f;
+            _iceSlowFactor = 1f;
         }
 
         private static Vector3 GetSurfaceSafeTeleportPosition(Vector3 position)

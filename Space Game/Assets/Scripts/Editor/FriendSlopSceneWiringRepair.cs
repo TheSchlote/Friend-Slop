@@ -20,7 +20,11 @@ namespace FriendSlop.Editor
         private const string ShipInteriorScenePath = "Assets/Scenes/ShipInterior.unity";
         private const string StarterJunkScenePath = "Assets/Scenes/Planet_StarterJunk.unity";
         private const string RustyMoonScenePath = "Assets/Scenes/Planet_RustyMoon.unity";
+        private const string DeepHaulScenePath = "Assets/Scenes/Planet_DeepHaul.unity";
+        private const string GhostShiftScenePath = "Assets/Scenes/Planet_GhostShift.unity";
+        private const string QuickStrikeScenePath = "Assets/Scenes/Planet_QuickStrike.unity";
         private const string VioletGiantScenePath = "Assets/Scenes/Planet_VioletGiant.unity";
+        private const string IcePlanetScenePath = "Assets/Scenes/Planet_IcePlanet.unity";
         private const string SceneCatalogPath = "Assets/SceneDefinitions/MainGameSceneCatalog.asset";
         private const string ShipInteriorSceneDefinitionPath = "Assets/SceneDefinitions/ShipInterior_Scene.asset";
         private const string VioletGiantSceneDefinitionPath = "Assets/SceneDefinitions/Planet_VioletGiant_Scene.asset";
@@ -50,7 +54,13 @@ namespace FriendSlop.Editor
             RepairShipInteriorScene();
             RepairPlanetScene(StarterJunkScenePath, "Crash Dirt Patch");
             RepairPlanetScene(RustyMoonScenePath, null);
+            // Tier 2 variants own their own scenes (each forked from Rusty Moon's wrapper),
+            // so they pick up the same launchpad / loot / teleporter wiring sweep.
+            RepairPlanetScene(DeepHaulScenePath, null);
+            RepairPlanetScene(GhostShiftScenePath, null);
+            RepairPlanetScene(QuickStrikeScenePath, null);
             RepairPlanetScene(VioletGiantScenePath, null);
+            RepairPlanetScene(IcePlanetScenePath, null);
             AssetDatabase.SaveAssets();
         }
 

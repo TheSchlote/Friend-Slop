@@ -142,8 +142,16 @@ namespace FriendSlop.Editor
                         if (ResolveSphereWorld(environment) == null)
                             failures.Add($"{label}: PlanetEnvironment '{environment.name}' has no SphereWorld assigned or discoverable.");
 
-                        if (!HasAnyLiveTransform(environment.MonsterSpawnPoints))
-                            failures.Add($"{label}: PlanetEnvironment '{environment.name}' has no live monster spawn anchors.");
+                        // Empty monster anchors are a valid authoring choice (Ice Planet,
+                        // future cozy planets, etc.); only fail when the array is
+                        // populated but every reference is dead - that's the broken-ref
+                        // bug class we actually want to catch.
+                        if (environment.MonsterSpawnPoints != null
+                            && environment.MonsterSpawnPoints.Length > 0
+                            && !HasAnyLiveTransform(environment.MonsterSpawnPoints))
+                        {
+                            failures.Add($"{label}: PlanetEnvironment '{environment.name}' has monster spawn slots but they all point to destroyed transforms.");
+                        }
 
                         ValidateSceneLootOwnership(scene, environment, label, failures);
 
