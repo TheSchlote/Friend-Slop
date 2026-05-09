@@ -93,7 +93,7 @@ FriendSlop.Core         <-  FriendSlop.Networking  <-  FriendSlop.Gameplay  <-  
 
 **Cost.** A handful of `.asmdef` files and some namespace cleanup. One-time pain, permanent payoff.
 
-**Status.** Not yet started. Planned as a single focused PR.
+**Status.** Started. The first `FriendSlop.Core` foundation slice now owns the D-006 utility types; the remaining Runtime/Networking/Gameplay split is still pending.
 
 ### D-007: File-size and singleton limits
 

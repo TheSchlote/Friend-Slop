@@ -100,6 +100,7 @@ namespace FriendSlop.UI
             activeMenuOpen = false;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+            RequestUiRefresh();
         }
 
         private static bool IsActiveRound()
@@ -136,7 +137,7 @@ namespace FriendSlop.UI
             if (phase == RoundPhase.Transitioning && round != null)
             {
                 var dest = round.SelectedNextPlanet ?? round.CurrentPlanet;
-                var destName = dest != null ? dest.DisplayName : "Unknown";
+                var destName = PlanetDisplayUtility.FormatPlanetLabel(dest, round.Catalog);
                 statusMsg = $"Traveling to {destName}...";
                 targetProgress = Mathf.Clamp01((Time.unscaledTime - _loadingProgressStartTime) /
                                                 TransitionProgressFillSeconds) * TransitionProgressMax;

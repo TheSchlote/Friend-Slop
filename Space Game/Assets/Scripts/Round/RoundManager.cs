@@ -43,6 +43,7 @@ namespace FriendSlop.Round
         public NetworkVariable<int> CurrentTier = new(1);
         public NetworkVariable<int> CurrentPlanetCatalogIndex = new(-1);
         public NetworkVariable<int> SelectedNextPlanetCatalogIndex = new(-1);
+        public NetworkVariable<int> ExpeditionsCompleted = new(0);
         // Set by survival-style objectives once the survival timer expires, giving players a
         // grace period to reach the launchpad. Replicated so HUDs can swap to "EXTRACT" copy.
         public NetworkVariable<bool> IsExtractionWindow = new(false);
@@ -61,6 +62,9 @@ namespace FriendSlop.Round
         private Coroutine _transitionCoroutine;
         private const float TransitionFadeSeconds = 1.0f;
         private const float TransitionHoldSeconds = 0.8f;
+        private int baseQuota;
+        private float baseRoundLengthSeconds;
+        private bool finalTierSuccessRecorded;
 
         public void ConfigureSpawnPoints(Transform[] spawnPoints)
         {
@@ -83,6 +87,8 @@ namespace FriendSlop.Round
 
         private void Awake()
         {
+            baseQuota = quota;
+            baseRoundLengthSeconds = roundLengthSeconds;
             RoundManagerRegistry.Register(this);
             EnsurePlanetSceneOrchestrator();
             // NetworkList must exist before OnNetworkSpawn so the server's first writes replicate.
@@ -217,255 +223,13 @@ namespace FriendSlop.Round
             if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
                 return;
 
+            if (Phase.Value == RoundPhase.Success && HasReachedFinalTier)
+            {
+                ServerReturnToExpeditionLobby();
+                return;
+            }
+
             ServerStartRound();
-        }
-
-        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        public void RequestSelectNextPlanetServerRpc(int catalogIndex, RpcParams rpcParams = default)
-        {
-            if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
-                return;
-
-            var planet = GetCatalogPlanet(catalogIndex);
-            if (planet == null) return;
-            if (planet.Tier != NextTier) return;
-            // Only allow picking from the offered choices when the server has rolled them.
-            if (!IsOfferedNextPlanetIndex(catalogIndex)) return;
-            SelectedNextPlanetCatalogIndex.Value = catalogIndex;
-        }
-
-        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        public void RequestTravelToNextPlanetServerRpc(RpcParams rpcParams = default)
-        {
-            if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
-                return;
-            if (Phase.Value != RoundPhase.Success) return;
-
-            ServerAdvanceToNextPlanet();
-        }
-
-        // Test-mode entry point: jump to any catalog planet regardless of tier or
-        // progression state. Reuses ServerTransitionToPlanet so scene loading, cleanup,
-        // and the loading screen all match the normal travel flow.
-        [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-        public void RequestStartTestRoundServerRpc(int catalogIndex, RpcParams rpcParams = default)
-        {
-            if (NetworkManager != null && rpcParams.Receive.SenderClientId != NetworkManager.ServerClientId)
-                return;
-            if (Phase.Value == RoundPhase.Active
-                || Phase.Value == RoundPhase.Loading
-                || Phase.Value == RoundPhase.Transitioning) return;
-
-            var planet = GetCatalogPlanet(catalogIndex);
-            if (planet == null || planetCatalog == null) return;
-
-            if (_transitionCoroutine != null) StopCoroutine(_transitionCoroutine);
-            _transitionCoroutine = StartCoroutine(ServerTransitionToPlanet(planet, catalogIndex));
-        }
-
-        public PlanetCatalog Catalog => planetCatalog;
-        public int NextTier => Mathf.Min(CurrentTier.Value + 1, PlanetCatalog.MaxTier);
-        public bool HasReachedFinalTier => CurrentTier.Value >= PlanetCatalog.MaxTier;
-        public PlanetDefinition CurrentPlanet => GetCatalogPlanet(CurrentPlanetCatalogIndex.Value);
-        public PlanetDefinition SelectedNextPlanet => GetCatalogPlanet(SelectedNextPlanetCatalogIndex.Value);
-        public RoundObjective ActiveObjective
-        {
-            get
-            {
-                var planet = CurrentPlanet;
-                return planet != null && planet.Objective != null ? planet.Objective : defaultObjective;
-            }
-        }
-        public bool HasActiveTimer => roundLengthSeconds > 0f;
-
-        public void ServerSetTimer(float seconds)
-        {
-            if (!IsServer) return;
-            roundLengthSeconds = Mathf.Max(0f, seconds);
-            TimeRemaining.Value = roundLengthSeconds;
-        }
-
-        // Called by survival-style objectives when the survival timer expires and a grace
-        // window should run before final resolution. Idempotent: re-entry while the window
-        // is already open is a no-op so Evaluate can safely call this every server tick.
-        public void ServerOpenExtractionGrace(float seconds)
-        {
-            if (!IsServer) return;
-            if (IsExtractionWindow.Value) return;
-            IsExtractionWindow.Value = true;
-            ServerSetTimer(Mathf.Max(0.1f, seconds));
-        }
-
-        public List<PlanetDefinition> GetNextTierCandidates()
-        {
-            return planetCatalog != null
-                ? planetCatalog.GetPlanetsForTier(NextTier)
-                : new List<PlanetDefinition>();
-        }
-
-        // Returns the random subset offered to the host on the current Success screen. When
-        // the server hasn't rolled choices yet (e.g. before any round has ended) this returns
-        // the full tier list so menus stay populated.
-        public List<PlanetDefinition> GetOfferedNextPlanetChoices()
-        {
-            var result = new List<PlanetDefinition>();
-            if (NextPlanetChoiceIndices != null && NextPlanetChoiceIndices.Count > 0)
-            {
-                for (var i = 0; i < NextPlanetChoiceIndices.Count; i++)
-                {
-                    var planet = GetCatalogPlanet(NextPlanetChoiceIndices[i]);
-                    if (planet != null && planet.Tier == NextTier) result.Add(planet);
-                }
-            }
-            if (result.Count == 0) return GetNextTierCandidates();
-            return result;
-        }
-
-        private bool IsOfferedNextPlanetIndex(int catalogIndex)
-        {
-            // No rolled offer yet (pre-Success or final tier): allow any same-tier pick so
-            // host-side flows that select up-front still work.
-            if (NextPlanetChoiceIndices == null || NextPlanetChoiceIndices.Count == 0) return true;
-            for (var i = 0; i < NextPlanetChoiceIndices.Count; i++)
-                if (NextPlanetChoiceIndices[i] == catalogIndex) return true;
-            return false;
-        }
-
-        private void ServerRollNextPlanetChoices()
-        {
-            if (!IsServer || NextPlanetChoiceIndices == null) return;
-            NextPlanetChoiceIndices.Clear();
-            if (planetCatalog == null || HasReachedFinalTier) return;
-
-            var pool = GetNextTierCandidates();
-            if (pool.Count == 0) return;
-
-            // <= MaxNextPlanetChoices candidates: show the whole tier so players still have
-            // a path forward. Above that, randomly sample MaxNextPlanetChoices distinct planets.
-            if (pool.Count <= MaxNextPlanetChoices)
-            {
-                for (var i = 0; i < pool.Count; i++)
-                {
-                    var idx = planetCatalog.IndexOf(pool[i]);
-                    if (idx >= 0) NextPlanetChoiceIndices.Add(idx);
-                }
-                return;
-            }
-
-            for (var i = 0; i < MaxNextPlanetChoices && pool.Count > 0; i++)
-            {
-                var pickIndex = Random.Range(0, pool.Count);
-                var planet = pool[pickIndex];
-                pool.RemoveAt(pickIndex);
-                var idx = planetCatalog.IndexOf(planet);
-                if (idx >= 0) NextPlanetChoiceIndices.Add(idx);
-            }
-        }
-
-        private PlanetDefinition GetCatalogPlanet(int index)
-        {
-            return planetCatalog != null ? planetCatalog.GetByIndex(index) : null;
-        }
-
-        private void ServerAdvanceToNextPlanet()
-        {
-            if (!IsServer) return;
-            if (HasReachedFinalTier)
-            {
-                SelectedNextPlanetCatalogIndex.Value = -1;
-                ServerStartRound();
-                return;
-            }
-
-            var next = SelectedNextPlanet;
-            if (next == null || next.Tier != NextTier)
-            {
-                // Default to the first option the host was actually offered, not the first
-                // catalog match - the offered list is what the menus showed them.
-                var offered = GetOfferedNextPlanetChoices();
-                next = offered.Count > 0 ? offered[0] : null;
-            }
-
-            if (next == null)
-            {
-                SelectedNextPlanetCatalogIndex.Value = -1;
-                ServerStartRound();
-                return;
-            }
-
-            var nextIndex = planetCatalog != null ? planetCatalog.IndexOf(next) : -1;
-            // Keep SelectedNextPlanetCatalogIndex set during transition so clients can display the destination.
-            SelectedNextPlanetCatalogIndex.Value = nextIndex;
-
-            if (_transitionCoroutine != null) StopCoroutine(_transitionCoroutine);
-            _transitionCoroutine = StartCoroutine(ServerTransitionToPlanet(next, nextIndex));
-        }
-
-        private IEnumerator ServerTransitionToPlanet(PlanetDefinition next, int nextIndex)
-        {
-            ServerSetPhase(RoundPhase.Transitioning);
-
-            // Wait for clients to fade to black before swapping the planet content.
-            yield return new WaitForSeconds(TransitionFadeSeconds);
-
-            var previousTier = CurrentTier.Value;
-            var previousPlanetCatalogIndex = CurrentPlanetCatalogIndex.Value;
-            var previousQuota = quota;
-            var previousRoundLengthSeconds = roundLengthSeconds;
-
-            ServerCleanupRoundActorsForPlanetTravel();
-            CurrentTier.Value = next.Tier;
-            CurrentPlanetCatalogIndex.Value = nextIndex; // triggers OnCurrentPlanetCatalogIndexChanged on all clients
-            ApplyPlanetOverrides(next);
-
-            // Brief hold so the loading screen is readable before the round starts.
-            yield return new WaitForSeconds(TransitionHoldSeconds);
-
-            // Don't start the next round until an env with launchpad + player spawns is
-            // registered. Otherwise the round can become active while players are still
-            // on the ship and the compass has no launchpad target.
-            // Same fallback as ApplyActivePlanetEnvironment: accept an exact match OR
-            // any same-tier env, so catalog entries without their own scene (DeepHaul,
-            // GhostShift, etc.) succeed once the fallback scene's env registers.
-            const float maxEnvWaitSeconds = PlanetSceneOrchestrator.SceneEventRetrySeconds + 8f;
-            var envWaitStart = Time.time;
-            while (PlanetSceneOwnership.FindRoundReadyEnvironment(next) == null
-                   && Time.time - envWaitStart < maxEnvWaitSeconds)
-            {
-                yield return null;
-            }
-
-            if (PlanetSceneOwnership.FindRoundReadyEnvironment(next) == null)
-            {
-                Debug.LogError(
-                    $"RoundManager: planet '{next.name}' was not round-ready after {maxEnvWaitSeconds:0.#}s " +
-                    $"({PlanetSceneOwnership.GetReadinessProblem(next)}). Restoring the previous planet instead of starting a broken round.");
-
-                quota = previousQuota;
-                roundLengthSeconds = previousRoundLengthSeconds;
-                Quota.Value = quota;
-                TimeRemaining.Value = roundLengthSeconds;
-                CurrentTier.Value = previousTier;
-                CurrentPlanetCatalogIndex.Value = previousPlanetCatalogIndex;
-                ApplyActivePlanetEnvironment();
-
-                SelectedNextPlanetCatalogIndex.Value = -1;
-                _transitionCoroutine = null;
-                ServerSetPhase(RoundPhase.Success);
-                yield break;
-            }
-
-            ApplyActivePlanetEnvironment();
-            SelectedNextPlanetCatalogIndex.Value = -1;
-            _transitionCoroutine = null;
-            ServerStartRound();
-        }
-
-        private void ApplyPlanetOverrides(PlanetDefinition planet)
-        {
-            if (planet == null) return;
-            if (planet.QuotaOverride > 0) quota = planet.QuotaOverride;
-            if (planet.RoundLengthOverride > 0f) roundLengthSeconds = planet.RoundLengthOverride;
         }
 
         [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -496,6 +260,7 @@ namespace FriendSlop.Round
             HasWings.Value = false;
             HasEngine.Value = false;
             RocketAssembled.Value = false;
+            finalTierSuccessRecorded = false;
             IsExtractionWindow.Value = false;
             boardedPlayerIds.Clear();
             PlayersBoarded.Value = 0;
@@ -576,96 +341,6 @@ namespace FriendSlop.Round
             }
         }
 
-        public void ServerPlayerBoarded(ulong clientId)
-        {
-            if (!IsServer || Phase.Value != RoundPhase.Active)
-                return;
-
-            if (boardedPlayerIds.Add(clientId))
-            {
-                UpdateBoardedPlayerCount();
-                CheckLaunchCondition();
-            }
-        }
-
-        public void ServerPlayerUnboarded(ulong clientId)
-        {
-            if (!IsServer)
-                return;
-
-            if (boardedPlayerIds.Remove(clientId))
-            {
-                UpdateBoardedPlayerCount();
-            }
-        }
-
-        private void CheckLaunchCondition()
-        {
-            var objective = ActiveObjective;
-            if (objective != null)
-            {
-                // Re-evaluate immediately on relevant gameplay events; otherwise Update handles polling.
-                if (Phase.Value != RoundPhase.Active) return;
-                var status = objective.Evaluate(this);
-                if (status == ObjectiveStatus.Success) ServerSetPhase(RoundPhase.Success);
-                else if (status == ObjectiveStatus.Failed) ServerSetPhase(RoundPhase.Failed);
-                return;
-            }
-
-            var connectedPlayerCount = NetworkManager != null ? NetworkManager.ConnectedClientsIds.Count : 0;
-            if (!RoundStateUtility.IsLaunchReady(RocketAssembled.Value, PlayersBoarded.Value, connectedPlayerCount))
-                return;
-
-            ServerSetPhase(RoundPhase.Success);
-        }
-
-        private void HandleClientDisconnect(ulong clientId)
-        {
-            if (!IsServer) return;
-
-            if (Phase.Value == RoundPhase.Loading)
-            {
-                var wasReady = _readyPlayerIds.Remove(clientId);
-                var loadingCounts = RoundStateUtility.RemoveDisconnectedLoadingPlayer(
-                    PlayersExpectedToLoad.Value,
-                    PlayersReady.Value,
-                    wasReady);
-                PlayersExpectedToLoad.Value = loadingCounts.ExpectedToLoad;
-                PlayersReady.Value = loadingCounts.ReadyCount;
-
-                if (PlayersExpectedToLoad.Value <= 0 || PlayersReady.Value >= PlayersExpectedToLoad.Value)
-                {
-                    ServerSetPhase(RoundPhase.Active);
-                }
-            }
-
-            if (boardedPlayerIds.Remove(clientId))
-            {
-                UpdateBoardedPlayerCount();
-                CheckLaunchCondition();
-            }
-        }
-
-        private void UpdateBoardedPlayerCount()
-        {
-            if (NetworkManager == null)
-            {
-                PlayersBoarded.Value = boardedPlayerIds.Count;
-                return;
-            }
-
-            var connectedBoardedPlayers = 0;
-            foreach (var clientId in NetworkManager.ConnectedClientsIds)
-            {
-                if (boardedPlayerIds.Contains(clientId))
-                {
-                    connectedBoardedPlayers++;
-                }
-            }
-
-            PlayersBoarded.Value = connectedBoardedPlayers;
-        }
-
         public static string FormatTime(float seconds)
         {
             seconds = Mathf.Max(0f, seconds);
@@ -678,91 +353,6 @@ namespace FriendSlop.Round
         {
             lootItems.Clear();
             lootItems.AddRange(FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None));
-        }
-
-        private void RespawnPlayersAtPlanet()
-        {
-            if (playerSpawnPoints == null || playerSpawnPoints.Length == 0)
-                return;
-
-            for (var index = 0; index < NetworkFirstPersonController.ActivePlayers.Count; index++)
-            {
-                var player = NetworkFirstPersonController.ActivePlayers[index];
-                if (player == null || !player.IsSpawned)
-                    continue;
-
-                var spawn = GetSpawnForPlayer(player, playerSpawnPoints);
-                if (spawn == null)
-                    continue;
-                player.ServerTeleport(spawn.position, spawn.rotation);
-                player.ServerRevive();
-            }
-        }
-
-        public void ServerPlaceNewPlayer(NetworkFirstPersonController player)
-        {
-            if (!IsServer || player == null)
-                return;
-
-            var spawnPoints = RoundStateUtility.IsShipPhase(Phase.Value) ? shipSpawnPoints : playerSpawnPoints;
-            if (spawnPoints == null || spawnPoints.Length == 0)
-                return;
-
-            var spawn = GetSpawnForPlayer(player, spawnPoints);
-            if (spawn == null) return;
-            player.ServerTeleport(spawn.position, spawn.rotation);
-        }
-
-        // Teleporter-pad entry points. Distinct from ServerPlaceNewPlayer because they're
-        // intended for mid-round transit between the ship and the active planet, so they
-        // ignore the phase-driven spawn-point switch and explicitly target one or the other.
-        public bool ServerTeleportPlayerToShip(NetworkFirstPersonController player)
-        {
-            if (!IsServer || player == null) return false;
-            return TeleportToSpawnPoints(player, shipSpawnPoints);
-        }
-
-        public bool ServerTeleportPlayerToPlanet(NetworkFirstPersonController player)
-        {
-            if (!IsServer || player == null) return false;
-            return TeleportToSpawnPoints(player, playerSpawnPoints);
-        }
-
-        private static bool TeleportToSpawnPoints(NetworkFirstPersonController player, Transform[] spawns)
-        {
-            if (spawns == null || spawns.Length == 0) return false;
-            var spawn = GetSpawnForPlayer(player, spawns);
-            if (spawn == null) return false;
-            player.ServerTeleport(spawn.position, spawn.rotation);
-            return true;
-        }
-
-        // Server-side fan-out for teleporter-pad effects. The flash is targeted at the
-        // teleported player only (other crew members shouldn't black out when someone
-        // else uses a pad), while the chirp broadcasts so everyone within earshot of the
-        // pad hears it.
-        public void ServerNotifyTeleporterEffect(NetworkFirstPersonController player, Vector3 padPosition)
-        {
-            if (!IsServer || player == null) return;
-
-            var flashParams = new ClientRpcParams
-            {
-                Send = new ClientRpcSendParams { TargetClientIds = new[] { player.OwnerClientId } }
-            };
-            TeleporterFlashClientRpc(flashParams);
-            TeleporterSoundClientRpc(padPosition);
-        }
-
-        [ClientRpc]
-        private void TeleporterFlashClientRpc(ClientRpcParams rpcParams = default)
-        {
-            LocalTeleporterFlashRequested?.Invoke();
-        }
-
-        [ClientRpc]
-        private void TeleporterSoundClientRpc(Vector3 padPosition)
-        {
-            TeleporterAudio.PlayAt(padPosition);
         }
 
         private void ServerSetPhase(RoundPhase phase)
@@ -780,6 +370,12 @@ namespace FriendSlop.Round
             // in sync with whichever subset was rolled.
             if (phase == RoundPhase.Success)
             {
+                if (HasReachedFinalTier && !finalTierSuccessRecorded)
+                {
+                    ExpeditionsCompleted.Value++;
+                    finalTierSuccessRecorded = true;
+                }
+
                 ServerRollNextPlanetChoices();
                 // Pre-select the first offered planet so the Travel button has a sensible
                 // default even if the host doesn't touch the cycle button.
@@ -795,40 +391,5 @@ namespace FriendSlop.Round
             }
         }
 
-        private void ServerMovePlayersToShip(bool revivePlayers)
-        {
-            if (!IsServer || shipSpawnPoints == null || shipSpawnPoints.Length == 0)
-                return;
-
-            for (var index = 0; index < NetworkFirstPersonController.ActivePlayers.Count; index++)
-            {
-                var player = NetworkFirstPersonController.ActivePlayers[index];
-                if (player == null || !player.IsSpawned)
-                    continue;
-
-                var spawn = GetSpawnForPlayer(player, shipSpawnPoints);
-                if (spawn == null) continue;
-                if (revivePlayers)
-                    player.ServerRevive();
-                player.ServerTeleport(spawn.position, spawn.rotation);
-            }
-        }
-
-        private static Transform GetSpawnForPlayer(NetworkFirstPersonController player, Transform[] spawnPoints)
-        {
-            if (spawnPoints == null || spawnPoints.Length == 0) return null;
-            var startIndex = NetworkFirstPersonController.ActivePlayers.IndexOf(player);
-            if (startIndex < 0) startIndex = 0;
-
-            // Skip null/destroyed slots so a stale planet-spawn array (e.g. transforms
-            // from a just-unloaded planet scene) doesn't strand players. Walk forward
-            // from the player's slot and return the first live transform.
-            for (var offset = 0; offset < spawnPoints.Length; offset++)
-            {
-                var candidate = spawnPoints[(startIndex + offset) % spawnPoints.Length];
-                if (candidate != null) return candidate;
-            }
-            return null;
-        }
     }
 }

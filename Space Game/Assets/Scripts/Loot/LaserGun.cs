@@ -87,15 +87,23 @@ namespace FriendSlop.Loot
         {
             var shooterId = rpcParams.Receive.SenderClientId;
             var shooter = NetworkFirstPersonController.FindByClientId(shooterId);
-            if (shooter == null || shooter.IsDead || !IsHeldBy(shooterId)) return;
-            if (!RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active)) return;
-            if (_ammo.Value <= 0) return;
-            if (Time.time < _nextServerFireTime) return;
+            var serverTime = Time.time;
+            if (!WeaponServerRules.CanLaserFire(
+                    shooter != null,
+                    shooter != null && shooter.IsDead,
+                    IsHeldBy(shooterId),
+                    RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active),
+                    _ammo.Value,
+                    serverTime,
+                    _nextServerFireTime))
+            {
+                return;
+            }
 
             origin = shooter.GetServerViewOrigin();
             direction = ResolveServerAimDirection(shooter, direction, maxServerAimAngle);
 
-            _nextServerFireTime = Time.time + fireCooldown;
+            _nextServerFireTime = serverTime + fireCooldown;
             _ammo.Value--;
 
             var endpoint = origin + direction * range;

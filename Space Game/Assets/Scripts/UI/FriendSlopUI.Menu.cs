@@ -163,6 +163,12 @@ namespace FriendSlop.UI
         private void UpdateRestartButtonLabel(RoundManager round, RoundPhase phase)
         {
             if (restartButtonLabel == null) return;
+            if (round != null && phase == RoundPhase.Success && round.HasReachedFinalTier)
+            {
+                restartButtonLabel.text = "Return to Lobby";
+                return;
+            }
+
             if (round != null && phase == RoundPhase.Success && !round.HasReachedFinalTier)
             {
                 var choices = round.GetOfferedNextPlanetChoices();
@@ -171,7 +177,7 @@ namespace FriendSlop.UI
                     var next = round.SelectedNextPlanet;
                     if (next == null || next.Tier != round.NextTier || !choices.Contains(next))
                         next = choices[0];
-                    restartButtonLabel.text = $"Travel: {FormatPlanetLabel(next)}";
+                    restartButtonLabel.text = $"Travel: {FormatPlanetLabel(next, round.Catalog)}";
                     return;
                 }
             }
@@ -221,6 +227,7 @@ namespace FriendSlop.UI
                 copyCodeButtonText.text = "Copied to Clipboard";
 
             SetButtonColor(copyCodeButton, SuccessButtonColor);
+            RequestUiRefresh();
         }
 
         private static string GetCopyableJoinCode(string rawCode)
@@ -303,9 +310,9 @@ namespace FriendSlop.UI
             return round != null ? round.CollectedValue.Value : 0;
         }
 
-        private static string FormatPlanetLabel(PlanetDefinition planet)
+        private static string FormatPlanetLabel(PlanetDefinition planet, PlanetCatalog catalog = null)
         {
-            return planet != null ? $"{planet.DisplayName} (Tier {planet.Tier})" : "Unknown";
+            return PlanetDisplayUtility.FormatPlanetLabel(planet, catalog);
         }
 
         private static string BuildSuccessResultText(RoundManager round)
@@ -316,11 +323,11 @@ namespace FriendSlop.UI
                 ? round.ActiveObjective.BuildSuccessText(round)
                 : string.Empty;
             if (string.IsNullOrWhiteSpace(objectiveText))
-                objectiveText = $"OBJECTIVE COMPLETE on {FormatPlanetLabel(round.CurrentPlanet)}.";
+                objectiveText = $"OBJECTIVE COMPLETE on {FormatPlanetLabel(round.CurrentPlanet, round.Catalog)}.";
 
             objectiveText = objectiveText.TrimEnd();
             if (round.HasReachedFinalTier)
-                return $"{objectiveText}\nFinal tier reached - replay to keep grinding.";
+                return $"{objectiveText}\nExpedition complete. Runs finished this session: {round.ExpeditionsCompleted.Value}.\nHost can return to the ship lobby.";
 
             var choices = round.GetOfferedNextPlanetChoices();
             if (choices.Count == 0)
@@ -338,7 +345,7 @@ namespace FriendSlop.UI
                 optionsLine = $"\n{choices.Count} of {totalForTier} tier {round.NextTier} planets rolled - host can cycle between them.";
             else
                 optionsLine = $"\n{choices.Count} tier {round.NextTier} options - host can cycle.";
-            return $"{objectiveText}\nNext: {FormatPlanetLabel(next)}{optionsLine}";
+            return $"{objectiveText}\nNext: {FormatPlanetLabel(next, round.Catalog)}{optionsLine}";
         }
 
         private static string BuildFailureResultText(RoundManager round)

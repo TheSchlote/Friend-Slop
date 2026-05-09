@@ -161,7 +161,7 @@ namespace FriendSlop.UI
             {
                 var planet = catalog.AllPlanets[i];
                 if (planet == null) continue;
-                var label = $"Tier {planet.Tier} - {planet.DisplayName}";
+                var label = PlanetDisplayUtility.FormatPlanetLabel(planet, catalog);
                 var capturedIndex = i;
                 var button = CreateButton(label, testModePlanetListContainer.transform, Vector2.zero,
                     () => OnTestPlanetClicked(capturedIndex));
