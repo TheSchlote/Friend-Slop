@@ -255,9 +255,12 @@ namespace FriendSlop.Interiors
             const float doorWidth  = 2f;
             const float doorHeight = 3f;
             const float wall       = 0.2f;
-            // Match BuildFloorOrCeiling.StairHoleW / StairHoleD in the editor builder.
-            const float holeW      = 4f;
-            const float holeD      = 5f;
+            // Match BuildFloorOrCeiling in the editor builder: 2 m wide × 4 m deep
+            // hole whose north edge is at the top step (z=7), covering the upper part
+            // of the staircase. Solid floor between the stair top and the wall.
+            const float holeW      = 2f;
+            const float holeD      = 4f;
+            const float holeNorthZ = 7f;
             float c = def.GridCellMeters;
             float h = def.FloorHeightMeters;
             float w = room.Definition.GridSize.x * c;
@@ -297,14 +300,13 @@ namespace FriendSlop.Interiors
                         size     = new Vector3(wall, doorHeight, doorWidth);
                         break;
                     case SocketDirection.Up:
-                        // Cap the ceiling hole at the NW corner (x=0..holeW, z=d-holeD..d).
-                        localPos = new Vector3(holeW * 0.5f, h, d - holeD * 0.5f);
+                        // Cap the ceiling hole — sits between holeSouthZ and holeNorthZ.
+                        localPos = new Vector3(holeW * 0.5f, h, holeNorthZ - holeD * 0.5f);
                         size     = new Vector3(holeW, wall, holeD);
                         break;
                     case SocketDirection.Down:
-                        // Cap the floor hole at the same NW corner so the player can't
-                        // fall through the bottom of a stair stack.
-                        localPos = new Vector3(holeW * 0.5f, 0f, d - holeD * 0.5f);
+                        // Cap the floor hole at the same XZ.
+                        localPos = new Vector3(holeW * 0.5f, 0f, holeNorthZ - holeD * 0.5f);
                         size     = new Vector3(holeW, wall, holeD);
                         break;
                     default: continue;

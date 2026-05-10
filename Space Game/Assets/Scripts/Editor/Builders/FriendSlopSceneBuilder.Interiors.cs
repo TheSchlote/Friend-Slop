@@ -164,12 +164,14 @@ namespace FriendSlop.Editor
                 BuildRamp(root, w, d, h, wall);
         }
 
-        // Floor or ceiling slab. If hasHole, leaves an opening at the NW corner sized
-        // generously so a player walking up the stairs has head-clearance before reaching
-        // the top — the hole is wider than the stairs (4 m vs 2 m) and deep enough that
-        // head clearance is reached before the player walks under solid ceiling.
-        private const float StairHoleW = 4f;
-        private const float StairHoleD = 5f;
+        // Floor or ceiling slab. If hasHole, leaves an opening that begins at the top
+        // step of the staircase (z ≈ 6.625 with 16 steps over 6 m run) and extends
+        // SOUTH from there, giving the player head-clearance during ascent. The strip
+        // between the top step and the north wall stays solid floor.
+        // 2 m wide (stair width) × 3 m deep.
+        private const float StairHoleW = 2f;
+        private const float StairHoleD = 4f;
+        private const float StairHoleNorthZ = 7f; // top step's north edge for the current ramp config
 
         private static void BuildFloorOrCeiling(GameObject root, string name, float y,
             float w, float d, float wall, bool hasHole)
@@ -180,16 +182,24 @@ namespace FriendSlop.Editor
                 return;
             }
 
-            float holeW = Mathf.Min(StairHoleW, w);
-            float holeD = Mathf.Min(StairHoleD, d);
+            float holeW       = Mathf.Min(StairHoleW, w);
+            float holeNorthZ  = Mathf.Min(StairHoleNorthZ, d);
+            float holeSouthZ  = Mathf.Max(0f, holeNorthZ - StairHoleD);
+
             // East strip — covers everything to the east of the hole (x=holeW..w, full Z).
             AddBox(root, $"{name}_E",
                 new Vector3(holeW + (w - holeW) * 0.5f, y, d * 0.5f),
                 new Vector3(w - holeW, wall, d));
-            // SW patch — covers the strip west of the hole (x=0..holeW, z=0..d-holeD).
-            AddBox(root, $"{name}_SW",
-                new Vector3(holeW * 0.5f, y, (d - holeD) * 0.5f),
-                new Vector3(holeW, wall, d - holeD));
+            // South patch — solid floor south of the hole.
+            if (holeSouthZ > 0.001f)
+                AddBox(root, $"{name}_SW",
+                    new Vector3(holeW * 0.5f, y, holeSouthZ * 0.5f),
+                    new Vector3(holeW, wall, holeSouthZ));
+            // North patch — solid floor between the top of the stairs and the wall.
+            if (d - holeNorthZ > 0.001f)
+                AddBox(root, $"{name}_NW",
+                    new Vector3(holeW * 0.5f, y, holeNorthZ + (d - holeNorthZ) * 0.5f),
+                    new Vector3(holeW, wall, d - holeNorthZ));
         }
 
         // Stairs from SW floor up to the NW ceiling hole. Each step is small enough that
