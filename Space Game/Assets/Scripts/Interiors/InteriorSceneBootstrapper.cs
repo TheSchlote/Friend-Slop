@@ -33,6 +33,7 @@ namespace FriendSlop.Interiors
             new(Quaternion.identity, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
         private GameObject _interiorRoot;
+        private InteriorMinimap _minimap;
         private BuildingDefinition _definition;
         private readonly List<ulong> _playersInside = new();
 
@@ -45,6 +46,15 @@ namespace FriendSlop.Interiors
         {
             if (IsServer)
             {
+                // The entrance fills InteriorSessionData before triggering the scene load.
+                // If we spawn without a definition, the scene was opened some other way
+                // (e.g., left open in the editor) — sit idle so we don't replicate junk.
+                if (InteriorSessionData.Definition == null)
+                {
+                    Debug.LogWarning("[Interior] Bootstrapper spawned with no session data — idling.");
+                    return;
+                }
+
                 _seed.Value           = InteriorSessionData.Seed;
                 _origin.Value         = InteriorSessionData.InteriorWorldOrigin;
                 _returnPosition.Value = InteriorSessionData.ReturnPosition;
@@ -77,17 +87,45 @@ namespace FriendSlop.Interiors
             var player = FindPlayer(clientId);
             if (player == null) return;
 
-            var dest = spawnPoint != null ? spawnPoint.position : _origin.Value + Vector3.up * 2f;
-            player.ServerTeleport(dest, _returnRotation.Value);
+            // Spawn near the south wall (right next to the exit) and face +Z so the player
+            // arrives looking into the interior with the exit door at their back.
+            player.ServerTeleport(GetSpawnPosition(), Quaternion.identity);
             if (!_playersInside.Contains(clientId))
                 _playersInside.Add(clientId);
+        }
+
+        // Spawn near the south wall of the Entry room (always grid (0,0,0)) so the
+        // exit door is right at the player's back when they arrive.
+        private Vector3 GetSpawnPosition()
+        {
+            if (spawnPoint != null) return spawnPoint.position;
+
+            var def = ResolveDefinition();
+            if (def == null) return _origin.Value + new Vector3(0f, 1f, 0f);
+
+            float halfCell = def.GridCellMeters * 0.5f;
+            return _origin.Value + new Vector3(halfCell, 1f, 1.5f);
         }
 
         public void PlayerExited(ulong clientId)
         {
             if (!IsServer) return;
             _playersInside.Remove(clientId);
-            if (_playersInside.Count == 0)
+            if (_playersInside.Count != 0) return;
+
+            // Roll fresh layouts for the next visit — clear all entrance seeds.
+            foreach (var entrance in Object.FindObjectsByType<InteriorEntrance>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                entrance.ResetSeed();
+
+            // Route through NetworkSceneTransitionService so its load-tracker stays
+            // in sync — otherwise re-entering the building after exit takes a stale
+            // "already loaded" branch and the bootstrapper never spawns again.
+            var service = Object.FindFirstObjectByType<FriendSlop.SceneManagement.NetworkSceneTransitionService>(
+                FindObjectsInactive.Exclude);
+            if (service != null)
+                service.ServerUnloadScenePath(gameObject.scene.path);
+            else
                 NetworkManager.SceneManager.UnloadScene(gameObject.scene);
         }
 
@@ -100,12 +138,14 @@ namespace FriendSlop.Interiors
 
             if (_definition != null)
             {
-                var layout = InteriorLayoutGenerator.Generate(_definition, _seed.Value);
+                var layout = InteriorLayoutGenerator.Generate(_definition, _seed.Value, SocketDirection.South);
                 _interiorRoot = BuildRooms(layout, _origin.Value);
+                _minimap = InteriorMinimap.Spawn(layout, _definition, _origin.Value);
                 yield return null;
                 BakeNavMesh(_interiorRoot);
                 yield return null;
                 SpawnDoors(layout, _origin.Value);
+                PositionExitDoor();
             }
 
             InteriorEvents.SetLoading(false);
@@ -124,10 +164,50 @@ namespace FriendSlop.Interiors
             InteriorEvents.SetLoading(true);
             yield return null;
 
-            var layout = InteriorLayoutGenerator.Generate(defAsset, _seed.Value);
+            var layout = InteriorLayoutGenerator.Generate(defAsset, _seed.Value, SocketDirection.South);
             _interiorRoot = BuildRooms(layout, _origin.Value);
+            _minimap = InteriorMinimap.Spawn(layout, defAsset, _origin.Value);
+            PositionExitDoor();
 
             InteriorEvents.SetLoading(false);
+        }
+
+        // Position the exit door near the south wall of the entry room. Wraps a coroutine
+        // so we can retry if the scene NetworkObjects haven't all spawned yet.
+        private void PositionExitDoor() => StartCoroutine(PositionExitDoorWhenReady());
+
+        private IEnumerator PositionExitDoorWhenReady()
+        {
+            InteriorExitDoor exit = null;
+            for (int i = 0; i < 30 && exit == null; i++)
+            {
+                var all = Object.FindObjectsByType<InteriorExitDoor>(
+                    FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+                if (all.Length > 0)
+                {
+                    exit = all[0];
+                    // Clean up any leftover duplicates from old scene saves.
+                    for (int j = 1; j < all.Length; j++)
+                        Destroy(all[j].gameObject);
+                    break;
+                }
+                yield return null;
+            }
+
+            if (exit == null)
+            {
+                Debug.LogWarning("[Interior] Exit door not found in scene — was 'Repair Interior Scene' run?");
+                yield break;
+            }
+
+            var def = ResolveDefinition();
+            float halfCell = def != null ? def.GridCellMeters * 0.5f : 4f;
+            // 0.15 m from the wall plane — slab back face lands flush with the wall pillars.
+            var pos = _origin.Value + new Vector3(halfCell, 0f, 0.15f);
+            exit.transform.position = pos;
+            exit.transform.rotation = Quaternion.identity;
+            Debug.Log($"[Interior] Exit door positioned at {pos} (in scene '{exit.gameObject.scene.name}')");
         }
 
         private void OnSeedReceived(int _, int newSeed)
@@ -142,6 +222,8 @@ namespace FriendSlop.Interiors
         private GameObject BuildRooms(InteriorLayout layout, Vector3 origin)
         {
             var root = new GameObject("Interior_Rooms");
+            // Move into the interior scene so rooms unload with the scene, not with the planet.
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, gameObject.scene);
             root.transform.position = origin;
 
             var def = ResolveDefinition();
@@ -153,8 +235,56 @@ namespace FriendSlop.Interiors
                 var worldPos = InteriorLayoutGenerator.RoomWorldPosition(room, origin, def);
                 var go = Object.Instantiate(room.Definition.Prefab, worldPos, Quaternion.identity, root.transform);
                 go.name = $"{room.Definition.name} [{room.GridPosition}]";
+
+                PatchUnconnectedSockets(go.transform, room, def);
             }
             return root;
+        }
+
+        // Plugs the door-frame opening for any socket the generator left unconnected.
+        // Door openings live on the SW-most cell of each wall (matching BuildPerimeterWall).
+        private static void PatchUnconnectedSockets(Transform roomRoot, PlacedRoom room, BuildingDefinition def)
+        {
+            const float doorWidth  = 2f;
+            const float doorHeight = 3f;
+            const float wall       = 0.2f;
+            float c = def.GridCellMeters;
+            float w = room.Definition.GridSize.x * c;
+            float d = room.Definition.GridSize.y * c;
+
+            foreach (var s in room.Definition.Sockets)
+            {
+                if (s.IsVertical() || room.ConnectedSockets.Contains(s)) continue;
+
+                Vector3 localPos;
+                Vector3 size;
+                switch (s)
+                {
+                    case SocketDirection.North:
+                        localPos = new Vector3(c * 0.5f, doorHeight * 0.5f, d);
+                        size     = new Vector3(doorWidth, doorHeight, wall);
+                        break;
+                    case SocketDirection.South:
+                        localPos = new Vector3(c * 0.5f, doorHeight * 0.5f, 0f);
+                        size     = new Vector3(doorWidth, doorHeight, wall);
+                        break;
+                    case SocketDirection.East:
+                        localPos = new Vector3(w, doorHeight * 0.5f, c * 0.5f);
+                        size     = new Vector3(wall, doorHeight, doorWidth);
+                        break;
+                    case SocketDirection.West:
+                        localPos = new Vector3(0f, doorHeight * 0.5f, c * 0.5f);
+                        size     = new Vector3(wall, doorHeight, doorWidth);
+                        break;
+                    default: continue;
+                }
+
+                var patch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                patch.name = $"WallPatch_{s}";
+                patch.transform.SetParent(roomRoot, false);
+                patch.transform.localPosition = localPos;
+                patch.transform.localScale    = size;
+            }
         }
 
         private static void BakeNavMesh(GameObject root)
@@ -175,10 +305,25 @@ namespace FriendSlop.Interiors
             {
                 if (conn.SocketA.IsVertical()) continue;
                 var (pos, rot) = InteriorLayoutGenerator.DoorTransform(conn, origin, def);
+                Debug.Log($"[Interior] Door at {pos} rot={rot.eulerAngles} " +
+                          $"(RoomA grid={conn.RoomA.GridPosition} size={conn.RoomA.Definition.GridSize} socket={conn.SocketA})");
                 var door = Object.Instantiate(doorPrefab, pos, rot);
+                UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(door, gameObject.scene);
+                ApplyDoorColor(door);
                 var netObj = door.GetComponent<NetworkObject>();
                 if (netObj != null) netObj.Spawn(destroyWithScene: true);
             }
+        }
+
+        // Saddle brown so doors stand out from the grey wall material.
+        private static readonly Color DoorColor = new(0.55f, 0.3f, 0.1f);
+        private static void ApplyDoorColor(GameObject door)
+        {
+            var renderer = door.GetComponentInChildren<MeshRenderer>();
+            if (renderer == null || renderer.sharedMaterial == null) return;
+            var mat = new Material(renderer.sharedMaterial) { color = DoorColor };
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", DoorColor);
+            renderer.sharedMaterial = mat;
         }
 
         // ── Utility ───────────────────────────────────────────────────────────
@@ -213,6 +358,11 @@ namespace FriendSlop.Interiors
             {
                 Destroy(_interiorRoot);
                 _interiorRoot = null;
+            }
+            if (_minimap != null)
+            {
+                Destroy(_minimap.gameObject);
+                _minimap = null;
             }
         }
     }

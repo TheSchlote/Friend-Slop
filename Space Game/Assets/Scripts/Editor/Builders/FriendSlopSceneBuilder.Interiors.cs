@@ -94,7 +94,18 @@ namespace FriendSlop.Editor
         {
             var assetPath = $"{InteriorRoomDefFolder}/{spec.Name}.asset";
             var existing  = AssetDatabase.LoadAssetAtPath<RoomDefinition>(assetPath);
-            if (existing != null) return existing;
+
+            // Always rebuild the prefab — geometry rules iterate. The .asset itself can be reused.
+            var prefab = RepairRoomPrefab(spec);
+
+            if (existing != null)
+            {
+                // Make sure the existing definition still points at the rebuilt prefab.
+                var existingSo = new SerializedObject(existing);
+                existingSo.FindProperty("prefab").objectReferenceValue = prefab;
+                existingSo.ApplyModifiedPropertiesWithoutUndo();
+                return existing;
+            }
 
             var def = ScriptableObject.CreateInstance<RoomDefinition>();
             var so  = new SerializedObject(def);
@@ -108,7 +119,6 @@ namespace FriendSlop.Editor
             for (int i = 0; i < spec.Sockets.Length; i++)
                 socketsArr.GetArrayElementAtIndex(i).enumValueIndex = (int)spec.Sockets[i];
 
-            var prefab = RepairRoomPrefab(spec);
             so.FindProperty("prefab").objectReferenceValue = prefab;
             so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -118,9 +128,9 @@ namespace FriendSlop.Editor
 
         private static GameObject RepairRoomPrefab(RoomSpec spec)
         {
+            // Always overwrite — geometry rules change as we iterate the interior system,
+            // and SaveAsPrefabAsset preserves the asset GUID so RoomDefinition refs survive.
             var prefabPath = $"{InteriorRoomFolder}/{spec.Name}.prefab";
-            var existing   = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-            if (existing != null) return existing;
 
             var root = new GameObject(spec.Name);
             BuildRoomGeometry(root, spec);
@@ -132,30 +142,20 @@ namespace FriendSlop.Editor
 
         private static void BuildRoomGeometry(GameObject root, RoomSpec spec)
         {
-            float w = spec.GridSize.x * 8f;  // 8 m per grid cell
-            float d = spec.GridSize.y * 8f;
+            const float c = 8f;  // metres per grid cell
+            float w = spec.GridSize.x * c;
+            float d = spec.GridSize.y * c;
             const float h = 4f;
             const float wall = 0.2f;
 
-            AddBox(root, "Floor",   new Vector3(w * 0.5f, 0,       d * 0.5f), new Vector3(w, wall, d));
-            AddBox(root, "Ceiling", new Vector3(w * 0.5f, h,       d * 0.5f), new Vector3(w, wall, d));
+            AddBox(root, "Floor",   new Vector3(w * 0.5f, 0, d * 0.5f), new Vector3(w, wall, d));
+            AddBox(root, "Ceiling", new Vector3(w * 0.5f, h, d * 0.5f), new Vector3(w, wall, d));
 
             var sockets = new HashSet<SocketDirection>(spec.Sockets);
-            if (!sockets.Contains(SocketDirection.North))
-                AddBox(root, "WallN", new Vector3(w * 0.5f, h * 0.5f, d), new Vector3(w, h, wall));
-            if (!sockets.Contains(SocketDirection.South))
-                AddBox(root, "WallS", new Vector3(w * 0.5f, h * 0.5f, 0), new Vector3(w, h, wall));
-            if (!sockets.Contains(SocketDirection.East))
-                AddBox(root, "WallE", new Vector3(w, h * 0.5f, d * 0.5f), new Vector3(wall, h, d));
-            if (!sockets.Contains(SocketDirection.West))
-                AddBox(root, "WallW", new Vector3(0, h * 0.5f, d * 0.5f), new Vector3(wall, h, d));
-
-            // Door frames for each open socket (horizontal)
-            foreach (var s in spec.Sockets)
-            {
-                if (s.IsVertical()) continue;
-                AddDoorFrame(root, s, w, d, h, wall);
-            }
+            BuildPerimeterWall(root, SocketDirection.North, sockets, w, d, h, wall, c);
+            BuildPerimeterWall(root, SocketDirection.South, sockets, w, d, h, wall, c);
+            BuildPerimeterWall(root, SocketDirection.East,  sockets, w, d, h, wall, c);
+            BuildPerimeterWall(root, SocketDirection.West,  sockets, w, d, h, wall, c);
         }
 
         private static void AddBox(GameObject parent, string n, Vector3 localPos, Vector3 scale)
@@ -167,31 +167,79 @@ namespace FriendSlop.Editor
             go.transform.localScale    = scale;
         }
 
-        private static void AddDoorFrame(GameObject root, SocketDirection s, float w, float d, float h, float wall)
+        // For each wall direction we either build a solid wall (no socket on this side) or a
+        // wall with a single door opening at the SW-most cell of that wall — the door cell.
+        // The remaining cells of a multi-cell wall stay solid. This matches DoorTransform's
+        // grid-aligned door positions so doors and door frames always line up.
+        private static void BuildPerimeterWall(GameObject root, SocketDirection s, HashSet<SocketDirection> sockets,
+            float w, float d, float h, float wall, float c)
         {
-            const float dw = 2f;  // door width
-            const float dh = 3f;  // door height
-            float roomDim = s == SocketDirection.North || s == SocketDirection.South ? w : d;
-            float wallZ   = s == SocketDirection.North ? d : (s == SocketDirection.South ? 0 : d * 0.5f);
-            float wallX   = s == SocketDirection.East  ? w : (s == SocketDirection.West  ? 0 : w * 0.5f);
-
             bool ns = s == SocketDirection.North || s == SocketDirection.South;
-            Vector3 frameScale = ns ? new Vector3(roomDim, wall, wall) : new Vector3(wall, wall, roomDim);
-            Vector3 center     = new Vector3(wallX, h * 0.5f, wallZ);
 
-            // Side pillars
-            float sideW = (roomDim - dw) * 0.5f;
+            if (!sockets.Contains(s))
+            {
+                if (ns)
+                {
+                    float wallZ = s == SocketDirection.North ? d : 0f;
+                    AddBox(root, $"Wall{s}", new Vector3(w * 0.5f, h * 0.5f, wallZ), new Vector3(w, h, wall));
+                }
+                else
+                {
+                    float wallX = s == SocketDirection.East ? w : 0f;
+                    AddBox(root, $"Wall{s}", new Vector3(wallX, h * 0.5f, d * 0.5f), new Vector3(wall, h, d));
+                }
+                return;
+            }
+
+            // Has a socket — solid wall covers everything past the first cell, then a
+            // door frame at the first cell.
             if (ns)
             {
-                AddBox(root, $"Frame_{s}_L", new Vector3(sideW * 0.5f,         h * 0.5f, wallZ), new Vector3(sideW, h, wall));
-                AddBox(root, $"Frame_{s}_R", new Vector3(roomDim - sideW * 0.5f, h * 0.5f, wallZ), new Vector3(sideW, h, wall));
-                AddBox(root, $"Frame_{s}_T", new Vector3(roomDim * 0.5f, dh + (h - dh) * 0.5f, wallZ), new Vector3(dw, h - dh, wall));
+                float wallZ = s == SocketDirection.North ? d : 0f;
+                if (w > c + 0.001f)
+                {
+                    float restW = w - c;
+                    AddBox(root, $"Wall{s}_Rest",
+                        new Vector3(c + restW * 0.5f, h * 0.5f, wallZ),
+                        new Vector3(restW, h, wall));
+                }
+                AddDoorFrameAtCell(root, s, c, wallZ, h, wall, ns: true);
             }
             else
             {
-                AddBox(root, $"Frame_{s}_L", new Vector3(wallX, h * 0.5f, sideW * 0.5f),          new Vector3(wall, h, sideW));
-                AddBox(root, $"Frame_{s}_R", new Vector3(wallX, h * 0.5f, roomDim - sideW * 0.5f), new Vector3(wall, h, sideW));
-                AddBox(root, $"Frame_{s}_T", new Vector3(wallX, dh + (h - dh) * 0.5f, roomDim * 0.5f), new Vector3(wall, h - dh, dw));
+                float wallX = s == SocketDirection.East ? w : 0f;
+                if (d > c + 0.001f)
+                {
+                    float restD = d - c;
+                    AddBox(root, $"Wall{s}_Rest",
+                        new Vector3(wallX, h * 0.5f, c + restD * 0.5f),
+                        new Vector3(wall, h, restD));
+                }
+                AddDoorFrameAtCell(root, s, c, wallX, h, wall, ns: false);
+            }
+        }
+
+        // Builds the side pillars + lintel for a single door cell (centred on the cell).
+        private static void AddDoorFrameAtCell(GameObject root, SocketDirection s,
+            float cellSize, float wallPos, float h, float wall, bool ns)
+        {
+            const float dw = 2f;   // door opening width
+            const float dh = 3f;   // door opening height
+            float sideW = (cellSize - dw) * 0.5f;
+
+            if (ns)
+            {
+                float wallZ = wallPos;
+                AddBox(root, $"Frame_{s}_L", new Vector3(sideW * 0.5f,             h * 0.5f, wallZ), new Vector3(sideW, h, wall));
+                AddBox(root, $"Frame_{s}_R", new Vector3(cellSize - sideW * 0.5f,  h * 0.5f, wallZ), new Vector3(sideW, h, wall));
+                AddBox(root, $"Frame_{s}_T", new Vector3(cellSize * 0.5f, dh + (h - dh) * 0.5f, wallZ), new Vector3(dw, h - dh, wall));
+            }
+            else
+            {
+                float wallX = wallPos;
+                AddBox(root, $"Frame_{s}_L", new Vector3(wallX, h * 0.5f, sideW * 0.5f),                new Vector3(wall, h, sideW));
+                AddBox(root, $"Frame_{s}_R", new Vector3(wallX, h * 0.5f, cellSize - sideW * 0.5f),     new Vector3(wall, h, sideW));
+                AddBox(root, $"Frame_{s}_T", new Vector3(wallX, dh + (h - dh) * 0.5f, cellSize * 0.5f), new Vector3(wall, h - dh, dw));
             }
         }
 

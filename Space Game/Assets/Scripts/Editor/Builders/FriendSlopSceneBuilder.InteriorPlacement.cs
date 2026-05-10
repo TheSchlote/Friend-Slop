@@ -41,9 +41,15 @@ namespace FriendSlop.Editor
 
         private static bool EnsureTestBuildingInScene(Scene scene)
         {
-            // Idempotent: bail if building is already in the scene.
+            // Always rebuild — the menu is "Add Test Building" and the user expects a fresh
+            // known-good state every time. Idempotency by name caused stale layouts to stick.
             foreach (var root in scene.GetRootGameObjects())
-                if (root.name == TestBuildingName) return false;
+            {
+                if (root.name != TestBuildingName) continue;
+                Object.DestroyImmediate(root);
+                Debug.Log("[Friend Slop] Removed previous test building.");
+                break;
+            }
 
             var smallDef = AssetDatabase.LoadAssetAtPath<BuildingDefinition>(
                 $"{InteriorBuildingFolder}/Building_Small.asset");
@@ -57,13 +63,30 @@ namespace FriendSlop.Editor
             var go = new GameObject(TestBuildingName);
             SceneManager.MoveGameObjectToScene(go, scene);
 
-            // Place on the planet surface.
+            const float shellSize = 8f;
+            const float halfShell = shellSize * 0.5f;
+
+            // Place on the planet surface, prioritising the entry door — we shift the pivot
+            // so the door's bottom lands on the actual surface in the door's direction.
+            // Otherwise on a small planet (R=18) the building's centre sits flush but the
+            // door floats a metre off the ground.
             var world = Object.FindFirstObjectByType<SphereWorld>(FindObjectsInactive.Include);
             if (world != null)
             {
                 var surfaceDir = new Vector3(0.3f, 0.9f, 0.2f).normalized;
-                go.transform.position = world.GetSurfacePoint(surfaceDir, 0.5f);
-                go.transform.rotation = world.GetSurfaceRotation(surfaceDir, Vector3.forward);
+                var rotation = world.GetSurfaceRotation(surfaceDir, Vector3.forward);
+                var centerSurface = world.GetSurfacePoint(surfaceDir, 0f);
+
+                // Where would the door bottom land if pivot was at centerSurface?
+                var doorLocalOffset = new Vector3(0f, 0f, halfShell);
+                var doorWorld = centerSurface + rotation * doorLocalOffset;
+
+                // Sample the actual surface in the door's direction (picks up terrain too).
+                var doorDir = (doorWorld - world.Center).normalized;
+                var doorSurface = world.GetSurfacePoint(doorDir, 0f);
+
+                go.transform.position = centerSurface + (doorSurface - doorWorld);
+                go.transform.rotation = rotation;
                 go.AddComponent<PlanetSurfaceAnchor>();
             }
             else
@@ -71,19 +94,40 @@ namespace FriendSlop.Editor
                 go.transform.position = new Vector3(10f, 1f, 0f);
             }
 
-            // Placeholder exterior so the building is visible in-editor.
+            // Placeholder exterior shell, centred on the pivot, sitting on the surface (Y=0..8).
+            // Keep its BoxCollider so the player can't walk through walls.
             var shell = GameObject.CreatePrimitive(PrimitiveType.Cube);
             shell.name = "ExteriorShell";
             shell.transform.SetParent(go.transform, false);
-            shell.transform.localPosition = new Vector3(4f, 4f, 4f);
-            shell.transform.localScale    = new Vector3(8f, 8f, 8f);
-            Object.DestroyImmediate(shell.GetComponent<Collider>());
+            shell.transform.localPosition = new Vector3(0f, shellSize * 0.5f, 0f);
+            shell.transform.localScale    = new Vector3(shellSize, shellSize, shellSize);
 
-            // Non-trigger so PlayerInteractor's SphereCast (QueryTriggerInteraction.Ignore) detects it.
+            // Door visual on the front (+Z) face — same plane as the interactable collider.
+            var doorVisual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            doorVisual.name = "DoorVisual";
+            doorVisual.transform.SetParent(go.transform, false);
+            doorVisual.transform.localPosition = new Vector3(0f, 1.25f, shellSize * 0.5f + 0.06f);
+            doorVisual.transform.localScale    = new Vector3(1.6f, 2.5f, 0.1f);
+            Object.DestroyImmediate(doorVisual.GetComponent<Collider>());
+            var renderer = doorVisual.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                // Saddle brown — visible against grey shell and green hills.
+                var brown = new Color(0.55f, 0.3f, 0.1f);
+                var src = renderer.sharedMaterial != null
+                    ? renderer.sharedMaterial
+                    : new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                var mat = new Material(src) { color = brown };
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", brown);
+                renderer.sharedMaterial = mat;
+            }
+
+            // Non-trigger collider just outside the shell so SphereCast hits it before the
+            // shell's wall. (0.25 m clear of the shell face.)
             var col = go.AddComponent<BoxCollider>();
             col.isTrigger = false;
-            col.size   = new Vector3(2f, 3f, 0.3f);
-            col.center = new Vector3(0f, 1.5f, 0f);
+            col.size   = new Vector3(1.6f, 2.5f, 0.2f);
+            col.center = new Vector3(0f, 1.25f, shellSize * 0.5f + 0.25f);
 
             // NetworkObject required because InteriorEntrance is a NetworkBehaviour.
             go.AddComponent<NetworkObject>();

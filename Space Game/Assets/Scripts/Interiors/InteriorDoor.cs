@@ -1,15 +1,23 @@
+using FriendSlop.Interaction;
+using FriendSlop.Player;
 using Unity.Netcode;
 using UnityEngine;
 
 namespace FriendSlop.Interiors
 {
     // Server-authoritative door. Toggled via RPC; open state synced via NetworkVariable.
-    public class InteriorDoor : NetworkBehaviour
+    public class InteriorDoor : NetworkBehaviour, IFriendSlopInteractable
     {
         [SerializeField] private Collider doorCollider;
         [SerializeField] private Transform doorPivot;
         [SerializeField] private float openAngle = 90f;
         [SerializeField] private float animSpeed = 4f;
+
+        public bool CanInteract(NetworkFirstPersonController player) => true;
+        public string GetPrompt(NetworkFirstPersonController player)
+            => _isOpen.Value ? "E close door" : "E open door";
+
+        public void Interact(NetworkFirstPersonController player) => ToggleRpc();
 
         private readonly NetworkVariable<bool> _isOpen =
             new(false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);

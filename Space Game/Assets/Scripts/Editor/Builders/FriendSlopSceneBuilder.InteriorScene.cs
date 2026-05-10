@@ -35,6 +35,13 @@ namespace FriendSlop.Editor
             {
                 Debug.Log("[Friend Slop] Interior scene already up to date.");
             }
+
+            // Close the scene so it doesn't auto-load with the editor on Play. If the
+            // scene is open when Play starts, the bootstrapper's OnNetworkSpawn fires
+            // before any player enters the building, generates with empty session data,
+            // and produces an empty interior.
+            if (SceneManager.sceneCount > 1)
+                EditorSceneManager.CloseScene(scene, removeScene: true);
         }
 
         // ── Scene load / create ────────────────────────────────────────────────
@@ -69,18 +76,13 @@ namespace FriendSlop.Editor
             go.AddComponent<NetworkObject>();
             var bs = go.AddComponent<InteriorSceneBootstrapper>();
 
-            // Spawn point one unit above origin facing +Z
-            var spawnGo = new GameObject("SpawnPoint");
-            spawnGo.transform.SetParent(go.transform, false);
-            spawnGo.transform.localPosition = new Vector3(0f, 1f, -1f);
-
             var doorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(
                 $"{InteriorPrefabFolder}/InteriorDoor.prefab");
             var catalog = AssetDatabase.LoadAssetAtPath<InteriorCatalog>(
                 $"{InteriorAssetFolder}/InteriorCatalog.asset");
 
+            // Leave spawnPoint unwired — bootstrapper computes the entry-room centre at runtime.
             var so = new SerializedObject(bs);
-            so.FindProperty("spawnPoint").objectReferenceValue = spawnGo.transform;
             so.FindProperty("doorPrefab").objectReferenceValue = doorPrefab;
             so.FindProperty("catalog").objectReferenceValue    = catalog;
             so.ApplyModifiedPropertiesWithoutUndo();
@@ -93,31 +95,61 @@ namespace FriendSlop.Editor
 
         private static bool EnsureExitDoor(Scene scene)
         {
+            // Destroy both real InteriorExitDoors and orphaned GameObjects named
+            // "InteriorExitDoor" (those exist because earlier broken builds tried to add
+            // the component before its required Collider and silently dropped it).
+            var staleRoots = new System.Collections.Generic.HashSet<GameObject>();
+            var allExits = Object.FindObjectsByType<InteriorExitDoor>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var exit in allExits)
+            {
+                if (exit == null || exit.gameObject == null) continue;
+                if (exit.gameObject.scene != scene) continue;
+                staleRoots.Add(exit.gameObject.transform.root.gameObject);
+            }
             foreach (var root in scene.GetRootGameObjects())
-                if (root.GetComponentInChildren<InteriorExitDoor>() != null) return false;
+                if (root != null && root.name == "InteriorExitDoor")
+                    staleRoots.Add(root);
+
+            foreach (var stale in staleRoots)
+                Object.DestroyImmediate(stale);
+            Debug.Log($"[Friend Slop] EnsureExitDoor: destroyed {staleRoots.Count} stale root(s) in '{scene.name}'.");
 
             var origin = InteriorSessionData.InteriorWorldOrigin;
 
             var go = new GameObject("InteriorExitDoor");
             SceneManager.MoveGameObjectToScene(go, scene);
+            // Bootstrapper repositions this at runtime to the entry-room centre once the
+            // building definition is known. The placement here is just a sane default.
+            go.transform.position = origin;
 
-            // Place 2 m in front of the spawn point so the player sees it immediately.
-            go.transform.position = origin + new Vector3(0f, 1f, 0f);
+            // Sized to fully fill the room's 2 m × 3 m door-frame opening.
+            // Collider must be added BEFORE InteriorExitDoor — [RequireComponent] silently
+            // refuses to attach the component otherwise.
+            var col = go.AddComponent<BoxCollider>();
+            col.isTrigger = false;
+            col.size   = new Vector3(2f, 3f, 0.2f);
+            col.center = new Vector3(0f, 1.5f, 0f);
 
             go.AddComponent<NetworkObject>();
             go.AddComponent<InteriorExitDoor>();
 
-            // Non-trigger BoxCollider so SphereCast in PlayerInteractor can detect it.
-            var col = go.AddComponent<BoxCollider>();
-            col.isTrigger = false;
-            col.size = new Vector3(1.5f, 2.5f, 0.2f);
-
-            // Visible placeholder geometry (thin slab facing +Z)
+            // Slab visual — fills the doorway opening exactly so no gap is visible around it.
             var slab = GameObject.CreatePrimitive(PrimitiveType.Cube);
             slab.name = "ExitDoor_Visual";
             slab.transform.SetParent(go.transform, false);
-            slab.transform.localScale = new Vector3(1.5f, 2.5f, 0.1f);
+            slab.transform.localPosition = new Vector3(0f, 1.5f, 0f);
+            slab.transform.localScale    = new Vector3(2f, 3f, 0.1f);
             Object.DestroyImmediate(slab.GetComponent<Collider>());
+
+            var renderer = slab.GetComponent<MeshRenderer>();
+            if (renderer != null && renderer.sharedMaterial != null)
+            {
+                var red = new Color(0.85f, 0.15f, 0.15f);
+                var mat = new Material(renderer.sharedMaterial) { color = red };
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", red);
+                renderer.sharedMaterial = mat;
+            }
 
             EditorUtility.SetDirty(go);
             return true;

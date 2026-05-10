@@ -26,18 +26,28 @@ namespace FriendSlop.Interiors
             RequestEnterRpc(player.OwnerClientId);
         }
 
+        // Called by the bootstrapper when the interior scene fully unloads (last player
+        // exited). Forces a fresh random layout on the next entry.
+        public void ResetSeed()
+        {
+            if (!IsServer) return;
+            _seed.Value = -1;
+        }
+
         [Rpc(SendTo.Server)]
         private void RequestEnterRpc(ulong requestingClientId)
         {
             if (definition == null) return;
 
             if (_seed.Value < 0)
-                _seed.Value = (Mathf.RoundToInt(transform.position.x) * 31
-                             + Mathf.RoundToInt(transform.position.z)) & int.MaxValue;
+                _seed.Value = UnityEngine.Random.Range(1, int.MaxValue);
 
             InteriorSessionData.Seed              = _seed.Value;
             InteriorSessionData.Definition        = definition;
-            InteriorSessionData.ReturnPosition    = transform.position + transform.up * 1.5f;
+            // Return position: 1 m above ground, 5 m in front of the building origin
+            // (clear of the 8 m shell's +Z face). transform.forward is the building's
+            // surface-tangent forward direction.
+            InteriorSessionData.ReturnPosition    = transform.TransformPoint(new Vector3(0f, 1f, 5f));
             InteriorSessionData.ReturnRotation    = transform.rotation;
             InteriorSessionData.RequestingClientId = requestingClientId;
             InteriorSessionData.ScenePath         = interiorScenePath;
@@ -46,14 +56,26 @@ namespace FriendSlop.Interiors
             if (service == null) return;
 
             var normalized = GameScenePathUtility.NormalizePath(interiorScenePath);
-            if (service.WasServerSceneLoadStarted(normalized) || IsSceneLoaded(normalized))
+            bool wasStarted = service.WasServerSceneLoadStarted(normalized);
+            bool sceneLoaded = IsSceneLoaded(normalized);
+            if (wasStarted || sceneLoaded)
             {
-                // Interior already loaded — just teleport this player in.
                 var bootstrapper = Object.FindFirstObjectByType<InteriorSceneBootstrapper>(FindObjectsInactive.Include);
-                bootstrapper?.TeleportPlayerIn(requestingClientId);
+                Debug.Log($"[Interior] Re-entry — wasStarted={wasStarted} sceneLoaded={sceneLoaded} bootstrapper={(bootstrapper != null ? "found" : "MISSING")}");
+                if (bootstrapper != null)
+                {
+                    bootstrapper.TeleportPlayerIn(requestingClientId);
+                }
+                else
+                {
+                    // Scene was unloaded but the service tracker is stale — load fresh.
+                    Debug.Log("[Interior] Stale tracker — forcing fresh scene load.");
+                    service.ServerLoadScenePath(interiorScenePath, LoadSceneMode.Additive);
+                }
             }
             else
             {
+                Debug.Log($"[Interior] First entry — loading scene {interiorScenePath}");
                 service.ServerLoadScenePath(interiorScenePath, LoadSceneMode.Additive);
             }
         }

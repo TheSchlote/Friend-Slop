@@ -14,11 +14,12 @@ namespace FriendSlop.Interiors
 
         // ── Public API ─────────────────────────────────────────────────────────
 
-        public static InteriorLayout Generate(BuildingDefinition def, int seed)
+        public static InteriorLayout Generate(BuildingDefinition def, int seed,
+            SocketDirection? reservedExitSocket = null)
         {
             for (int i = 0; i < MaxGenerationAttempts; i++)
             {
-                var layout = TryGenerate(def, seed + i);
+                var layout = TryGenerate(def, seed + i, reservedExitSocket);
                 if (layout != null) return layout;
             }
             return GenerateFallback(def, seed);
@@ -26,7 +27,8 @@ namespace FriendSlop.Interiors
 
         // ── Generation core ────────────────────────────────────────────────────
 
-        private static InteriorLayout TryGenerate(BuildingDefinition def, int seed)
+        private static InteriorLayout TryGenerate(BuildingDefinition def, int seed,
+            SocketDirection? reservedExitSocket)
         {
             var rng = new Random(seed);
             var layout = new InteriorLayout { Seed = seed };
@@ -44,6 +46,13 @@ namespace FriendSlop.Interiors
 
             var entry = TryPlaceAt(layout, entryDef, Vector3Int.zero);
             if (entry == null) return null;
+
+            // Reserve a socket on the entry for the exterior exit door — the generator
+            // won't try to connect an interior room there, and the exit door fills the
+            // wall opening at runtime.
+            if (reservedExitSocket.HasValue && entryDef.HasSocket(reservedExitSocket.Value))
+                entry.ConnectedSockets.Add(reservedExitSocket.Value);
+
             AddSockets(frontier, entry);
 
             int placedOnFloor = 1;
@@ -199,10 +208,14 @@ namespace FriendSlop.Interiors
                 g.z * def.GridCellMeters);
         }
 
-        // World-space centre of the door at a connection, plus its facing rotation.
+        // Door prefab is hinge-pivoted: pivot sits at the bottom-left corner of the door,
+        // mesh extends +X by doorWidth and +Y by doorHeight. So we return the hinge position
+        // (offset back along the door's local +X by half the door width) and the door's
+        // outward facing rotation. Y is at floor level so the door sits on the floor.
+        private const float DoorWidth = 2f;
+
         public static (Vector3 position, Quaternion rotation) DoorTransform(
-            InteriorLayout.Connection conn, Vector3 buildingOrigin, BuildingDefinition def,
-            float doorMidHeight = 1.5f)
+            InteriorLayout.Connection conn, Vector3 buildingOrigin, BuildingDefinition def)
         {
             var a = conn.RoomA;
             var cell = def.GridCellMeters;
@@ -210,34 +223,40 @@ namespace FriendSlop.Interiors
             var origin = buildingOrigin;
             var p = a.GridPosition;
             var s = a.Definition.GridSize;
-            float baseY = origin.y + p.y * floorH + doorMidHeight;
+            float floorY = origin.y + p.y * floorH;
 
-            Vector3 pos;
+            Vector3 openingCentre;
             Quaternion rot;
+            // Door is on the SW-most cell of each wall (cellX=0 for N/S, cellZ=0 for E/W),
+            // so multi-cell rooms still align with neighbouring 1×1 rooms on the grid.
             switch (conn.SocketA)
             {
                 case SocketDirection.North:
-                    pos = new Vector3(origin.x + (p.x + s.x * 0.5f) * cell, baseY, origin.z + (p.z + s.y) * cell);
+                    openingCentre = new Vector3(origin.x + (p.x + 0.5f) * cell, floorY, origin.z + (p.z + s.y) * cell);
                     rot = Quaternion.Euler(0, 0, 0);
                     break;
                 case SocketDirection.South:
-                    pos = new Vector3(origin.x + (p.x + s.x * 0.5f) * cell, baseY, origin.z + p.z * cell);
+                    openingCentre = new Vector3(origin.x + (p.x + 0.5f) * cell, floorY, origin.z + p.z * cell);
                     rot = Quaternion.Euler(0, 180, 0);
                     break;
                 case SocketDirection.East:
-                    pos = new Vector3(origin.x + (p.x + s.x) * cell, baseY, origin.z + (p.z + s.y * 0.5f) * cell);
+                    openingCentre = new Vector3(origin.x + (p.x + s.x) * cell, floorY, origin.z + (p.z + 0.5f) * cell);
                     rot = Quaternion.Euler(0, 90, 0);
                     break;
                 case SocketDirection.West:
-                    pos = new Vector3(origin.x + p.x * cell, baseY, origin.z + (p.z + s.y * 0.5f) * cell);
+                    openingCentre = new Vector3(origin.x + p.x * cell, floorY, origin.z + (p.z + 0.5f) * cell);
                     rot = Quaternion.Euler(0, 270, 0);
                     break;
                 default: // Up/Down — centre of vertical connector room
-                    pos = new Vector3(origin.x + (p.x + s.x * 0.5f) * cell, origin.y + p.y * floorH + floorH * 0.5f, origin.z + (p.z + s.y * 0.5f) * cell);
-                    rot = Quaternion.identity;
-                    break;
+                    return (
+                        new Vector3(origin.x + (p.x + s.x * 0.5f) * cell, floorY + floorH * 0.5f, origin.z + (p.z + s.y * 0.5f) * cell),
+                        Quaternion.identity);
             }
-            return (pos, rot);
+
+            // Shift back along the door's local +X by half the door width so the hinge
+            // lands at one edge of the opening and the mesh fills the doorway.
+            var hinge = openingCentre - rot * new Vector3(DoorWidth * 0.5f, 0f, 0f);
+            return (hinge, rot);
         }
 
         // ── Frontier & selection helpers ───────────────────────────────────────
