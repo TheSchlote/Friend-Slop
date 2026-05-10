@@ -75,6 +75,7 @@ namespace Microdetail
             if (!File.Exists(path))
             {
                 Debug.LogWarning($"[Microdetail] Shader support package not found at {path}. Skipping import.");
+                currentRenderPipeline = currentPipeline;
                 return;
             }
 
