@@ -148,14 +148,81 @@ namespace FriendSlop.Editor
             const float h = 4f;
             const float wall = 0.2f;
 
-            AddBox(root, "Floor",   new Vector3(w * 0.5f, 0, d * 0.5f), new Vector3(w, wall, d));
-            AddBox(root, "Ceiling", new Vector3(w * 0.5f, h, d * 0.5f), new Vector3(w, wall, d));
-
             var sockets = new HashSet<SocketDirection>(spec.Sockets);
+            bool hasUp   = sockets.Contains(SocketDirection.Up);
+            bool hasDown = sockets.Contains(SocketDirection.Down);
+
+            BuildFloorOrCeiling(root, "Floor",   y: 0f, w, d, wall, hasHole: hasDown);
+            BuildFloorOrCeiling(root, "Ceiling", y: h,  w, d, wall, hasHole: hasUp);
+
             BuildPerimeterWall(root, SocketDirection.North, sockets, w, d, h, wall, c);
             BuildPerimeterWall(root, SocketDirection.South, sockets, w, d, h, wall, c);
             BuildPerimeterWall(root, SocketDirection.East,  sockets, w, d, h, wall, c);
             BuildPerimeterWall(root, SocketDirection.West,  sockets, w, d, h, wall, c);
+
+            if (hasUp)
+                BuildRamp(root, w, d, h, wall);
+        }
+
+        // Floor or ceiling slab. If hasHole, leaves an opening at the NW corner sized
+        // generously so a player walking up the stairs has head-clearance before reaching
+        // the top — the hole is wider than the stairs (4 m vs 2 m) and deep enough that
+        // head clearance is reached before the player walks under solid ceiling.
+        private const float StairHoleW = 4f;
+        private const float StairHoleD = 5f;
+
+        private static void BuildFloorOrCeiling(GameObject root, string name, float y,
+            float w, float d, float wall, bool hasHole)
+        {
+            if (!hasHole)
+            {
+                AddBox(root, name, new Vector3(w * 0.5f, y, d * 0.5f), new Vector3(w, wall, d));
+                return;
+            }
+
+            float holeW = Mathf.Min(StairHoleW, w);
+            float holeD = Mathf.Min(StairHoleD, d);
+            // East strip — covers everything to the east of the hole (x=holeW..w, full Z).
+            AddBox(root, $"{name}_E",
+                new Vector3(holeW + (w - holeW) * 0.5f, y, d * 0.5f),
+                new Vector3(w - holeW, wall, d));
+            // SW patch — covers the strip west of the hole (x=0..holeW, z=0..d-holeD).
+            AddBox(root, $"{name}_SW",
+                new Vector3(holeW * 0.5f, y, (d - holeD) * 0.5f),
+                new Vector3(holeW, wall, d - holeD));
+        }
+
+        // Stairs from SW floor up to the NW ceiling hole. Each step is small enough that
+        // a CharacterController's stepOffset walks the player up automatically — far more
+        // reliable than a tilted slab, which physics-based controllers tend to slip off.
+        // Wraps the steps in a parent named "Ramp" so the bootstrapper can still find
+        // and remove the staircase if the Up socket ends up unconnected.
+        private static void BuildRamp(GameObject root, float w, float d, float h, float wall)
+        {
+            const int   stepCount  = 16;
+            const float rampWidth  = 2f;
+            const float rampX      = 1f;        // ramp centred at local x=1
+            const float runStart   = 1f;
+            float       runEnd     = d - 1f;
+            float       run        = runEnd - runStart;
+            float       stepDepth  = run / stepCount;
+            float       stepHeight = h   / stepCount;
+
+            var ramp = new GameObject("Ramp");
+            ramp.transform.SetParent(root.transform, worldPositionStays: false);
+
+            for (int i = 0; i < stepCount; i++)
+            {
+                // Each step is a solid block whose top sits at (i+1) * stepHeight.
+                float topY    = (i + 1) * stepHeight;
+                float zCenter = runStart + i * stepDepth + stepDepth * 0.5f;
+
+                var step = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                step.name = $"Step_{i}";
+                step.transform.SetParent(ramp.transform);
+                step.transform.localPosition = new Vector3(rampX, topY * 0.5f, zCenter);
+                step.transform.localScale    = new Vector3(rampWidth, topY, stepDepth);
+            }
         }
 
         private static void AddBox(GameObject parent, string n, Vector3 localPos, Vector3 scale)
@@ -290,10 +357,11 @@ namespace FriendSlop.Editor
         private static BuildingDefinition RepairBuildingDefinition(BuildingSpec spec, RoomDefinition[] allDefs)
         {
             var assetPath = $"{InteriorBuildingFolder}/{spec.Name}.asset";
-            var existing  = AssetDatabase.LoadAssetAtPath<BuildingDefinition>(assetPath);
-            if (existing != null) return existing;
+            var def       = AssetDatabase.LoadAssetAtPath<BuildingDefinition>(assetPath);
+            bool isNew    = def == null;
+            if (isNew)
+                def = ScriptableObject.CreateInstance<BuildingDefinition>();
 
-            var def = ScriptableObject.CreateInstance<BuildingDefinition>();
             var so  = new SerializedObject(def);
             so.FindProperty("displayName").stringValue      = spec.DisplayName;
             so.FindProperty("minRooms").intValue            = spec.MinRooms;
@@ -311,7 +379,8 @@ namespace FriendSlop.Editor
                 pool.GetArrayElementAtIndex(i).objectReferenceValue = allDefs[i];
 
             so.ApplyModifiedPropertiesWithoutUndo();
-            AssetDatabase.CreateAsset(def, assetPath);
+            if (isNew) AssetDatabase.CreateAsset(def, assetPath);
+            EditorUtility.SetDirty(def);
             return def;
         }
 
@@ -320,21 +389,26 @@ namespace FriendSlop.Editor
         private static void RepairInteriorCatalog()
         {
             var catalogPath = $"{InteriorAssetFolder}/InteriorCatalog.asset";
-            if (AssetDatabase.LoadAssetAtPath<InteriorCatalog>(catalogPath) != null) return;
+            // Always rebuild — adding a new building spec must update the catalog.
 
             var guids = AssetDatabase.FindAssets("t:BuildingDefinition", new[] { InteriorBuildingFolder });
             var defs  = new List<BuildingDefinition>();
             foreach (var guid in guids)
                 defs.Add(AssetDatabase.LoadAssetAtPath<BuildingDefinition>(AssetDatabase.GUIDToAssetPath(guid)));
 
-            var catalog = ScriptableObject.CreateInstance<InteriorCatalog>();
+            var catalog   = AssetDatabase.LoadAssetAtPath<InteriorCatalog>(catalogPath);
+            bool isNewCat = catalog == null;
+            if (isNewCat)
+                catalog = ScriptableObject.CreateInstance<InteriorCatalog>();
+
             var so      = new SerializedObject(catalog);
             var arr     = so.FindProperty("buildings");
             arr.arraySize = defs.Count;
             for (int i = 0; i < defs.Count; i++)
                 arr.GetArrayElementAtIndex(i).objectReferenceValue = defs[i];
             so.ApplyModifiedPropertiesWithoutUndo();
-            AssetDatabase.CreateAsset(catalog, catalogPath);
+            if (isNewCat) AssetDatabase.CreateAsset(catalog, catalogPath);
+            EditorUtility.SetDirty(catalog);
         }
 
         // ── NetworkPrefabsList ─────────────────────────────────────────────────
@@ -426,9 +500,10 @@ namespace FriendSlop.Editor
 
         private static BuildingSpec[] GetBuildingSpecs() => new[]
         {
-            new BuildingSpec("Building_Small",  "Small Building",       4,  8,  1, 1, 0, 1),
-            new BuildingSpec("Building_Medium", "Medium Building",      8, 20,  2, 3, 1, 2),
-            new BuildingSpec("Building_Large",  "Large Building",      20, 40,  3, 5, 2, 4),
+            new BuildingSpec("Building_Small",      "Small Building",       4,  8,  1, 1, 0, 1),
+            new BuildingSpec("Building_Medium",     "Medium Building",      8, 20,  2, 3, 1, 2),
+            new BuildingSpec("Building_Large",      "Large Building",      20, 40,  3, 5, 2, 4),
+            new BuildingSpec("Building_Multifloor", "Multi-floor Building",10, 18,  3, 3, 1, 2),
         };
 
         private readonly struct RoomSpec

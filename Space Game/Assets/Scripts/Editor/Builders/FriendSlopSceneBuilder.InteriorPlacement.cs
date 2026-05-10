@@ -14,6 +14,7 @@ namespace FriendSlop.Editor
     {
         private const string HillsAndValleysScenePath = "Assets/Scenes/Planet_HillsAndValleys.unity";
         private const string TestBuildingName = "TestBuilding_Interior";
+        private const string MultifloorBuildingName = "TestBuilding_Multifloor";
 
         [MenuItem("Tools/Friend Slop/Interiors/Add Test Building to Hills and Valleys")]
         public static void AddTestBuildingToHillsAndValleys()
@@ -27,61 +28,57 @@ namespace FriendSlop.Editor
                 return;
             }
 
-            var changed = EnsureTestBuildingInScene(scene);
-            if (changed)
+            var smallChanged = EnsureBuildingInScene(scene, TestBuildingName,
+                "Building_Small", new Vector3(0.3f, 0.9f, 0.2f).normalized);
+            var mfChanged = EnsureBuildingInScene(scene, MultifloorBuildingName,
+                "Building_Multifloor", new Vector3(-0.4f, 0.8f, -0.3f).normalized);
+
+            if (smallChanged || mfChanged)
             {
                 EditorSceneManager.SaveScene(scene);
-                Debug.Log("[Friend Slop] Test building added to Hills and Valleys scene.");
-            }
-            else
-            {
-                Debug.Log("[Friend Slop] Test building already present in Hills and Valleys scene.");
+                Debug.Log("[Friend Slop] Test buildings added to Hills and Valleys scene.");
             }
         }
 
-        private static bool EnsureTestBuildingInScene(Scene scene)
+        private static bool EnsureBuildingInScene(Scene scene, string buildingName,
+            string buildingDefName, Vector3 surfaceDir)
         {
-            // Always rebuild — the menu is "Add Test Building" and the user expects a fresh
-            // known-good state every time. Idempotency by name caused stale layouts to stick.
+            // Always rebuild — the menu expects a fresh known-good state every time.
             foreach (var root in scene.GetRootGameObjects())
             {
-                if (root.name != TestBuildingName) continue;
+                if (root.name != buildingName) continue;
                 Object.DestroyImmediate(root);
-                Debug.Log("[Friend Slop] Removed previous test building.");
+                Debug.Log($"[Friend Slop] Removed previous '{buildingName}'.");
                 break;
             }
 
-            var smallDef = AssetDatabase.LoadAssetAtPath<BuildingDefinition>(
-                $"{InteriorBuildingFolder}/Building_Small.asset");
+            var def = AssetDatabase.LoadAssetAtPath<BuildingDefinition>(
+                $"{InteriorBuildingFolder}/{buildingDefName}.asset");
 
-            if (smallDef == null)
+            if (def == null)
             {
-                Debug.LogWarning("[Friend Slop] Interior assets missing — run 'Repair Interior Assets' first.");
+                Debug.LogWarning($"[Friend Slop] Building definition '{buildingDefName}' missing — run 'Repair Interior Assets' first.");
                 return false;
             }
 
-            var go = new GameObject(TestBuildingName);
+            var go = new GameObject(buildingName);
             SceneManager.MoveGameObjectToScene(go, scene);
 
-            const float shellSize = 8f;
-            const float halfShell = shellSize * 0.5f;
+            const float shellWidth = 8f;       // X / Z extent (matches one grid cell)
+            const float halfWidth  = shellWidth * 0.5f;
+            float shellHeight      = def.MaxFloors * def.FloorHeightMeters;
 
             // Place on the planet surface, prioritising the entry door — we shift the pivot
             // so the door's bottom lands on the actual surface in the door's direction.
-            // Otherwise on a small planet (R=18) the building's centre sits flush but the
-            // door floats a metre off the ground.
             var world = Object.FindFirstObjectByType<SphereWorld>(FindObjectsInactive.Include);
             if (world != null)
             {
-                var surfaceDir = new Vector3(0.3f, 0.9f, 0.2f).normalized;
                 var rotation = world.GetSurfaceRotation(surfaceDir, Vector3.forward);
                 var centerSurface = world.GetSurfacePoint(surfaceDir, 0f);
 
-                // Where would the door bottom land if pivot was at centerSurface?
-                var doorLocalOffset = new Vector3(0f, 0f, halfShell);
+                var doorLocalOffset = new Vector3(0f, 0f, halfWidth);
                 var doorWorld = centerSurface + rotation * doorLocalOffset;
 
-                // Sample the actual surface in the door's direction (picks up terrain too).
                 var doorDir = (doorWorld - world.Center).normalized;
                 var doorSurface = world.GetSurfacePoint(doorDir, 0f);
 
@@ -94,19 +91,18 @@ namespace FriendSlop.Editor
                 go.transform.position = new Vector3(10f, 1f, 0f);
             }
 
-            // Placeholder exterior shell, centred on the pivot, sitting on the surface (Y=0..8).
-            // Keep its BoxCollider so the player can't walk through walls.
+            // Placeholder exterior shell. Height scales with floor count.
             var shell = GameObject.CreatePrimitive(PrimitiveType.Cube);
             shell.name = "ExteriorShell";
             shell.transform.SetParent(go.transform, false);
-            shell.transform.localPosition = new Vector3(0f, shellSize * 0.5f, 0f);
-            shell.transform.localScale    = new Vector3(shellSize, shellSize, shellSize);
+            shell.transform.localPosition = new Vector3(0f, shellHeight * 0.5f, 0f);
+            shell.transform.localScale    = new Vector3(shellWidth, shellHeight, shellWidth);
 
             // Door visual on the front (+Z) face — same plane as the interactable collider.
             var doorVisual = GameObject.CreatePrimitive(PrimitiveType.Cube);
             doorVisual.name = "DoorVisual";
             doorVisual.transform.SetParent(go.transform, false);
-            doorVisual.transform.localPosition = new Vector3(0f, 1.25f, shellSize * 0.5f + 0.06f);
+            doorVisual.transform.localPosition = new Vector3(0f, 1.25f, halfWidth + 0.06f);
             doorVisual.transform.localScale    = new Vector3(1.6f, 2.5f, 0.1f);
             Object.DestroyImmediate(doorVisual.GetComponent<Collider>());
             var renderer = doorVisual.GetComponent<MeshRenderer>();
@@ -127,14 +123,14 @@ namespace FriendSlop.Editor
             var col = go.AddComponent<BoxCollider>();
             col.isTrigger = false;
             col.size   = new Vector3(1.6f, 2.5f, 0.2f);
-            col.center = new Vector3(0f, 1.25f, shellSize * 0.5f + 0.25f);
+            col.center = new Vector3(0f, 1.25f, halfWidth + 0.25f);
 
             // NetworkObject required because InteriorEntrance is a NetworkBehaviour.
             go.AddComponent<NetworkObject>();
 
             var entrance = go.AddComponent<InteriorEntrance>();
             var so = new SerializedObject(entrance);
-            so.FindProperty("definition").objectReferenceValue = smallDef;
+            so.FindProperty("definition").objectReferenceValue = def;
             so.FindProperty("interiorScenePath").stringValue   = InteriorScenePath;
             so.ApplyModifiedPropertiesWithoutUndo();
 

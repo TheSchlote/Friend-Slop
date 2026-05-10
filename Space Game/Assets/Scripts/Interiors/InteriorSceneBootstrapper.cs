@@ -35,6 +35,7 @@ namespace FriendSlop.Interiors
         private GameObject _interiorRoot;
         private InteriorMinimap _minimap;
         private BuildingDefinition _definition;
+        private int _entryFloor;
         private readonly List<ulong> _playersInside = new();
 
         public Vector3 ReturnPosition => _returnPosition.Value;
@@ -94,8 +95,8 @@ namespace FriendSlop.Interiors
                 _playersInside.Add(clientId);
         }
 
-        // Spawn near the south wall of the Entry room (always grid (0,0,0)) so the
-        // exit door is right at the player's back when they arrive.
+        // Spawn near the south wall of the Entry room. Entry sits on _entryFloor
+        // (middle floor for multi-storey buildings with a basement).
         private Vector3 GetSpawnPosition()
         {
             if (spawnPoint != null) return spawnPoint.position;
@@ -104,7 +105,8 @@ namespace FriendSlop.Interiors
             if (def == null) return _origin.Value + new Vector3(0f, 1f, 0f);
 
             float halfCell = def.GridCellMeters * 0.5f;
-            return _origin.Value + new Vector3(halfCell, 1f, 1.5f);
+            float entryY   = _entryFloor * def.FloorHeightMeters;
+            return _origin.Value + new Vector3(halfCell, entryY + 1f, 1.5f);
         }
 
         public void PlayerExited(ulong clientId)
@@ -139,6 +141,7 @@ namespace FriendSlop.Interiors
             if (_definition != null)
             {
                 var layout = InteriorLayoutGenerator.Generate(_definition, _seed.Value, SocketDirection.South);
+                _entryFloor = layout.EntryFloor;
                 _interiorRoot = BuildRooms(layout, _origin.Value);
                 _minimap = InteriorMinimap.Spawn(layout, _definition, _origin.Value);
                 yield return null;
@@ -165,6 +168,7 @@ namespace FriendSlop.Interiors
             yield return null;
 
             var layout = InteriorLayoutGenerator.Generate(defAsset, _seed.Value, SocketDirection.South);
+            _entryFloor = layout.EntryFloor;
             _interiorRoot = BuildRooms(layout, _origin.Value);
             _minimap = InteriorMinimap.Spawn(layout, defAsset, _origin.Value);
             PositionExitDoor();
@@ -203,8 +207,9 @@ namespace FriendSlop.Interiors
 
             var def = ResolveDefinition();
             float halfCell = def != null ? def.GridCellMeters * 0.5f : 4f;
+            float entryY   = def != null ? _entryFloor * def.FloorHeightMeters : 0f;
             // 0.15 m from the wall plane — slab back face lands flush with the wall pillars.
-            var pos = _origin.Value + new Vector3(halfCell, 0f, 0.15f);
+            var pos = _origin.Value + new Vector3(halfCell, entryY, 0.15f);
             exit.transform.position = pos;
             exit.transform.rotation = Quaternion.identity;
             Debug.Log($"[Interior] Exit door positioned at {pos} (in scene '{exit.gameObject.scene.name}')");
@@ -243,18 +248,33 @@ namespace FriendSlop.Interiors
 
         // Plugs the door-frame opening for any socket the generator left unconnected.
         // Door openings live on the SW-most cell of each wall (matching BuildPerimeterWall).
+        // Vertical sockets (Up/Down) leave 2×2 holes in ceiling/floor at the NW corner —
+        // patch those too so the bottom/top of a stair stack doesn't open into the void.
         private static void PatchUnconnectedSockets(Transform roomRoot, PlacedRoom room, BuildingDefinition def)
         {
             const float doorWidth  = 2f;
             const float doorHeight = 3f;
             const float wall       = 0.2f;
+            // Match BuildFloorOrCeiling.StairHoleW / StairHoleD in the editor builder.
+            const float holeW      = 4f;
+            const float holeD      = 5f;
             float c = def.GridCellMeters;
+            float h = def.FloorHeightMeters;
             float w = room.Definition.GridSize.x * c;
             float d = room.Definition.GridSize.y * c;
 
+            // If the room's Up socket is unconnected, the ramp leads to a patched ceiling
+            // and is just a dead end — remove it so the player isn't confused.
+            if (room.Definition.HasSocket(SocketDirection.Up) &&
+                !room.ConnectedSockets.Contains(SocketDirection.Up))
+            {
+                var ramp = roomRoot.Find("Ramp");
+                if (ramp != null) Object.Destroy(ramp.gameObject);
+            }
+
             foreach (var s in room.Definition.Sockets)
             {
-                if (s.IsVertical() || room.ConnectedSockets.Contains(s)) continue;
+                if (room.ConnectedSockets.Contains(s)) continue;
 
                 Vector3 localPos;
                 Vector3 size;
@@ -275,6 +295,17 @@ namespace FriendSlop.Interiors
                     case SocketDirection.West:
                         localPos = new Vector3(0f, doorHeight * 0.5f, c * 0.5f);
                         size     = new Vector3(wall, doorHeight, doorWidth);
+                        break;
+                    case SocketDirection.Up:
+                        // Cap the ceiling hole at the NW corner (x=0..holeW, z=d-holeD..d).
+                        localPos = new Vector3(holeW * 0.5f, h, d - holeD * 0.5f);
+                        size     = new Vector3(holeW, wall, holeD);
+                        break;
+                    case SocketDirection.Down:
+                        // Cap the floor hole at the same NW corner so the player can't
+                        // fall through the bottom of a stair stack.
+                        localPos = new Vector3(holeW * 0.5f, 0f, d - holeD * 0.5f);
+                        size     = new Vector3(holeW, wall, holeD);
                         break;
                     default: continue;
                 }

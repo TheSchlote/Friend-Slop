@@ -38,70 +38,100 @@ namespace FriendSlop.Interiors
             int targetSpecial = rng.Next(def.MinSpecialRooms, def.MaxSpecialRooms + 1);
             layout.FloorCount = floors;
 
+            // Entry sits on the middle floor when there are 3+ floors so rooms can grow
+            // both upward (upper floors) and downward (basement). Otherwise floor 0.
+            int startFloor = floors >= 3 ? floors / 2 : 0;
+            layout.EntryFloor = startFloor;
+
             var roomsPerFloor = DistributeRooms(totalRooms, floors, rng);
             var frontier      = new List<OpenSocket>();
 
             var entryDef = PickByCategory(def.RoomPool, RoomCategory.Entry, rng);
             if (entryDef == null) return null;
 
-            var entry = TryPlaceAt(layout, entryDef, Vector3Int.zero);
+            var entry = TryPlaceAt(layout, entryDef, new Vector3Int(0, startFloor, 0));
             if (entry == null) return null;
 
-            // Reserve a socket on the entry for the exterior exit door — the generator
-            // won't try to connect an interior room there, and the exit door fills the
-            // wall opening at runtime.
+            // Reserve a socket on the entry for the exterior exit door.
             if (reservedExitSocket.HasValue && entryDef.HasSocket(reservedExitSocket.Value))
                 entry.ConnectedSockets.Add(reservedExitSocket.Value);
 
             AddSockets(frontier, entry);
 
+            // Expand the entry floor first.
             int placedOnFloor = 1;
+            ExpandFloor(layout, def, frontier, rng, startFloor,
+                roomsPerFloor[startFloor], ref placedOnFloor, targetSpecial);
 
-            for (int floor = 0; floor < floors; floor++)
+            // Walk upward from the entry to the top floor.
+            for (int floor = startFloor; floor + 1 < floors; floor++)
             {
-                int target = roomsPerFloor[floor];
-                int iters  = 0;
+                if (!PlaceVerticalLink(layout, def, frontier, rng, floor, +1)) return null;
+                placedOnFloor = 1;
+                ExpandFloor(layout, def, frontier, rng, floor + 1,
+                    roomsPerFloor[floor + 1], ref placedOnFloor, targetSpecial);
+            }
 
-                while (placedOnFloor < target && iters < MaxExpansionIterations)
-                {
-                    iters++;
-                    var floorFrontier = FloorHorizontalFrontier(frontier, floor);
-                    if (floorFrontier.Count == 0) break;
-
-                    var open = floorFrontier[rng.Next(floorFrontier.Count)];
-                    frontier.Remove(open);
-
-                    bool wantSpecial = layout.CountByCategory(RoomCategory.Special) < targetSpecial;
-                    var placed = TryPlaceNeighbor(layout, def, open, floor, rng, wantSpecial);
-                    if (placed != null)
-                    {
-                        AddSockets(frontier, placed);
-                        placedOnFloor++;
-                    }
-                }
-
-                // Connect to next floor via a vertical connector
-                if (floor < floors - 1)
-                {
-                    var connDef = PickVerticalConnector(def.RoomPool, rng);
-                    if (connDef == null) return null;
-
-                    var placed = ForceConnector(layout, def, frontier, connDef, floor, rng);
-                    if (placed == null) return null;
-
-                    // Mirror the connector on the floor above to close the loop
-                    var upPos  = new Vector3Int(placed.GridPosition.x, floor + 1, placed.GridPosition.z);
-                    var upRoom = TryPlaceAt(layout, connDef, upPos);
-                    if (upRoom == null) return null;
-
-                    RegisterConnection(layout, placed, SocketDirection.Up, upRoom, SocketDirection.Down);
-                    AddSockets(frontier, upRoom);
-                    placedOnFloor = 1;
-                }
+            // Walk downward from the entry to the basement (floor 0).
+            for (int floor = startFloor; floor - 1 >= 0; floor--)
+            {
+                if (!PlaceVerticalLink(layout, def, frontier, rng, floor, -1)) return null;
+                placedOnFloor = 1;
+                ExpandFloor(layout, def, frontier, rng, floor - 1,
+                    roomsPerFloor[floor - 1], ref placedOnFloor, targetSpecial);
             }
 
             if (layout.CountByCategory(RoomCategory.Special) < def.MinSpecialRooms) return null;
             return layout.Rooms.Count > 0 ? layout : null;
+        }
+
+        private static void ExpandFloor(InteriorLayout layout, BuildingDefinition def,
+            List<OpenSocket> frontier, Random rng, int floor, int target,
+            ref int placedOnFloor, int targetSpecial)
+        {
+            int iters = 0;
+            while (placedOnFloor < target && iters < MaxExpansionIterations)
+            {
+                iters++;
+                var floorFrontier = FloorHorizontalFrontier(frontier, floor);
+                if (floorFrontier.Count == 0) break;
+
+                var open = floorFrontier[rng.Next(floorFrontier.Count)];
+                frontier.Remove(open);
+
+                bool wantSpecial = layout.CountByCategory(RoomCategory.Special) < targetSpecial;
+                var placed = TryPlaceNeighbor(layout, def, open, floor, rng, wantSpecial);
+                if (placed != null)
+                {
+                    AddSockets(frontier, placed);
+                    placedOnFloor++;
+                }
+            }
+        }
+
+        // dir = +1 places a connector going UP (from `floor` to `floor+1`).
+        // dir = -1 places a connector going DOWN (from `floor` to `floor-1`).
+        private static bool PlaceVerticalLink(InteriorLayout layout, BuildingDefinition def,
+            List<OpenSocket> frontier, Random rng, int floor, int dir)
+        {
+            var connDef = PickVerticalConnector(def.RoomPool, rng);
+            if (connDef == null) return false;
+
+            var placed = ForceConnector(layout, def, frontier, connDef, floor, rng);
+            if (placed == null) return false;
+
+            var mirrorPos = new Vector3Int(placed.GridPosition.x, floor + dir, placed.GridPosition.z);
+            var mirror    = TryPlaceAt(layout, connDef, mirrorPos);
+            if (mirror == null) return false;
+
+            // Going up: placed.Up ↔ mirror.Down.  Going down: placed.Down ↔ mirror.Up.
+            if (dir > 0)
+                RegisterConnection(layout, placed, SocketDirection.Up,   mirror, SocketDirection.Down);
+            else
+                RegisterConnection(layout, placed, SocketDirection.Down, mirror, SocketDirection.Up);
+
+            AddSockets(frontier, mirror);
+            return true;
         }
 
         // ── Placement helpers ──────────────────────────────────────────────────

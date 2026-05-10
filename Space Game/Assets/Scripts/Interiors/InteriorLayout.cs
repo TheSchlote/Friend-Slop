@@ -12,6 +12,7 @@ namespace FriendSlop.Interiors
         public List<Connection> Connections { get; } = new();
         public int Seed       { get; set; }
         public int FloorCount { get; set; }
+        public int EntryFloor { get; set; }
 
         public bool IsCellOccupied(Vector3Int cell) => Grid.ContainsKey(cell);
 
