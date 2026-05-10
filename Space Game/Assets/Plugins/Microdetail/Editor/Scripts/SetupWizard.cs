@@ -72,9 +72,21 @@ namespace Microdetail
                     throw new ArgumentOutOfRangeException();
             }
             
-            AssetDatabase.ImportPackage(path, false);
-            
-            currentRenderPipeline = currentPipeline;
+            if (!File.Exists(path))
+            {
+                Debug.LogWarning($"[Microdetail] Shader support package not found at {path}. Skipping import.");
+                return;
+            }
+
+            try
+            {
+                AssetDatabase.ImportPackage(path, false);
+                currentRenderPipeline = currentPipeline;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Microdetail] Could not import shader support package: {e.Message}");
+            }
         }
     }
 }

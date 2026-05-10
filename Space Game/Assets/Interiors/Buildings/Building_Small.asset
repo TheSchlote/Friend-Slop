@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3830b0b9a65b185489ee24b6645642fd, type: 3}
+  m_Name: Building_Small
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.BuildingDefinition
+  displayName: Small Building
+  minRooms: 4
+  maxRooms: 8
+  minFloors: 1
+  maxFloors: 1
+  floorHeightMeters: 4
+  gridCellMeters: 8
+  roomPool:
+  - {fileID: 11400000, guid: b419e43687285d84cba999d343e41d4b, type: 2}
+  - {fileID: 11400000, guid: 82829e8ef54e9f146a245f6006560527, type: 2}
+  - {fileID: 11400000, guid: 05747c344b6b83046b401c9b2dfae810, type: 2}
+  - {fileID: 11400000, guid: 3f832b3de35206e4495b3c8e4b592645, type: 2}
+  - {fileID: 11400000, guid: 13e294c794d71de42bd77b5686327d21, type: 2}
+  - {fileID: 11400000, guid: 264d1f3b08eec92498f1b217ce095240, type: 2}
+  - {fileID: 11400000, guid: dcc46ee5a3f76e04d99ab1be853af8e4, type: 2}
+  minSpecialRooms: 0
+  maxSpecialRooms: 1
