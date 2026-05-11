@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Workbench
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Workbench
+  kind: workbench
+  tags:
+  - workshop
+  - factory
+  placement: 0
+  footprintXZ: {x: 2, y: 0.8}
+  weight: 5
+  interactable: 0
+  prefab: {fileID: 3723143606493858115, guid: f54db30e4e72b30489434e88dfb272ea, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.95, z: 0}
+    localScale: {x: 2, y: 0.08, z: 0.8}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  - shape: 3
+    localPosition: {x: -0.85, y: 0.45, z: 0}
+    localScale: {x: 0.1, y: 0.95, z: 0.7}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.65, b: 0.7, a: 1}
+  - shape: 3
+    localPosition: {x: 0.85, y: 0.45, z: 0}
+    localScale: {x: 0.1, y: 0.95, z: 0.7}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.65, b: 0.7, a: 1}

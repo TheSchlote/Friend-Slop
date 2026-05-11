@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Chair
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Chair
+  kind: chair
+  tags:
+  - shared
+  - dining
+  - office
+  - breakroom
+  - cafeteria
+  placement: 2
+  footprintXZ: {x: 0.55, y: 0.55}
+  weight: 3
+  interactable: 0
+  prefab: {fileID: 2156516369269511666, guid: 2b1edd42dae03304bbfa1bf23273fdce, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.45, z: 0}
+    localScale: {x: 0.45, y: 0.06, z: 0.45}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.75, z: -0.2}
+    localScale: {x: 0.45, y: 0.6, z: 0.05}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}
+  - shape: 3
+    localPosition: {x: 0.2, y: 0.22, z: 0.2}
+    localScale: {x: 0.05, y: 0.45, z: 0.05}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}
+  - shape: 3
+    localPosition: {x: -0.2, y: 0.22, z: 0.2}
+    localScale: {x: 0.05, y: 0.45, z: 0.05}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}
+  - shape: 3
+    localPosition: {x: 0.2, y: 0.22, z: -0.2}
+    localScale: {x: 0.05, y: 0.45, z: 0.05}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}
+  - shape: 3
+    localPosition: {x: -0.2, y: 0.22, z: -0.2}
+    localScale: {x: 0.05, y: 0.45, z: 0.05}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}

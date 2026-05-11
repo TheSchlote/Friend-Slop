@@ -39,14 +39,29 @@ namespace FriendSlop.Interiors
             layout.FloorCount = floors;
 
             // Entry sits on the middle floor when there are 3+ floors so rooms can grow
-            // both upward (upper floors) and downward (basement). Otherwise floor 0.
-            int startFloor = floors >= 3 ? floors / 2 : 0;
+            // both upward (upper floors) and downward (basement). For buildings that
+            // explicitly want a basement below (skipBasementExpansion=true), put the
+            // entry on the topmost floor so 'down' actually goes to a basement. Otherwise
+            // floor 0.
+            int startFloor;
+            if (def.SkipBasementExpansion && floors >= 2)
+                startFloor = floors - 1;
+            else if (floors >= 3)
+                startFloor = floors / 2;
+            else
+                startFloor = 0;
             layout.EntryFloor = startFloor;
 
             var roomsPerFloor = DistributeRooms(totalRooms, floors, rng);
             var frontier      = new List<OpenSocket>();
 
-            var entryDef = PickByCategory(def.RoomPool, RoomCategory.Entry, rng);
+            // Build the required-room quota map. The entry (RoomCategory.Entry) is taken
+            // from this list — falling back to legacy RoomPool entry rooms if no entry is
+            // declared in the recipe (back-compat for older BuildingDefinitions).
+            var quotas = BuildRequiredQuotas(def);
+
+            var entryDef = PickEntryFromQuotas(quotas, rng)
+                        ?? PickByCategory(def.RoomPool, RoomCategory.Entry, rng);
             if (entryDef == null) return null;
 
             var entry = TryPlaceAt(layout, entryDef, new Vector3Int(0, startFloor, 0));
@@ -54,14 +69,28 @@ namespace FriendSlop.Interiors
 
             // Reserve a socket on the entry for the exterior exit door.
             if (reservedExitSocket.HasValue && entryDef.HasSocket(reservedExitSocket.Value))
+            {
                 entry.ConnectedSockets.Add(reservedExitSocket.Value);
+                layout.ExitRoom   = entry;
+                layout.ExitSocket = reservedExitSocket.Value;
+            }
 
             AddSockets(frontier, entry);
+
+            // If the recipe lists another entry-eligible required room (e.g. a LivingRoom),
+            // try to place it adjacent to the entry now and flag the connection as an open
+            // passage so the player walks straight through from entry into that room.
+            TryPlaceAdjacentEntryCandidate(layout, frontier, rng, entry, quotas, reservedExitSocket);
+
+            // Resolve any required rooms with explicit adjacency hints (e.g. DiningRoom must
+            // sit next to the Kitchen). Done before generic expansion so the layout actually
+            // honours the relationship.
+            ProcessAdjacencyConstraints(layout, def, frontier, rng, quotas, startFloor);
 
             // Expand the entry floor first.
             int placedOnFloor = 1;
             ExpandFloor(layout, def, frontier, rng, startFloor,
-                roomsPerFloor[startFloor], ref placedOnFloor, targetSpecial);
+                roomsPerFloor[startFloor], ref placedOnFloor, targetSpecial, quotas);
 
             // Walk upward from the entry to the top floor.
             for (int floor = startFloor; floor + 1 < floors; floor++)
@@ -69,7 +98,7 @@ namespace FriendSlop.Interiors
                 if (!PlaceVerticalLink(layout, def, frontier, rng, floor, +1)) return null;
                 placedOnFloor = 1;
                 ExpandFloor(layout, def, frontier, rng, floor + 1,
-                    roomsPerFloor[floor + 1], ref placedOnFloor, targetSpecial);
+                    roomsPerFloor[floor + 1], ref placedOnFloor, targetSpecial, quotas);
             }
 
             // Walk downward from the entry to the basement (floor 0).
@@ -77,17 +106,216 @@ namespace FriendSlop.Interiors
             {
                 if (!PlaceVerticalLink(layout, def, frontier, rng, floor, -1)) return null;
                 placedOnFloor = 1;
+                // Process adjacency hints first so e.g. a Basement_2x2 can grab the stair-
+                // mirror's free sockets before generic expansion eats them.
+                ProcessAdjacencyConstraints(layout, def, frontier, rng, quotas, floor - 1);
+                if (def.SkipBasementExpansion && floor - 1 == 0) continue;
                 ExpandFloor(layout, def, frontier, rng, floor - 1,
-                    roomsPerFloor[floor - 1], ref placedOnFloor, targetSpecial);
+                    roomsPerFloor[floor - 1], ref placedOnFloor, targetSpecial, quotas);
             }
 
+            // Any unfulfilled required rooms means this seed is unviable — fail so the
+            // outer loop retries with a different seed.
+            if (HasUnmetQuotas(quotas)) return null;
             if (layout.CountByCategory(RoomCategory.Special) < def.MinSpecialRooms) return null;
             return layout.Rooms.Count > 0 ? layout : null;
         }
 
+        // ── Recipe quota tracking ─────────────────────────────────────────────
+
+        private static Dictionary<RoomDefinition, int> BuildRequiredQuotas(BuildingDefinition def)
+        {
+            var quotas = new Dictionary<RoomDefinition, int>();
+            foreach (var req in def.RequiredRooms)
+            {
+                if (req.Definition == null) continue;
+                quotas.TryGetValue(req.Definition, out var existing);
+                quotas[req.Definition] = existing + req.Count;
+            }
+            return quotas;
+        }
+
+        private static RoomDefinition PickEntryFromQuotas(Dictionary<RoomDefinition, int> quotas, Random rng)
+        {
+            var matches = new List<RoomDefinition>();
+            foreach (var kv in quotas)
+                if (kv.Key != null && kv.Key.IsEntryCandidate && kv.Value > 0)
+                    matches.Add(kv.Key);
+            if (matches.Count == 0) return null;
+            var chosen = matches[rng.Next(matches.Count)];
+            quotas[chosen]--;
+
+            // If the chosen entry is a substitute (non-Entry-category room flagged as
+            // entry-eligible, e.g. a LivingRoom acting as the foyer), zero any leftover
+            // Entry-category required quotas so the building doesn't ALSO spawn a small
+            // dedicated entry room — the LivingRoom is doing that job.
+            if (chosen.Category != RoomCategory.Entry)
+            {
+                var keys = new List<RoomDefinition>(quotas.Keys);
+                foreach (var k in keys)
+                    if (k != chosen && k.Category == RoomCategory.Entry)
+                        quotas[k] = 0;
+            }
+
+            return chosen;
+        }
+
+        // After the entry is placed, looks for any OTHER entry-candidate room still in the
+        // required quotas. If found, tries to place it on a free socket of the entry and
+        // marks that connection as an open passage. Falls back silently if the candidate
+        // can't fit — the room will then be placed normally during expansion (with a door).
+        private static void TryPlaceAdjacentEntryCandidate(
+            InteriorLayout layout, List<OpenSocket> frontier, Random rng,
+            PlacedRoom entry, Dictionary<RoomDefinition, int> quotas,
+            SocketDirection? reservedExitSocket)
+        {
+            RoomDefinition partner = null;
+            foreach (var kv in quotas)
+            {
+                if (kv.Value <= 0 || kv.Key == null) continue;
+                if (!kv.Key.IsEntryCandidate) continue;
+                partner = kv.Key;
+                break;
+            }
+            if (partner == null) return;
+
+            // Try every free socket on the entry (skipping the one reserved for the exit door).
+            var sockets = new List<SocketDirection>(entry.Definition.Sockets);
+            Shuffle(sockets, rng);
+            foreach (var s in sockets)
+            {
+                if (s.IsVertical()) continue;
+                if (reservedExitSocket.HasValue && s == reservedExitSocket.Value) continue;
+                if (entry.ConnectedSockets.Contains(s)) continue;
+                if (!partner.HasSocket(s.Opposite())) continue;
+
+                var pos = NeighborOrigin(entry, s, partner.GridSize);
+                if (pos.y != entry.GridPosition.y) continue;
+                var placed = TryPlaceAt(layout, partner, pos);
+                if (placed == null) continue;
+
+                RegisterConnection(layout, entry, s, placed, s.Opposite(), isOpenPassage: true);
+                AddSockets(frontier, placed);
+                quotas[partner]--;
+                return;
+            }
+        }
+
+        private static bool HasUnmetQuotas(Dictionary<RoomDefinition, int> quotas)
+        {
+            foreach (var kv in quotas)
+                if (kv.Value > 0) return true;
+            return false;
+        }
+
+        // Places required rooms with adjacency hints. For each required room whose
+        // AdjacentToAny list is non-empty, ensures a preferred parent exists in the layout
+        // (force-placing one if needed) and then drops the room on a free socket of that
+        // parent. Rooms whose parents can't be placed on the requested floor are deferred
+        // to the normal expansion pass.
+        private static void ProcessAdjacencyConstraints(InteriorLayout layout,
+            BuildingDefinition def, List<OpenSocket> frontier, Random rng,
+            Dictionary<RoomDefinition, int> quotas, int floor)
+        {
+            foreach (var req in def.RequiredRooms)
+            {
+                if (req.Definition == null) continue;
+                if (req.AdjacentToAny.Count == 0) continue;
+                if (!quotas.TryGetValue(req.Definition, out var remaining) || remaining <= 0) continue;
+
+                // Find an already-placed parent matching one of the AdjacentToAny entries.
+                PlacedRoom parent = FindPlacedRoomOnFloor(layout, req.AdjacentToAny, floor);
+
+                // Otherwise, try to force one of the parents into the layout via frontier.
+                if (parent == null)
+                {
+                    foreach (var pDef in req.AdjacentToAny)
+                    {
+                        if (pDef == null) continue;
+                        parent = ForcePlaceRoomAtFrontier(layout, frontier, rng, pDef, floor);
+                        if (parent != null)
+                        {
+                            if (quotas.TryGetValue(pDef, out var pq) && pq > 0)
+                                quotas[pDef] = pq - 1;
+                            break;
+                        }
+                    }
+                }
+                if (parent == null) continue;
+
+                var placed = TryPlaceRoomAdjacentTo(layout, frontier, rng, req.Definition, parent);
+                if (placed != null)
+                    quotas[req.Definition] = remaining - 1;
+            }
+        }
+
+        private static PlacedRoom FindPlacedRoomOnFloor(InteriorLayout layout,
+            IReadOnlyList<RoomDefinition> candidates, int floor)
+        {
+            foreach (var room in layout.Rooms)
+            {
+                if (room.GridPosition.y != floor) continue;
+                foreach (var c in candidates)
+                    if (c != null && room.Definition == c) return room;
+            }
+            return null;
+        }
+
+        // Eagerly places `roomDef` on the given floor by walking the frontier for a socket
+        // that accepts it. Returns the placed room (or null if no socket works).
+        private static PlacedRoom ForcePlaceRoomAtFrontier(InteriorLayout layout,
+            List<OpenSocket> frontier, Random rng, RoomDefinition roomDef, int floor)
+        {
+            if (roomDef == null) return null;
+            var floorFrontier = FloorHorizontalFrontier(frontier, floor);
+            Shuffle(floorFrontier, rng);
+            foreach (var open in floorFrontier)
+            {
+                var needed = open.Socket.Opposite();
+                if (!roomDef.HasSocket(needed)) continue;
+                var pos = NeighborOrigin(open.Room, open.Socket, roomDef.GridSize);
+                if (pos.y != floor) continue;
+                var placed = TryPlaceAt(layout, roomDef, pos);
+                if (placed == null) continue;
+                frontier.Remove(open);
+                RegisterConnection(layout, open.Room, open.Socket, placed, needed);
+                AddSockets(frontier, placed);
+                return placed;
+            }
+            return null;
+        }
+
+        private static PlacedRoom TryPlaceRoomAdjacentTo(InteriorLayout layout,
+            List<OpenSocket> frontier, Random rng, RoomDefinition roomDef, PlacedRoom parent)
+        {
+            if (roomDef == null || parent == null) return null;
+            var sockets = new List<SocketDirection>(parent.Definition.Sockets);
+            Shuffle(sockets, rng);
+            foreach (var s in sockets)
+            {
+                if (s.IsVertical()) continue;
+                if (parent.ConnectedSockets.Contains(s)) continue;
+                var needed = s.Opposite();
+                if (!roomDef.HasSocket(needed)) continue;
+
+                var pos = NeighborOrigin(parent, s, roomDef.GridSize);
+                if (pos.y != parent.GridPosition.y) continue;
+                var placed = TryPlaceAt(layout, roomDef, pos);
+                if (placed == null) continue;
+
+                // Remove the matching open-socket entry from the frontier so it isn't reused.
+                frontier.RemoveAll(os => os.Room == parent && os.Socket == s);
+                RegisterConnection(layout, parent, s, placed, needed);
+                AddSockets(frontier, placed);
+                return placed;
+            }
+            return null;
+        }
+
         private static void ExpandFloor(InteriorLayout layout, BuildingDefinition def,
             List<OpenSocket> frontier, Random rng, int floor, int target,
-            ref int placedOnFloor, int targetSpecial)
+            ref int placedOnFloor, int targetSpecial,
+            Dictionary<RoomDefinition, int> quotas)
         {
             int iters = 0;
             while (placedOnFloor < target && iters < MaxExpansionIterations)
@@ -100,7 +328,7 @@ namespace FriendSlop.Interiors
                 frontier.Remove(open);
 
                 bool wantSpecial = layout.CountByCategory(RoomCategory.Special) < targetSpecial;
-                var placed = TryPlaceNeighbor(layout, def, open, floor, rng, wantSpecial);
+                var placed = TryPlaceNeighbor(layout, def, open, floor, rng, wantSpecial, quotas);
                 if (placed != null)
                 {
                     AddSockets(frontier, placed);
@@ -110,18 +338,37 @@ namespace FriendSlop.Interiors
         }
 
         // dir = +1 places a connector going UP (from `floor` to `floor+1`).
-        // dir = -1 places a connector going DOWN (from `floor` to `floor-1`).
+        // dir = -1 places a connector going DOWN (from `floor` to `floor-1`). The downward
+        // case supports an asymmetric mirror (e.g. a 2×2 basement room) and a list of
+        // preferred parent rooms that the connector should sit next to (e.g. Kitchen,
+        // LivingRoom, Hallway).
         private static bool PlaceVerticalLink(InteriorLayout layout, BuildingDefinition def,
             List<OpenSocket> frontier, Random rng, int floor, int dir)
         {
             var connDef = PickVerticalConnector(def.RoomPool, rng);
             if (connDef == null) return false;
 
-            var placed = ForceConnector(layout, def, frontier, connDef, floor, rng);
+            var preferredParents = dir < 0 ? def.DownConnectorParents : null;
+            var placed = ForceConnector(layout, def, frontier, connDef, floor, rng, preferredParents);
             if (placed == null) return false;
 
+            // Pick the mirror prefab — defaults to the connector itself, but a building can
+            // override the downward mirror (e.g. a 2×2 basement instead of another stair).
+            var mirrorDef = (dir < 0 && def.DownwardConnectorMirror != null)
+                ? def.DownwardConnectorMirror
+                : connDef;
+
+            // Mirror needs the matching vertical socket (Down for going up, Up for going
+            // down) so the connection registers correctly.
+            var requiredMirrorSocket = dir > 0 ? SocketDirection.Down : SocketDirection.Up;
+            if (!mirrorDef.HasSocket(requiredMirrorSocket))
+            {
+                Debug.LogWarning($"[Interior] Mirror prefab '{mirrorDef.name}' lacks {requiredMirrorSocket} socket — falling back to the connector itself.");
+                mirrorDef = connDef;
+            }
+
             var mirrorPos = new Vector3Int(placed.GridPosition.x, floor + dir, placed.GridPosition.z);
-            var mirror    = TryPlaceAt(layout, connDef, mirrorPos);
+            var mirror    = TryPlaceAt(layout, mirrorDef, mirrorPos);
             if (mirror == null) return false;
 
             // Going up: placed.Up ↔ mirror.Down.  Going down: placed.Down ↔ mirror.Up.
@@ -138,39 +385,112 @@ namespace FriendSlop.Interiors
 
         private static PlacedRoom TryPlaceNeighbor(
             InteriorLayout layout, BuildingDefinition def, OpenSocket open,
-            int floor, Random rng, bool preferSpecial)
+            int floor, Random rng, bool preferSpecial,
+            Dictionary<RoomDefinition, int> quotas)
         {
             var needed = open.Socket.Opposite();
 
-            var candidates = BuildCandidateList(def.RoomPool, needed, vertical: false, preferSpecial);
+            // First, try to satisfy an unmet required-room quota with a room that fits this socket.
+            var required = BuildRequiredCandidates(quotas, needed);
+            if (required.Count > 0)
+            {
+                Shuffle(required, rng);
+                foreach (var candidate in required)
+                {
+                    var room = TryPlaceCandidate(layout, open, needed, candidate);
+                    if (room != null)
+                    {
+                        quotas[candidate]--;
+                        return room;
+                    }
+                }
+            }
+
+            // Fall back to the optional pool. Required rooms aren't included automatically —
+            // they're handled by the priority path above. If a required room has been zeroed
+            // out (e.g. Entry_1x1 when LivingRoom became the entry), this prevents it from
+            // showing up via the fallback. Floor info is passed so floor-restricted rooms
+            // (e.g. ServerRoom top-floor-only) are excluded from invalid floors.
+            var candidates = BuildCandidateList(def.OptionalPool, needed, vertical: false, preferSpecial,
+                floor, layout.FloorCount, layout.EntryFloor);
             if (candidates.Count == 0 && preferSpecial)
-                candidates = BuildCandidateList(def.RoomPool, needed, vertical: false, preferSpecial: false);
+                candidates = BuildCandidateList(def.OptionalPool, needed, vertical: false, preferSpecial: false,
+                    floor, layout.FloorCount, layout.EntryFloor);
             if (candidates.Count == 0) return null;
 
             Shuffle(candidates, rng);
 
             foreach (var candidate in candidates)
             {
-                var pos = NeighborOrigin(open.Room, open.Socket, candidate.GridSize);
-                if (pos.y != open.Room.GridPosition.y) continue; // stay on current floor
-                var room = TryPlaceAt(layout, candidate, pos);
+                var room = TryPlaceCandidate(layout, open, needed, candidate);
                 if (room != null)
                 {
-                    RegisterConnection(layout, open.Room, open.Socket, room, needed);
+                    // If this candidate also satisfies a required quota, decrement it.
+                    if (quotas.TryGetValue(candidate, out var remaining) && remaining > 0)
+                        quotas[candidate] = remaining - 1;
                     return room;
                 }
             }
             return null;
         }
 
+        // Shared placement attempt: stays on the current floor, places the room and
+        // registers the socket connection.
+        private static PlacedRoom TryPlaceCandidate(InteriorLayout layout, OpenSocket open,
+            SocketDirection needed, RoomDefinition candidate)
+        {
+            var pos = NeighborOrigin(open.Room, open.Socket, candidate.GridSize);
+            if (pos.y != open.Room.GridPosition.y) return null; // stay on current floor
+            var room = TryPlaceAt(layout, candidate, pos);
+            if (room == null) return null;
+            RegisterConnection(layout, open.Room, open.Socket, room, needed);
+            return room;
+        }
+
+        // Lists required rooms (with positive remaining count) whose socket set includes
+        // `needed`, repeated by their remaining count so heavier-quota rooms are picked
+        // proportionally more often.
+        private static List<RoomDefinition> BuildRequiredCandidates(
+            Dictionary<RoomDefinition, int> quotas, SocketDirection needed)
+        {
+            var list = new List<RoomDefinition>();
+            foreach (var kv in quotas)
+            {
+                if (kv.Value <= 0 || kv.Key == null) continue;
+                if (kv.Key.IsVerticalConnector) continue;       // vertical handled separately
+                if (!kv.Key.HasSocket(needed)) continue;
+                for (int i = 0; i < kv.Value; i++) list.Add(kv.Key);
+            }
+            return list;
+        }
+
         private static PlacedRoom ForceConnector(
             InteriorLayout layout, BuildingDefinition def, List<OpenSocket> frontier,
-            RoomDefinition connDef, int floor, Random rng)
+            RoomDefinition connDef, int floor, Random rng,
+            IReadOnlyList<RoomDefinition> preferredParents = null)
         {
-            var floorFrontier = FloorHorizontalFrontier(frontier, floor);
-            Shuffle(floorFrontier, rng);
+            var allFrontier = FloorHorizontalFrontier(frontier, floor);
+            // Try preferred-parent sockets first if any were provided.
+            if (preferredParents != null && preferredParents.Count > 0)
+            {
+                var preferred = new List<OpenSocket>();
+                foreach (var os in allFrontier)
+                {
+                    foreach (var p in preferredParents)
+                        if (p != null && os.Room.Definition == p) { preferred.Add(os); break; }
+                }
+                var placed = TryConnectorAtSockets(layout, frontier, rng, connDef, preferred);
+                if (placed != null) return placed;
+                // Falls through to ANY frontier socket if preferred sockets don't pan out.
+            }
+            return TryConnectorAtSockets(layout, frontier, rng, connDef, allFrontier);
+        }
 
-            foreach (var open in floorFrontier)
+        private static PlacedRoom TryConnectorAtSockets(InteriorLayout layout,
+            List<OpenSocket> frontier, Random rng, RoomDefinition connDef, List<OpenSocket> candidates)
+        {
+            Shuffle(candidates, rng);
+            foreach (var open in candidates)
             {
                 if (!connDef.HasSocket(open.Socket.Opposite())) continue;
                 var pos  = NeighborOrigin(open.Room, open.Socket, connDef.GridSize);
@@ -201,11 +521,12 @@ namespace FriendSlop.Interiors
         private static void RegisterConnection(
             InteriorLayout layout,
             PlacedRoom a, SocketDirection sa,
-            PlacedRoom b, SocketDirection sb)
+            PlacedRoom b, SocketDirection sb,
+            bool isOpenPassage = false)
         {
             a.ConnectedSockets.Add(sa);
             b.ConnectedSockets.Add(sb);
-            layout.Connections.Add(new InteriorLayout.Connection(a, sa, b, sb));
+            layout.Connections.Add(new InteriorLayout.Connection(a, sa, b, sb, isOpenPassage));
         }
 
         // ── Position math ──────────────────────────────────────────────────────
@@ -309,7 +630,8 @@ namespace FriendSlop.Interiors
 
         private static List<RoomDefinition> BuildCandidateList(
             System.Collections.Generic.IReadOnlyList<RoomDefinition> pool,
-            SocketDirection needed, bool vertical, bool preferSpecial)
+            SocketDirection needed, bool vertical, bool preferSpecial,
+            int floor = -1, int floorCount = -1, int entryFloor = -1)
         {
             var list = new List<RoomDefinition>();
             foreach (var rd in pool)
@@ -317,6 +639,8 @@ namespace FriendSlop.Interiors
                 if (rd.IsVerticalConnector != vertical) continue;
                 if (!rd.HasSocket(needed)) continue;
                 if (preferSpecial && rd.Category != RoomCategory.Special) continue;
+                // Floor-restricted rooms are filtered out when caller knows the floor.
+                if (floor >= 0 && !rd.AllowedOnFloor(floor, floorCount, entryFloor)) continue;
                 for (int w = 0; w < rd.Weight; w++) list.Add(rd);
             }
             return list;

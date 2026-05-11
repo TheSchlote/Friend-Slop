@@ -14,6 +14,14 @@ namespace FriendSlop.Interiors
     {
         [SerializeField] private BuildingDefinition definition;
         [SerializeField] private string interiorScenePath = "Assets/Scenes/Building_Interior.unity";
+        [Tooltip("Optional. When assigned, the entrance reads its definition from the selector " +
+                 "instead of the inline 'definition' field — used by the test-scene type picker.")]
+        [SerializeField] private InteriorTypeSelector typeSelector;
+
+        private BuildingDefinition ActiveDefinition =>
+            typeSelector != null && typeSelector.CurrentDefinition != null
+                ? typeSelector.CurrentDefinition
+                : definition;
 
         private readonly NetworkVariable<int> _seed =
             new(-1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -37,13 +45,14 @@ namespace FriendSlop.Interiors
         [Rpc(SendTo.Server)]
         private void RequestEnterRpc(ulong requestingClientId)
         {
-            if (definition == null) return;
+            var resolvedDef = ActiveDefinition;
+            if (resolvedDef == null) return;
 
             if (_seed.Value < 0)
                 _seed.Value = UnityEngine.Random.Range(1, int.MaxValue);
 
             InteriorSessionData.Seed              = _seed.Value;
-            InteriorSessionData.Definition        = definition;
+            InteriorSessionData.Definition        = resolvedDef;
             // Return position: 1 m above ground, 5 m in front of the building origin
             // (clear of the 8 m shell's +Z face). transform.forward is the building's
             // surface-tangent forward direction.

@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Sink
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Sink
+  kind: sink
+  tags:
+  - bathroom
+  - kitchen
+  placement: 0
+  footprintXZ: {x: 0.8, y: 0.5}
+  weight: 4
+  interactable: 0
+  prefab: {fileID: 5410644291791712898, guid: 5a45127138dda75439d6a7188d49e33d, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.4, z: 0}
+    localScale: {x: 0.3, y: 0.8, z: 0.3}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.98, g: 0.98, b: 0.95, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.85, z: 0.02}
+    localScale: {x: 0.8, y: 0.12, z: 0.45}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.98, g: 0.98, b: 0.95, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.92, z: 0.02}
+    localScale: {x: 0.6, y: 0.04, z: 0.32}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.97, z: -0.16}
+    localScale: {x: 0.08, y: 0.08, z: 0.08}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.78, g: 0.8, b: 0.85, a: 1}
+  - shape: 2
+    localPosition: {x: 0, y: 1.08, z: -0.16}
+    localScale: {x: 0.04, y: 0.12, z: 0.04}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.78, g: 0.8, b: 0.85, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1.16, z: -0.05}
+    localScale: {x: 0.04, y: 0.04, z: 0.22}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.78, g: 0.8, b: 0.85, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1.45, z: -0.24}
+    localScale: {x: 0.6, y: 0.45, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.85, g: 0.85, b: 0.92, a: 1}

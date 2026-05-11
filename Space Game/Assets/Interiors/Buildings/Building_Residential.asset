@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3830b0b9a65b185489ee24b6645642fd, type: 3}
+  m_Name: Building_Residential
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.BuildingDefinition
+  displayName: Residential
+  minRooms: 6
+  maxRooms: 10
+  minFloors: 2
+  maxFloors: 2
+  floorHeightMeters: 4
+  gridCellMeters: 6.8
+  requiredRooms:
+  - definition: {fileID: 11400000, guid: bc4dbc291d7d30f46b2d3f64cc7dc653, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: 1c7ab2306d257b140bda183973cb4c36, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: bbfb71cd435298d43af4d7df1168b27a, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: e2537f5965de5e64b9ec7000dd30b8fd, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: 8b954702e3aa1c84194fb6c9ce7182af, type: 2}
+    count: 1
+    adjacentToAny:
+    - {fileID: 11400000, guid: 1c7ab2306d257b140bda183973cb4c36, type: 2}
+  optionalPool:
+  - {fileID: 11400000, guid: c9b7fca5a2f5e84479feb816d892aee9, type: 2}
+  - {fileID: 11400000, guid: 77d6c2219045171488d031dda7cfef61, type: 2}
+  - {fileID: 11400000, guid: e2537f5965de5e64b9ec7000dd30b8fd, type: 2}
+  - {fileID: 11400000, guid: dcc46ee5a3f76e04d99ab1be853af8e4, type: 2}
+  minSpecialRooms: 1
+  maxSpecialRooms: 2
+  downwardConnectorMirror: {fileID: 11400000, guid: a3d51c35140894645bda1f8284e0137c, type: 2}
+  downConnectorParents:
+  - {fileID: 11400000, guid: 1c7ab2306d257b140bda183973cb4c36, type: 2}
+  - {fileID: 11400000, guid: bbfb71cd435298d43af4d7df1168b27a, type: 2}
+  - {fileID: 11400000, guid: e2537f5965de5e64b9ec7000dd30b8fd, type: 2}
+  skipBasementExpansion: 1
+  themeColor: {r: 0.95, g: 0.85, b: 0.7, a: 1}
+  lootTable: {fileID: 0}
+  monsterPool: {fileID: 0}
+  objective: {fileID: 0}

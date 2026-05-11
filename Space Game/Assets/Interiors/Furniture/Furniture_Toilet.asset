@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Toilet
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Toilet
+  kind: toilet
+  tags:
+  - bathroom
+  placement: 0
+  footprintXZ: {x: 0.7, y: 0.7}
+  weight: 5
+  interactable: 0
+  prefab: {fileID: 4253869522806891412, guid: 6736cfc6ecaca17498c550d74ea3488e, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.15, z: 0.05}
+    localScale: {x: 0.35, y: 0.3, z: 0.35}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.98, g: 0.98, b: 0.95, a: 1}
+  - shape: 2
+    localPosition: {x: 0, y: 0.33, z: 0.05}
+    localScale: {x: 0.55, y: 0.04, z: 0.55}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.98, g: 0.98, b: 0.95, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.34, z: 0.05}
+    localScale: {x: 0.42, y: 0.02, z: 0.42}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.6, z: -0.27}
+    localScale: {x: 0.55, y: 0.55, z: 0.2}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.98, g: 0.98, b: 0.95, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.9, z: -0.27}
+    localScale: {x: 0.58, y: 0.04, z: 0.22}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.98, g: 0.98, b: 0.95, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.92, z: -0.18}
+    localScale: {x: 0.08, y: 0.05, z: 0.05}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
