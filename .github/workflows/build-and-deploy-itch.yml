@@ -20,7 +20,10 @@ concurrency:
 
 env:
   UNITY_PROJECT_PATH: Space Game
-  UNITY_VERSION: 6000.3.15f1
+  PROJECT_UNITY_VERSION: 6000.3.15f1
+  # GameCI has not published unityci/editor images for 6000.3.15f1 yet.
+  # Keep CI on the closest 6000.3 patch image so PR checks can run.
+  UNITY_VERSION: 6000.3.14f1
   BUILD_NAME: FriendSlop
   BUILD_VERSION: 0.1.${{ github.run_number }}
   # GameCI v4 actions still declare Node 20 as of this workflow revision.
@@ -41,7 +44,7 @@ jobs:
 
       - name: Verify workflow Unity version matches project
         shell: pwsh
-        run: ./tools/Assert-UnityVersion.ps1 -ExpectedUnityVersion '${{ env.UNITY_VERSION }}'
+        run: ./tools/Assert-UnityVersion.ps1 -ExpectedUnityVersion '${{ env.PROJECT_UNITY_VERSION }}'
 
   editmode-tests:
     name: Run EditMode tests
