@@ -1,0 +1,105 @@
+float _Constant;
+
+float sdRoundCone(float3 p, float r1, float r2, float h)
+{
+    float b = (r1 - r2) / h;
+    float a = sqrt(1.0f - b * b);
+
+    float2 q = float2(length(p.xz), p.y);
+    float k = dot(q, float2(-b, a));
+    if(k < 0.0f)
+        return length(q) - r1;
+    
+    if(k > a * h)
+        return length(q - float2(0.0f, h)) - r2;
+    
+    return dot(q, float2(a, b)) - r1;
+}
+
+float sdVerticalCapsule( float3 p, float h, float r )
+{
+    p.y -= clamp( p.y, 0.0, h );
+    return length(p) - r;
+}
+
+float sdEllipsoid( float3 p, float3 r )
+{
+    float k0 = length(p / r);
+    float k1 = length(p / (r * r));
+    return k0 * (k0 - 1.0f) / k1;
+}
+
+sampler3D _SDF;
+sampler3D _Albedo;
+float3 _TextureSize;
+
+inline float SamplePart(float4 uvwl, float thickness)
+{
+    uvwl -= float4(0.5f, 0.0f, 0.5f, 0.0f);
+    uvwl = abs(uvwl);
+
+    float maxValue = max(uvwl.x, uvwl.z);
+
+    float2 normalized = uvwl.xz / maxValue;
+    
+    float3 direction = float3(normalized.x > 0.35f, 0.0f, normalized.y > 0.35f);
+
+    uvwl.xyz -= (uvwl.y * uvwl.y * 0.4f) * direction;
+    float first = sdVerticalCapsule(uvwl.xyz - direction * 0.1f, 0.9f, thickness);
+    
+    return first;
+}
+
+inline float SampleSDF(float4 uvwl)
+{
+    return min(SamplePart(uvwl, 0.025f), SamplePart(uvwl * float4(1.0f, 2.0f, 1.0f, 1.0f), 0.025f));
+}
+
+inline float GetValueScaler()
+{
+    return 1.0f;
+}
+
+inline void Sample(float4 uvwl, out float3 albedo, out float metallic, out float smoothness, out float AO)
+{
+	AO = uvwl.y;
+	metallic = 0.0f;
+	smoothness = 0.3f;
+	albedo = 1.0f;
+}
+
+inline float3 GetVolumeSize()
+{
+    return 1.0f;
+}
+
+inline float GetThickness(float lodFactor)
+{
+    return 0.02f;
+}
+
+inline float GetMinHitDistance()
+{
+    return 0.06f;
+}
+
+inline float GetStepSize(float sdf, float lodFactor)
+{
+    if (sdf < 0.0f)
+        return sdf; 
+        
+#if defined(MICRODETAIL_PREVIEW)
+	return max(sdf, 0.02f);
+#endif
+
+    return max(sdf, 0.1f);
+}
+
+inline int GetMaxIterationsCount()
+{
+#if defined(MICRODETAIL_PREVIEW)
+	return 1000;
+#endif
+
+    return 10;
+}

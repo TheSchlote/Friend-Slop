@@ -1,0 +1,554 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-6637430071992537327
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Rocks
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 3722fc1e2a81bdb4fa51c66e865e9aca, type: 2}
+    seed:
+      x: -514.3203
+      y: -585.9863
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: 290727bd1349ee94c900eb84c08182ff, type: 2}
+    seed:
+      x: 674.24225
+      y: -458.18936
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: 1aa349b78d5ca8f4f9a8377a9342ec6e, type: 2}
+    seed:
+      x: -889.9319
+      y: -848.97974
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: c640510df32ca2d47b0a8e1ed9de388c, type: 2}
+    seed:
+      x: -654.5851
+      y: -219.76053
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: cf4265c22f4ef6747ae58728f7e17287, type: 2}
+    seed:
+      x: -93.5582
+      y: -349.35318
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: 6f80846be0e6f9e4e8a7aab90f2ace18, type: 2}
+    seed:
+      x: 552.55743
+      y: 167.57907
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: fcb5830ea71686a42b19e53c327e2a2b, type: 2}
+    seed:
+      x: -348.53638
+      y: -421.04712
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: 15d7d4994c7f57b44b1ae12e97c9eaa3, type: 2}
+    seed:
+      x: -461.27405
+      y: -880.1837
+    samplesPerUnitArea: 7
+--- !u!114 &-6110689913817361870
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Gravel
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 091c44692da71ae4198a995a07b39379, type: 2}
+    seed:
+      x: -456.18448
+      y: -809.5071
+    samplesPerUnitArea: 128
+  - asset: {fileID: 11400000, guid: c9f9e5f9ab40e58478dd6f936c8b1919, type: 2}
+    seed:
+      x: 377.81067
+      y: -42.90161
+    samplesPerUnitArea: 128
+--- !u!114 &-1170750230425318698
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Logs
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 4d09c9b4850c6d040ba23cabd4042a6d, type: 2}
+    seed:
+      x: 715.4596
+      y: -565.64685
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 3cc9a4760a62ea045a00a846c929624b, type: 2}
+    seed:
+      x: -417.41214
+      y: -34.904816
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 0fdaaab8f7dc1754da07fb77643a1e04, type: 2}
+    seed:
+      x: -725.58923
+      y: 745.9342
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 438c6ee022ce0474e8398ecd10bf34a5, type: 2}
+    seed:
+      x: 390.12143
+      y: -753.1908
+    samplesPerUnitArea: 10
+--- !u!114 &-780914410670909671
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Seaweeds
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 15d3f032c62d22746bac1b15ca82f458, type: 2}
+    seed:
+      x: 952.631
+      y: 966.7551
+    samplesPerUnitArea: 64
+--- !u!114 &-552497243654530493
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Forest cover
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 22438f4c5884a2d448da614a7595e20b, type: 2}
+    seed:
+      x: 649.3585
+      y: 703.58105
+    samplesPerUnitArea: 180
+  - asset: {fileID: 11400000, guid: 5677ebd1757f95748bfbf394ef3a946d, type: 2}
+    seed:
+      x: -619.32117
+      y: -489.52975
+    samplesPerUnitArea: 128
+  - asset: {fileID: 11400000, guid: fa5ceed7018aaba44b91022ced3e4c9d, type: 2}
+    seed:
+      x: -445.34192
+      y: -586.94104
+    samplesPerUnitArea: 5
+  - asset: {fileID: 11400000, guid: 00c3a8a51ca09ef4f8cbd7db70d39cae, type: 2}
+    seed:
+      x: 971.6572
+      y: -167.84253
+    samplesPerUnitArea: 3
+  - asset: {fileID: 11400000, guid: e29d494b8d8bdd241994ab702b2a8040, type: 2}
+    seed:
+      x: -799.6793
+      y: -4.9871216
+    samplesPerUnitArea: 256
+  - asset: {fileID: 11400000, guid: a5e1e11ad0eda6248bd190e5aff93f29, type: 2}
+    seed:
+      x: -690.9955
+      y: -281.36954
+    samplesPerUnitArea: 3
+  - asset: {fileID: 11400000, guid: 1cee276c044203242a11d025b728bbb7, type: 2}
+    seed:
+      x: 553.4687
+      y: 811.44495
+    samplesPerUnitArea: 3
+  - asset: {fileID: 11400000, guid: 6441d18bd20bf7a41b353f7a7a4064b2, type: 2}
+    seed:
+      x: 703.855
+      y: 204.78357
+    samplesPerUnitArea: 20
+  - asset: {fileID: 11400000, guid: cf06d94bd32dc4c43899f35cf501e4b2, type: 2}
+    seed:
+      x: 378.787
+      y: 597.5556
+    samplesPerUnitArea: 1
+  - asset: {fileID: 11400000, guid: 98c89666cdff3c049ae6f8cf720ebe26, type: 2}
+    seed:
+      x: -936.7001
+      y: -838.4795
+    samplesPerUnitArea: 1
+--- !u!114 &-369098185256567112
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Thesaurus
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: da44d2c89c29c45458d3519e9365f56e, type: 2}
+    seed:
+      x: -276.93546
+      y: 181.59256
+    samplesPerUnitArea: 1024
+  - asset: {fileID: 11400000, guid: 25152dc6c6676e5468e0ba80ba9a034d, type: 2}
+    seed:
+      x: -708.6094
+      y: -638.13477
+    samplesPerUnitArea: 3
+  - asset: {fileID: 11400000, guid: cbc69622917aed64f933992ecad7f693, type: 2}
+    seed:
+      x: 333.52182
+      y: 796.3727
+    samplesPerUnitArea: 10
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39c841f137f682a4ab1aaa3aa0550a46, type: 3}
+  m_Name: Default palette
+  m_EditorClassIdentifier: 
+  selectedIndex: 9
+  layers:
+  - {fileID: 2612386075423334880}
+  - {fileID: 7490852628014947625}
+  - {fileID: 720313969933755352}
+  - {fileID: -780914410670909671}
+  - {fileID: 9165407096217043382}
+  - {fileID: -552497243654530493}
+  - {fileID: -6637430071992537327}
+  - {fileID: -6110689913817361870}
+  - {fileID: -369098185256567112}
+  - {fileID: -1170750230425318698}
+  - {fileID: 8135029199984047696}
+  - {fileID: 3386838711668183659}
+  - {fileID: 6452258552588518208}
+--- !u!114 &720313969933755352
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Corals
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 67e51931b1ebf78448c9d428a52d9448, type: 2}
+    seed:
+      x: -959.25073
+      y: 440.026
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 1543d75efeec34c42aa77ff7924e8252, type: 2}
+    seed:
+      x: 692.1477
+      y: -959.9614
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 8d2aebe588d7ec649a5673893196787c, type: 2}
+    seed:
+      x: 841.7268
+      y: 561.0685
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 65fa81ea7f0d2734abc5b50dd794cfe6, type: 2}
+    seed:
+      x: -849.98303
+      y: 134.74808
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 8800b48a67520f348bd7ce4bf82ed3e7, type: 2}
+    seed:
+      x: 579.6642
+      y: 445.8332
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 945d3a93ccb605049b9cf38c151b3ae3, type: 2}
+    seed:
+      x: -244.46216
+      y: -565.4175
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: b8ec8285c5fe7344c921b1933535fe1c, type: 2}
+    seed:
+      x: 684.47156
+      y: 959.8458
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 2ce92f3a9eecfd448bac43b757ce4b1f, type: 2}
+    seed:
+      x: 414.10397
+      y: 4.091858
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 15e17c05f4cf08b4d98a0c5dcf10f2e0, type: 2}
+    seed:
+      x: -927.9513
+      y: 719.0952
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 5e4a1c24cc73f224eaf0d5a6b2affee4, type: 2}
+    seed:
+      x: -325.91043
+      y: -1.2999878
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: 30da12cbae5558e40b2b0f6d8dbec0e9, type: 2}
+    seed:
+      x: 720.5615
+      y: -367.58102
+    samplesPerUnitArea: 10
+  - asset: {fileID: 11400000, guid: f25b59ddf2ae5db4084d7b2b157f20a7, type: 2}
+    seed:
+      x: -639.7278
+      y: -482.74435
+    samplesPerUnitArea: 10
+--- !u!114 &2612386075423334880
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Mixed trash
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 51d005af6ffdc904880ba7f34a34ade4, type: 2}
+    seed:
+      x: 125.24524
+      y: -303.5437
+    samplesPerUnitArea: 60
+  - asset: {fileID: 11400000, guid: e1b30f002513e4048bf822e8a625a46e, type: 2}
+    seed:
+      x: -356.33362
+      y: 924.7992
+    samplesPerUnitArea: 60
+  - asset: {fileID: 11400000, guid: b7e4fad379ba1674385f4363300020a5, type: 2}
+    seed:
+      x: 171.94785
+      y: 627.6107
+    samplesPerUnitArea: 6
+  - asset: {fileID: 11400000, guid: c12f62fce52f00641ad06fbd15e8b02b, type: 2}
+    seed:
+      x: 263.81845
+      y: 481.73688
+    samplesPerUnitArea: 6
+  - asset: {fileID: 11400000, guid: ac17e99c140d3c54d8c2db00125c121d, type: 2}
+    seed:
+      x: -921.5846
+      y: -122.039185
+    samplesPerUnitArea: 6
+  - asset: {fileID: 11400000, guid: a7598acb7eee30f4a9a7d323bc7c3241, type: 2}
+    seed:
+      x: 776.9639
+      y: 533.9541
+    samplesPerUnitArea: 60
+  - asset: {fileID: 11400000, guid: 14f29f45d1f9cdb4f9789918e901869e, type: 2}
+    seed:
+      x: 704.056
+      y: -639.4863
+    samplesPerUnitArea: 60
+  - asset: {fileID: 11400000, guid: 47cfc8253d308c14e84fe5c1b9e73ac2, type: 2}
+    seed:
+      x: -371.24954
+      y: 498.10645
+    samplesPerUnitArea: 60
+  - asset: {fileID: 11400000, guid: acb937318e455da40acf5ec64f588cbd, type: 2}
+    seed:
+      x: 47.671417
+      y: 1.4365845
+    samplesPerUnitArea: 20
+  - asset: {fileID: 11400000, guid: 2f3a85df50139e54e91fe2e252970bac, type: 2}
+    seed:
+      x: -321.0894
+      y: -832.89844
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: 592af4f816511774d8ac52970fcb8b1a, type: 2}
+    seed:
+      x: 684.7644
+      y: 345.2074
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: 3f77dadfb0dfe904492667b9ab4b87b2, type: 2}
+    seed:
+      x: 492.12738
+      y: 962.3943
+    samplesPerUnitArea: 2
+  - asset: {fileID: 11400000, guid: 014d1946bdf4b594cbd6b4964495093c, type: 2}
+    seed:
+      x: 418.90808
+      y: 323.8585
+    samplesPerUnitArea: 20
+  - asset: {fileID: 11400000, guid: a6cbf2381cbccd243a528e4dabf4a2fa, type: 2}
+    seed:
+      x: -459.68567
+      y: 851.59204
+    samplesPerUnitArea: 6
+  - asset: {fileID: 11400000, guid: 1c5ae3d58ea640845bd3443706ebae85, type: 2}
+    seed:
+      x: 619.0974
+      y: -854.4249
+    samplesPerUnitArea: 20
+--- !u!114 &3386838711668183659
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Cherries
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 8f147033af050c943830cdfc9abe0564, type: 2}
+    seed:
+      x: 189.21078
+      y: 696.31287
+    samplesPerUnitArea: 128
+  - asset: {fileID: 11400000, guid: 8594e47959ab493468d2b8d26da4b6f9, type: 2}
+    seed:
+      x: 505.4011
+      y: 98.10104
+    samplesPerUnitArea: 0
+--- !u!114 &6452258552588518208
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Crabs
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: ac243a7694c2c954ea09d12bbadf6447, type: 2}
+    seed:
+      x: 215.88599
+      y: -255.18118
+    samplesPerUnitArea: 100
+--- !u!114 &7490852628014947625
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Seashells
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: a615b1bdb476d3144a6de6fffefbb835, type: 2}
+    seed:
+      x: 781.32886
+      y: -58.901886
+    samplesPerUnitArea: 20
+  - asset: {fileID: 11400000, guid: 41c881656f8fabd459c95c3c295706c8, type: 2}
+    seed:
+      x: 566.4587
+      y: -411.66296
+    samplesPerUnitArea: 40
+  - asset: {fileID: 11400000, guid: f01228d6a97c4a2429100b8fc908091b, type: 2}
+    seed:
+      x: -272.61914
+      y: -784.57764
+    samplesPerUnitArea: 40
+  - asset: {fileID: 11400000, guid: 1e326b89eb58e43448d7065cc4f2c00e, type: 2}
+    seed:
+      x: 111.78552
+      y: -310.64832
+    samplesPerUnitArea: 20
+--- !u!114 &8135029199984047696
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Apples
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 8a41b8a9c1c4f6b4bb1c92a7472cc16c, type: 2}
+    seed:
+      x: 643.3336
+      y: 666.37036
+    samplesPerUnitArea: 30
+  - asset: {fileID: 11400000, guid: e733a3841b034af46830937683d78499, type: 2}
+    seed:
+      x: 836.35754
+      y: -508.8103
+    samplesPerUnitArea: 30
+--- !u!114 &9165407096217043382
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2b884fd3adec37d4980afebfba094ae3, type: 3}
+  m_Name: Skulls
+  m_EditorClassIdentifier: 
+  enabled: 1
+  visible: 1
+  entries:
+  - asset: {fileID: 11400000, guid: 1c2d251c4bc22db4c93503ea97ac02c7, type: 2}
+    seed:
+      x: -167.74927
+      y: 850.58545
+    samplesPerUnitArea: 5
+  - asset: {fileID: 11400000, guid: b4f18e92a3e4ad74bbc0d7f68264e1c3, type: 2}
+    seed:
+      x: -698.5853
+      y: -348.4651
+    samplesPerUnitArea: 5

@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using FriendSlop.Core;
 using FriendSlop.Loot;
 using FriendSlop.Round;
@@ -43,6 +45,7 @@ namespace FriendSlop.Networking
                 : null;
 
             var count = Mathf.Min(lootPrefabs.Length, anchors.Length);
+            var spawnedLootObjects = new List<GameObject>(count);
             for (var i = 0; i < count; i++)
             {
                 var prefab = lootPrefabs[i];
@@ -70,9 +73,12 @@ namespace FriendSlop.Networking
                 var loot = Instantiate(prefab, pos, rot);
                 MoveToActivePlanetScene(loot.gameObject, activeEnv);
                 loot.ServerSetSpawnPose(pos, rot);
-                SpawnNetworkObject(loot.NetworkObject, destroyWithScene: true);
+                SpawnNetworkObjectInScene(loot.NetworkObject, activeEnv.gameObject.scene, destroyWithScene: true);
                 MoveToActivePlanetScene(loot.gameObject, activeEnv);
+                spawnedLootObjects.Add(loot.gameObject);
             }
+
+            StartCoroutine(KeepSpawnedObjectsInScene(spawnedLootObjects, activeEnv.gameObject.scene));
         }
 
         private static bool HasSceneOwnedLootSpawner(PlanetEnvironment activeEnv)
@@ -129,6 +135,7 @@ namespace FriendSlop.Networking
             var anchors = hasPlanetAnchors ? activeEnv.MonsterSpawnPoints : monsterSpawnPoints;
             if (anchors == null) return;
 
+            var spawnedMonsterObjects = new List<GameObject>(anchors.Length);
             foreach (var spawnPoint in anchors)
             {
                 if (spawnPoint == null)
@@ -138,8 +145,63 @@ namespace FriendSlop.Networking
 
                 var monster = Instantiate(monsterPrefab, spawnPoint.position, spawnPoint.rotation);
                 MoveToActivePlanetScene(monster.gameObject, activeEnv);
-                SpawnNetworkObject(monster.NetworkObject, destroyWithScene: true);
+                SpawnNetworkObjectInScene(monster.NetworkObject, activeEnv.gameObject.scene, destroyWithScene: true);
                 MoveToActivePlanetScene(monster.gameObject, activeEnv);
+                spawnedMonsterObjects.Add(monster.gameObject);
+            }
+
+            StartCoroutine(KeepSpawnedObjectsInScene(spawnedMonsterObjects, activeEnv.gameObject.scene));
+        }
+
+        private void SpawnNetworkObjectInScene(NetworkObject networkObject, Scene targetScene, bool destroyWithScene)
+        {
+            if (networkObject == null)
+            {
+                return;
+            }
+
+            var previousActiveScene = SceneManager.GetActiveScene();
+            var changedActiveScene = targetScene.IsValid()
+                                     && targetScene.isLoaded
+                                     && previousActiveScene != targetScene;
+
+            if (changedActiveScene)
+            {
+                SceneManager.SetActiveScene(targetScene);
+            }
+
+            try
+            {
+                SpawnNetworkObject(networkObject, destroyWithScene);
+            }
+            finally
+            {
+                if (changedActiveScene && previousActiveScene.IsValid() && previousActiveScene.isLoaded)
+                {
+                    SceneManager.SetActiveScene(previousActiveScene);
+                }
+            }
+        }
+
+        private IEnumerator KeepSpawnedObjectsInScene(IReadOnlyList<GameObject> objects, Scene targetScene)
+        {
+            if (!targetScene.IsValid() || !targetScene.isLoaded || objects == null)
+            {
+                yield break;
+            }
+
+            for (var frame = 0; frame < 30; frame++)
+            {
+                for (var i = 0; i < objects.Count; i++)
+                {
+                    var obj = objects[i];
+                    if (obj != null && obj.scene != targetScene)
+                    {
+                        SceneManager.MoveGameObjectToScene(obj, targetScene);
+                    }
+                }
+
+                yield return null;
             }
         }
 

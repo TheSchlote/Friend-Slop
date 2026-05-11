@@ -73,7 +73,9 @@ namespace FriendSlop.Player
             var up = transform.up;
             var world = SphereWorld.GetClosest(transform.position);
             var groundPos = world != null ? world.GetSurfacePoint(up, 0.06f) : transform.position + up * 0.06f;
-            BloodSplatter.Spawn(groundPos, up, count);
+            var bodyHeight = characterController != null ? characterController.height : 1.8f;
+            var bodyOrigin = transform.position + up * (bodyHeight * 0.5f);
+            BloodSplatter.Spawn(bodyOrigin, groundPos, up, count, isDeath);
         }
 
         public void ServerRevive()

@@ -332,7 +332,6 @@ namespace FriendSlop.Editor
             SetMaterial(planetObject, materials["PlanetGrass"]);
 
             planetObject.AddComponent<NetworkObject>();
-            planetObject.AddComponent<PlanetColorRandomizer>();
             planetObject.AddComponent<PlanetTreeSpawner>();
 
             var world = planetObject.AddComponent<SphereWorld>();
@@ -950,8 +949,6 @@ namespace FriendSlop.Editor
 
                 if (planet.GetComponent<NetworkObject>() == null)
                     planet.AddComponent<NetworkObject>();
-                if (planet.GetComponent<PlanetColorRandomizer>() == null)
-                    planet.AddComponent<PlanetColorRandomizer>();
                 if (planet.GetComponent<PlanetTreeSpawner>() == null)
                     planet.AddComponent<PlanetTreeSpawner>();
 

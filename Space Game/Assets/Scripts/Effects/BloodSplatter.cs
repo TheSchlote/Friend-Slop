@@ -1,138 +1,89 @@
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace FriendSlop.Effects
 {
-    public class BloodSplatter : MonoBehaviour
+    // Static helper that spawns blood VFX at a hit point using prefabs from
+    // a BloodVfxLibrary ScriptableObject loaded from Resources/. The library
+    // wires up HIVEMIND RealisticBloodVFX (URP) decal + particle prefabs.
+    public static class BloodSplatter
     {
-        private const float Lifetime = 10f;
-        private const float FadeDelay = 5f;
+        private const string LibraryResourcePath = "Effects/BloodVfxLibrary";
 
-        private float _elapsed;
+        private static BloodVfxLibrary _library;
+        private static bool _libraryLoadAttempted;
 
-        private readonly struct SplatterMat
+        private static BloodVfxLibrary Library
         {
-            public readonly Material Material;
-            public readonly float StartAlpha;
-            public SplatterMat(Material m, float a) { Material = m; StartAlpha = a; }
+            get
+            {
+                if (_library != null) return _library;
+                if (_libraryLoadAttempted) return null;
+                _libraryLoadAttempted = true;
+                _library = Resources.Load<BloodVfxLibrary>(LibraryResourcePath);
+                if (_library == null)
+                    Debug.LogWarning($"BloodSplatter: missing Resources/{LibraryResourcePath} — no blood VFX will spawn.");
+                return _library;
+            }
         }
-
-        private readonly List<SplatterMat> _mats = new();
 
         public static void Spawn(Vector3 position, Vector3 surfaceNormal, int count)
         {
-            var go = new GameObject("BloodSplatter");
-            go.AddComponent<BloodSplatter>().Initialize(position, surfaceNormal, count);
-            Destroy(go, Lifetime + 0.5f);
+            Spawn(position, position, surfaceNormal, count, isDeath: false);
         }
 
-        private void Initialize(Vector3 position, Vector3 surfaceNormal, int count)
+        public static void Spawn(Vector3 position, Vector3 surfaceNormal, int count, bool isDeath)
         {
-            var tangent = Vector3.Cross(surfaceNormal, Vector3.right);
-            if (tangent.sqrMagnitude < 0.001f)
-                tangent = Vector3.Cross(surfaceNormal, Vector3.forward);
-            tangent.Normalize();
-            var bitangent = Vector3.Cross(surfaceNormal, tangent).normalized;
+            Spawn(position, position, surfaceNormal, count, isDeath);
+        }
 
-            bool isUrp = GraphicsSettings.currentRenderPipeline != null;
+        // particleOrigin: where the burst spray comes from (e.g. the player's chest).
+        // groundPosition: where the floor decals scatter (e.g. the surface beneath the player).
+        public static void Spawn(Vector3 particleOrigin, Vector3 groundPosition, Vector3 surfaceNormal, int count, bool isDeath)
+        {
+            var lib = Library;
+            if (lib == null || count <= 0) return;
+
+            var n = surfaceNormal.sqrMagnitude > 0.0001f ? surfaceNormal.normalized : Vector3.up;
+
+            var tangent = Vector3.Cross(n, Vector3.right);
+            if (tangent.sqrMagnitude < 0.001f)
+                tangent = Vector3.Cross(n, Vector3.forward);
+            tangent.Normalize();
+            var bitangent = Vector3.Cross(n, tangent).normalized;
+
+            var burst = lib.PickParticleBurst();
+            if (burst != null)
+            {
+                // Align the prefab's local +Y with the surface normal so cone-shape
+                // emitters (which default to local Y) spray outward from the player.
+                // Random twist around that axis for variety.
+                var burstRot = Quaternion.FromToRotation(Vector3.up, n)
+                             * Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up);
+                var burstGo = Object.Instantiate(burst, particleOrigin, burstRot);
+                Object.Destroy(burstGo, lib.lifetime);
+            }
 
             for (var i = 0; i < count; i++)
             {
-                var offset = tangent * Random.Range(-0.45f, 0.45f)
-                           + bitangent * Random.Range(-0.45f, 0.45f);
-                var spotPos = position + surfaceNormal * 0.04f + offset;
-                var rot = Quaternion.LookRotation(surfaceNormal, tangent)
-                        * Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
-                var scaleW = Random.Range(0.18f, 0.58f);
-                var scaleH = Random.Range(0.08f, 0.32f);
+                var useDeath = isDeath && i == 0;
+                var prefab = useDeath ? lib.PickDeathDecal() : lib.PickDecal();
+                if (prefab == null) continue;
 
-                var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                Destroy(quad.GetComponent<MeshCollider>());
-                quad.transform.SetParent(transform, false);
-                quad.transform.SetPositionAndRotation(spotPos, rot);
-                quad.transform.localScale = new Vector3(scaleW, scaleH, 1f);
+                var radius = Random.Range(lib.decalOffsetRange.x, lib.decalOffsetRange.y);
+                var ang = Random.Range(0f, Mathf.PI * 2f);
+                var offset = (tangent * Mathf.Cos(ang) + bitangent * Mathf.Sin(ang)) * radius;
+                var spotPos = groundPosition + offset + n * 0.02f;
 
-                var mr = quad.GetComponent<MeshRenderer>();
-                mr.shadowCastingMode = ShadowCastingMode.Off;
-                mr.receiveShadows = false;
+                // URP DecalProjector projects along the GameObject's forward (+Z).
+                // Aim forward into the surface and add a random Z roll for variety.
+                var rot = Quaternion.LookRotation(-n) * Quaternion.Euler(0f, 0f, Random.Range(0f, 360f));
 
-                var alpha = Random.Range(0.55f, 0.80f);
-                var r = Random.Range(0.38f, 0.55f);
-                var mat = isUrp ? CreateUrpMat(r, alpha) : CreateBuiltInMat(r, alpha);
-                if (mat != null)
-                    mr.material = mat;
-                else
-                    mr.material.color = new Color(r, 0f, 0f, 1f);
-
-                _mats.Add(new SplatterMat(mr.material, alpha));
+                var go = Object.Instantiate(prefab, spotPos, rot);
+                var s = Random.Range(lib.decalScaleRange.x, lib.decalScaleRange.y);
+                if (useDeath) s *= lib.deathDecalSizeMultiplier;
+                go.transform.localScale = go.transform.localScale * s;
+                Object.Destroy(go, lib.lifetime);
             }
-        }
-
-        private static Material CreateUrpMat(float r, float alpha)
-        {
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null) return null;
-
-            var mat = new Material(shader);
-            mat.SetFloat("_Surface", 1f);
-            mat.SetFloat("_Blend", 0f);
-            mat.SetFloat("_Smoothness", 0f);
-            mat.SetFloat("_Metallic", 0f);
-            mat.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
-            mat.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
-            mat.SetInt("_ZWrite", 0);
-            mat.SetInt("_Cull", (int)CullMode.Off);
-            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            mat.renderQueue = (int)RenderQueue.Transparent;
-            mat.SetColor("_BaseColor", new Color(r, 0f, 0f, alpha));
-            return mat;
-        }
-
-        private static Material CreateBuiltInMat(float r, float alpha)
-        {
-            var shader = Shader.Find("Standard");
-            if (shader == null) return null;
-
-            var mat = new Material(shader);
-            mat.SetFloat("_Mode", 3f);
-            mat.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
-            mat.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
-            mat.SetInt("_ZWrite", 0);
-            mat.SetFloat("_Glossiness", 0f);
-            mat.SetFloat("_Metallic", 0f);
-            mat.SetInt("_Cull", (int)CullMode.Off);
-            mat.DisableKeyword("_ALPHATEST_ON");
-            mat.EnableKeyword("_ALPHABLEND_ON");
-            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-            mat.renderQueue = (int)RenderQueue.Transparent;
-            mat.color = new Color(r, 0f, 0f, alpha);
-            return mat;
-        }
-
-        private void Update()
-        {
-            _elapsed += Time.deltaTime;
-            if (_elapsed < FadeDelay) return;
-
-            var fade = 1f - Mathf.Clamp01((_elapsed - FadeDelay) / (Lifetime - FadeDelay));
-            foreach (var item in _mats)
-            {
-                var c = item.Material.color;
-                item.Material.color = new Color(c.r, c.g, c.b, item.StartAlpha * fade);
-            }
-        }
-
-        private void OnDestroy()
-        {
-            foreach (var item in _mats)
-            {
-                if (item.Material != null)
-                    Destroy(item.Material);
-            }
-
-            _mats.Clear();
         }
     }
 }

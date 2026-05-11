@@ -27,6 +27,14 @@ namespace FriendSlop.Round
         [Header("Scene (optional - per-planet scene asset)")]
         [SerializeField] private GameSceneDefinition planetScene;
 
+        // When true, the global AnomalySpawner skips this planet at TrySpawnOrb time so
+        // anomalies never appear during the round. Per-scene AnomalySpawner instances
+        // (e.g. Ice Planet's IceMine spawner) are unaffected - they live in their own
+        // scene and run their own list. Used by the tier 4 sandbox where the host wants
+        // to iterate on procgen without orbs underfoot.
+        [Header("Hazards")]
+        [SerializeField] private bool suppressAnomalies;
+
         // When true, this planet is hidden from the normal tier-progression menus and is
         // only reachable via the host's Test Mode picker. Pair with flatTestWorld for the
         // built-in flat sandbox; the flag is also the hook for any future test-only planets
@@ -54,6 +62,7 @@ namespace FriendSlop.Round
         public bool HasPlanetScene => planetScene != null && planetScene.IsConfigured;
         // FlatTestWorld implies TestModeOnly; the explicit flag covers test-only planets
         // that aren't the procedural flat world.
+        public bool SuppressAnomalies => suppressAnomalies;
         public bool IsTestModeOnly => testModeOnly || flatTestWorld;
         public bool IsFlatTestWorld => flatTestWorld;
         public TestWorldDisplaySet DisplaySet => displaySet;

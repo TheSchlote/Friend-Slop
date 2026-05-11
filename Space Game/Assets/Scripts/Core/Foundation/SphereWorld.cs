@@ -19,6 +19,16 @@ namespace FriendSlop.Core
         public float GravityAcceleration => gravityAcceleration;
         public float SurfaceSlideDecel => Mathf.Max(0f, surfaceSlideDecel);
         public Vector3 Center => transform.position;
+        // Optional displaced-terrain hook. Procedural planets register themselves at
+        // generation time so anchor queries return the actual radial height of the
+        // mesh at a given direction; classic spherical planets leave this null and
+        // GetSurfacePoint behaves exactly as before.
+        public ISphereSurfaceHeightProvider HeightProvider { get; private set; }
+        public void SetHeightProvider(ISphereSurfaceHeightProvider provider) => HeightProvider = provider;
+        public void ClearHeightProvider(ISphereSurfaceHeightProvider provider)
+        {
+            if (HeightProvider == provider) HeightProvider = null;
+        }
 
         // Runtime configuration hooks for procedurally-built sphere worlds (e.g. the flat
         // test world). Editor builders go through SerializedObject so they can persist
@@ -83,12 +93,18 @@ namespace FriendSlop.Core
 
         public float GetSurfaceDistance(Vector3 position)
         {
-            return Vector3.Distance(position, Center) - radius;
+            var radial = position - Center;
+            var dist = radial.magnitude;
+            if (HeightProvider == null || dist < 0.0001f) return dist - radius;
+            var dir = radial / dist;
+            return dist - (radius + HeightProvider.GetHeightAt(dir));
         }
 
         public Vector3 GetSurfacePoint(Vector3 normal, float heightOffset = 0f)
         {
-            return Center + normal.normalized * (radius + heightOffset);
+            var n = normal.normalized;
+            var displacement = HeightProvider != null ? HeightProvider.GetHeightAt(n) : 0f;
+            return Center + n * (radius + displacement + heightOffset);
         }
 
         public Quaternion GetSurfaceRotation(Vector3 normal, Vector3 forwardHint)

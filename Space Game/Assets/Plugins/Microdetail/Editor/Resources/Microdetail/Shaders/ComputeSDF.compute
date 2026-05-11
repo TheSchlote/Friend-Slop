@@ -1,0 +1,166 @@
+#pragma kernel ComputeSDF
+
+#include "../../../../Resources/Microdetail/Shaders/Common.cginc"
+
+RWTexture3D<float> SDFResult;
+RWTexture3D<float4> MaskResult;
+RWTexture3D<float4> ColorResult;
+Texture2D<float4> Texture;
+Texture2D<float4> Smoothness;
+float4 SmoothnessMask;
+Texture2D<float4> Metallic;
+float4 MetallicMask;
+Texture2D<float4> AO;
+float4 AOMask;
+Texture2D<float2> TextureSDF;
+uint3 VolumeSize;
+uint TrianglesCount;
+float Padding;
+float Thickness;
+float3 StartPosition;
+
+SamplerState LinearClampSampler;
+
+struct Triangle
+{
+    float3 A;
+    float2 UVA;
+    float3 B;
+    float2 UVB;
+    float3 C;
+    float2 UVC;
+};
+
+struct Ray
+{
+    float3 origin;
+    float3 direction;
+};
+
+StructuredBuffer<Triangle> Triangles;
+
+float3 GetPointFromUV(Triangle triangleToCheck, float2 uv)
+{
+    float2 uvAB = triangleToCheck.UVB - triangleToCheck.UVA;
+    float2 uvAC = triangleToCheck.UVC - triangleToCheck.UVA;
+    float2 uvP = uv - triangleToCheck.UVA;
+
+    float denom = uvAB.x * uvAC.y - uvAB.y * uvAC.x;
+    float u = (uvP.x * uvAC.y - uvP.y * uvAC.x) / denom;
+    float v = (uvAB.x * uvP.y - uvAB.y * uvP.x) / denom;
+
+    float w = 1.0f - u - v;
+
+    return u * triangleToCheck.B + v * triangleToCheck.C + w * triangleToCheck.A;
+}
+
+float dot2( in float3 v ) { return dot(v,v); }
+
+struct TriangleCheckResult
+{
+    float3 Normal;
+    float3 Point;
+    float2 UV;
+};
+
+inline TriangleCheckResult TriangleClosestPoint(in Triangle meshTriangle, in float3 p)
+{
+    float3 v10 = meshTriangle.B - meshTriangle.A; 
+    float3 v21 = meshTriangle.C - meshTriangle.B; 
+    float3 v02 = meshTriangle.A - meshTriangle.C;
+    
+    float3 p0 = p - meshTriangle.A;
+    float3 p1 = p - meshTriangle.B;
+    float3 p2 = p - meshTriangle.C;
+    
+    float3 normal = cross(v10, v02);
+
+    float3 q = cross(normal, p0);
+    float d = 1.0f / dot2(normal);
+    float u = d * dot(q, v02);
+    float v = d * dot(q, v10);
+    float w = 1.0f - u - v;
+    
+    if (u < 0.0f)
+    {
+        w = clamp(dot(p2, v02) / dot2(v02), 0.0f, 1.0f);
+        u = 0.0f;
+        v = 1.0f - w;
+    }
+    else if (v < 0.0f)
+    {
+        u = clamp(dot(p0, v10) / dot2(v10), 0.0f, 1.0f);
+        v = 0.0f;
+        w = 1.0f - u;
+    }
+    else if (w < 0.0f)
+    {
+        v = clamp(dot(p1, v21) / dot2(v21), 0.0f, 1.0f);
+        w = 0.0f;
+        u = 1.0f - v;
+    }
+    
+    float2 uv = u * meshTriangle.UVB + v * meshTriangle.UVC + w * meshTriangle.UVA;
+    float3 position = u * meshTriangle.B + v * meshTriangle.C + w * meshTriangle.A;
+    TriangleCheckResult result;
+    result.Point = position;
+    result.UV = uv;
+    result.Normal = normal;
+    return result;
+}
+
+float SampleValue(Texture2D<float4> tex, float2 uv, float4 mask)
+{
+    float sampled = dot(tex.SampleLevel(LinearClampSampler, uv, 0.0f), abs(mask));
+    return any(mask < 0.0f) ? 1.0f - sampled : sampled;
+}
+
+[numthreads(8, 8, 8)]
+void ComputeSDF(uint3 id : SV_DispatchThreadID)
+{
+    float padding = Padding;
+    float minDistance = 1000000.0f;
+    float3 size = VolumeSize - padding * 2.0f;
+    float3 position = StartPosition + id - padding;
+    float4 color = 0.0f;
+    float4 mask = 0.0f;
+    
+    for (uint index = 0; index < TrianglesCount; index++)
+    {
+        Triangle target = Triangles[index];
+        
+        target.A *= size;
+        target.B *= size;
+        target.C *= size;
+
+        TriangleCheckResult result = TriangleClosestPoint(target, position);
+
+        float currentDistance = distance(result.Point, position);
+        if (isnan(currentDistance))
+            continue;
+        
+        if (currentDistance >= minDistance)
+            continue;
+
+        float2 sdfPoint = TextureSDF.SampleLevel(LinearClampSampler, result.UV, 0.0f);
+        float3 shiftedPoint = GetPointFromUV(target, sdfPoint);
+
+        currentDistance = distance(shiftedPoint, position) - Thickness;
+        if (currentDistance >= minDistance)
+            continue;
+
+        color = Texture.SampleLevel(LinearClampSampler, sdfPoint, 0);
+        mask = float4(
+            SampleValue(Metallic, sdfPoint, MetallicMask),
+            SampleValue(AO, sdfPoint, AOMask),
+            0.0f,
+            SampleValue(Smoothness, sdfPoint, SmoothnessMask));
+        
+        minDistance = currentDistance;
+    }
+
+    ColorResult[StartPosition + id] = color;
+    MaskResult[StartPosition + id] = mask;
+    
+    SDFResult[StartPosition + id] = saturate((minDistance * FIXED_POINT_SCALER) / 255.0f);
+}
