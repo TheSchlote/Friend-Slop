@@ -74,6 +74,12 @@ namespace Microdetail
             
             if (!File.Exists(path))
             {
+                if (IsPipelineSupportAlreadyImported(currentPipeline))
+                {
+                    currentRenderPipeline = currentPipeline;
+                    return;
+                }
+
                 Debug.LogWarning($"[Microdetail] Shader support package not found at {path}. Skipping import.");
                 currentRenderPipeline = currentPipeline;
                 return;
@@ -87,6 +93,17 @@ namespace Microdetail
             catch (Exception e)
             {
                 Debug.LogWarning($"[Microdetail] Could not import shader support package: {e.Message}");
+            }
+        }
+
+        private static bool IsPipelineSupportAlreadyImported(RenderPipelineType pipeline)
+        {
+            switch (pipeline)
+            {
+                case RenderPipelineType.URP:
+                    return File.Exists(Path.Combine("Assets", "Plugins", "Microdetail", "Resources", "Microdetail", "Shaders", "MicrodetailSDF.shader"));
+                default:
+                    return false;
             }
         }
     }

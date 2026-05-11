@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using FriendSlop.Core;
 using FriendSlop.Hazards;
 using FriendSlop.Loot;
@@ -60,8 +61,8 @@ namespace FriendSlop.Tests.PlayMode
             AssertLaunchpadLayout();
             AssertShipPartSpawnPointsAreNearLaunchpadHemisphere();
 
-            var firstLootCount = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
-            var firstMonsterCount = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+            var firstLootCount = FindSpawnedLootItems().Length;
+            var firstMonsterCount = FindSpawnedMonsters().Length;
             Assert.Greater(firstLootCount, 0, "Host startup should spawn loot.");
             Assert.Greater(firstMonsterCount, 0, "Host startup should spawn monsters.");
             yield return StartRoundFromPilotStationAndWaitForActive();
@@ -96,9 +97,9 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsFalse(FriendSlopUI.BlocksGameplayInput, "The restarted ship lobby should stay walkable.");
             Assert.AreEqual(1, Object.FindObjectsByType<RoundManager>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
                 "Restarting the host should not duplicate the RoundManager.");
-            Assert.AreEqual(firstLootCount, Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
+            Assert.AreEqual(firstLootCount, FindSpawnedLootItems().Length,
                 "Restarting the host should respawn the same amount of loot without duplicates.");
-            Assert.AreEqual(firstMonsterCount, Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
+            Assert.AreEqual(firstMonsterCount, FindSpawnedMonsters().Length,
                 "Restarting the host should respawn the same amount of monsters without duplicates.");
 
             yield return ShutdownAndWaitForSessionCleanup();
@@ -125,8 +126,8 @@ namespace FriendSlop.Tests.PlayMode
         {
             for (var frame = 0; frame < 600; frame++)
             {
-                var lootCount = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
-                var monsterCount = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+                var lootCount = FindSpawnedLootItems().Length;
+                var monsterCount = FindSpawnedMonsters().Length;
                 if (lootCount > 0 && monsterCount > 0) yield break;
                 yield return null;
             }
@@ -164,7 +165,7 @@ namespace FriendSlop.Tests.PlayMode
 
         private static void AssertSpawnedActorsInActivePlanetScene(Scene activePlanetScene)
         {
-            var lootItems = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var lootItems = FindSpawnedLootItems();
             Assert.Greater(lootItems.Length, 0, "Host startup should spawn loot before validating scene ownership.");
             foreach (var loot in lootItems)
             {
@@ -172,7 +173,7 @@ namespace FriendSlop.Tests.PlayMode
                     $"Loot '{loot.name}' should spawn in the active planet scene, not the bootstrap scene.");
             }
 
-            var monsters = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var monsters = FindSpawnedMonsters();
             Assert.Greater(monsters.Length, 0, "Host startup should spawn monsters before validating scene ownership.");
             foreach (var monster in monsters)
             {
@@ -190,6 +191,20 @@ namespace FriendSlop.Tests.PlayMode
             }
 
             Assert.Fail("ShipInterior should load and register a ShipEnvironment after host start.");
+        }
+
+        private static NetworkLootItem[] FindSpawnedLootItems()
+        {
+            return Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Where(loot => loot != null && loot.IsSpawned)
+                .ToArray();
+        }
+
+        private static RoamingMonster[] FindSpawnedMonsters()
+        {
+            return Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None)
+                .Where(monster => monster != null && monster.NetworkObject != null && monster.NetworkObject.IsSpawned)
+                .ToArray();
         }
 
         private static IEnumerator LoadPrototypeScene()

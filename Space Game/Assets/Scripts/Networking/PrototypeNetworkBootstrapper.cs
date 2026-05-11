@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using FriendSlop.Core;
 using FriendSlop.Hazards;
@@ -195,6 +196,8 @@ namespace FriendSlop.Networking
         private void HandlePlanetEnvironmentRegistered(PlanetEnvironment env)
         {
             TrySpawnForActivePlanet();
+            if (env != null && !env.gameObject.scene.isLoaded)
+                StartCoroutine(TrySpawnForActivePlanetWhenSceneLoaded(env.gameObject.scene));
         }
 
         private void TrySpawnForActivePlanet()
@@ -205,7 +208,7 @@ namespace FriendSlop.Networking
             if (planet == null) return;
             var env = PlanetSceneOwnership.FindBindableEnvironment(planet);
             if (env == null) return;
-
+            if (!env.gameObject.scene.isLoaded) return;
             if (spawnedLootForPlanet != planet)
             {
                 spawnedLootForPlanet = planet;
@@ -216,6 +219,20 @@ namespace FriendSlop.Networking
             {
                 spawnedMonstersForPlanet = planet;
                 SpawnMonsters(env);
+            }
+        }
+
+        private IEnumerator TrySpawnForActivePlanetWhenSceneLoaded(Scene scene)
+        {
+            for (var frame = 0; frame < 600; frame++)
+            {
+                if (scene.IsValid() && scene.isLoaded)
+                {
+                    TrySpawnForActivePlanet();
+                    yield break;
+                }
+
+                yield return null;
             }
         }
 

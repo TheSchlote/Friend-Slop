@@ -23,7 +23,7 @@ namespace FriendSlop.Interiors
 
         public void Interact(NetworkFirstPersonController player)
         {
-            RequestEnterRpc(player.OwnerClientId);
+            RequestEnterRpc();
         }
 
         // Called by the bootstrapper when the interior scene fully unloads (last player
@@ -35,9 +35,11 @@ namespace FriendSlop.Interiors
         }
 
         [Rpc(SendTo.Server)]
-        private void RequestEnterRpc(ulong requestingClientId)
+        private void RequestEnterRpc(RpcParams rpcParams = default)
         {
             if (definition == null) return;
+
+            var requestingClientId = rpcParams.Receive.SenderClientId;
 
             if (_seed.Value < 0)
                 _seed.Value = UnityEngine.Random.Range(1, int.MaxValue);

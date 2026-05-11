@@ -11,7 +11,7 @@ namespace FriendSlop.Interiors
     // Placed in Building_Interior.unity. Reads InteriorSessionData on the server,
     // replicates seed/origin to clients, then all clients generate rooms locally.
     // Server also spawns door NetworkObjects and teleports the requesting player in.
-    public class InteriorSceneBootstrapper : NetworkBehaviour
+    public partial class InteriorSceneBootstrapper : NetworkBehaviour
     {
         [SerializeField] private Transform spawnPoint;
         [SerializeField] private GameObject doorPrefab;
@@ -385,18 +385,5 @@ namespace FriendSlop.Interiors
             return null;
         }
 
-        private void DestroyInterior()
-        {
-            if (_interiorRoot != null)
-            {
-                Destroy(_interiorRoot);
-                _interiorRoot = null;
-            }
-            if (_minimap != null)
-            {
-                Destroy(_minimap.gameObject);
-                _minimap = null;
-            }
-        }
     }
 }

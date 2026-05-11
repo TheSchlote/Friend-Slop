@@ -15,12 +15,13 @@ namespace FriendSlop.Interiors
 
         public void Interact(NetworkFirstPersonController player)
         {
-            RequestExitRpc(player.OwnerClientId);
+            RequestExitRpc();
         }
 
         [Rpc(SendTo.Server)]
-        private void RequestExitRpc(ulong clientId)
+        private void RequestExitRpc(RpcParams rpcParams = default)
         {
+            var clientId = rpcParams.Receive.SenderClientId;
             var player = FindPlayer(clientId);
             if (player == null) return;
 
