@@ -164,8 +164,8 @@ namespace FriendSlop.UI
                 // Test-only planets don't appear in normal progression so flag them in the
                 // picker; otherwise it's confusing why they exist alongside tier entries.
                 var label = planet.IsTestModeOnly
-                    ? $"[TEST] {planet.DisplayName}"
-                    : $"Tier {planet.Tier} - {planet.DisplayName}";
+                    ? $"[TEST] {PlanetDisplayUtility.FormatPlanetLabel(planet, catalog)}"
+                    : PlanetDisplayUtility.FormatPlanetLabel(planet, catalog);
                 var capturedIndex = i;
                 var button = CreateButton(label, testModePlanetListContainer.transform, Vector2.zero,
                     () => OnTestPlanetClicked(capturedIndex));

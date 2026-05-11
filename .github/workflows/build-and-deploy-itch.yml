@@ -20,7 +20,7 @@ concurrency:
 
 env:
   UNITY_PROJECT_PATH: Space Game
-  UNITY_VERSION: 6000.3.4f1
+  UNITY_VERSION: 6000.3.15f1
   BUILD_NAME: FriendSlop
   BUILD_VERSION: 0.1.${{ github.run_number }}
   # GameCI v4 actions still declare Node 20 as of this workflow revision.
@@ -121,13 +121,39 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.UNITY_PROJECT_PATH }}/Library
-          key: Library-FriendSlop-${{ runner.os }}-PlayMode-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
+          key: Library-FriendSlop-${{ runner.os }}-PlayMode-v2-${{ hashFiles('Space Game/Packages/manifest.json', 'Space Game/Packages/packages-lock.json', 'Space Game/ProjectSettings/**', 'Space Game/Assets/**') }}
           restore-keys: |
-            Library-FriendSlop-${{ runner.os }}-PlayMode-
-            Library-FriendSlop-${{ runner.os }}-
+            Library-FriendSlop-${{ runner.os }}-PlayMode-v2-
+
+      - name: Checkout GameCI test runner
+        uses: actions/checkout@v6
+        with:
+          repository: game-ci/unity-test-runner
+          ref: v4
+          path: .github/actions/unity-test-runner
+
+      - name: Disable PlayMode coverage flags
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          script = Path(".github/actions/unity-test-runner/dist/platforms/ubuntu/run_tests.sh")
+          remove_prefixes = (
+              "-coverageResultsPath",
+              "-enableCodeCoverage",
+              "-debugCodeOptimization",
+              "-coverageOptions",
+          )
+          lines = [
+              line for line in script.read_text().splitlines()
+              if not line.strip().startswith(remove_prefixes)
+          ]
+          script.write_text("\n".join(lines) + "\n")
+          PY
 
       - name: Run PlayMode smoke tests
-        uses: game-ci/unity-test-runner@v4
+        uses: ./.github/actions/unity-test-runner
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}

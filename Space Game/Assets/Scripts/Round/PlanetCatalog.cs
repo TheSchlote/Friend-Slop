@@ -15,6 +15,24 @@ namespace FriendSlop.Round
 
         public int Count => planets != null ? planets.Count : 0;
 
+        public int HighestAuthoredTier
+        {
+            get
+            {
+                var highest = MinTier;
+                if (planets == null) return highest;
+
+                for (var i = 0; i < planets.Count; i++)
+                {
+                    var planet = planets[i];
+                    if (planet != null && !planet.IsTestModeOnly && planet.Tier > highest)
+                        highest = planet.Tier;
+                }
+
+                return Mathf.Clamp(highest, MinTier, MaxTier);
+            }
+        }
+
         // Tier lookups deliberately exclude test-mode-only planets so normal progression
         // never offers them. Test Mode reaches those planets via GetByIndex / AllPlanets,
         // which is unfiltered.

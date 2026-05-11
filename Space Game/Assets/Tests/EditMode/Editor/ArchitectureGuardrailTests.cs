@@ -11,16 +11,7 @@ namespace FriendSlop.Tests.EditMode
     {
         private const int DefaultRuntimeFileLineLimit = 400;
 
-        private static readonly Dictionary<string, int> ExistingOversizedRuntimeFiles = new()
-        {
-            ["Assets/Scripts/Round/RoundManager.cs"] = 1000,
-            ["Assets/Scripts/Player/NetworkFirstPersonController.cs"] = 739,
-            ["Assets/Scripts/Loot/NetworkLootItem.cs"] = 620,
-            ["Assets/Scripts/Networking/NetworkSessionManager.cs"] = 621,
-            ["Assets/Scripts/Player/PlayerInteractor.cs"] = 529,
-            ["Assets/Scripts/UI/FriendSlopUI.BuildUi.cs"] = 517,
-            ["Assets/Scripts/UI/FriendSlopUI.cs"] = 477,
-        };
+        private static readonly Dictionary<string, int> ExistingOversizedRuntimeFiles = new();
 
         private static readonly HashSet<string> AllowedSingletons = new()
         {
@@ -125,11 +116,19 @@ namespace FriendSlop.Tests.EditMode
         [Test]
         public void AsmdefReferencesKeepRuntimeAndUiDirectionClean()
         {
+            var coreRefs = ReadAsmdefReferences("Assets/Scripts/Core/Foundation/FriendSlop.Core.asmdef");
+            Assert.IsFalse(coreRefs.Contains("FriendSlop.Runtime"), "Core assembly must not reference Runtime.");
+            Assert.IsFalse(coreRefs.Contains("FriendSlop.UI"), "Core assembly must not reference UI.");
+            Assert.IsFalse(coreRefs.Contains("FriendSlop.Editor"), "Core assembly must not reference Editor.");
+            Assert.IsFalse(coreRefs.Contains("Unity.Netcode.Runtime"), "Core assembly must not reference Netcode.");
+
             var runtimeRefs = ReadAsmdefReferences("Assets/Scripts/FriendSlop.Runtime.asmdef");
+            Assert.IsTrue(runtimeRefs.Contains("FriendSlop.Core"), "Runtime assembly should depend on Core utilities.");
             Assert.IsFalse(runtimeRefs.Contains("FriendSlop.UI"), "Runtime assembly must not reference UI.");
             Assert.IsFalse(runtimeRefs.Contains("FriendSlop.Editor"), "Runtime assembly must not reference Editor.");
 
             var uiRefs = ReadAsmdefReferences("Assets/Scripts/UI/FriendSlop.UI.asmdef");
+            Assert.IsTrue(uiRefs.Contains("FriendSlop.Core"), "UI assembly should reference Core directly for utility types.");
             Assert.IsFalse(uiRefs.Contains("FriendSlop.Editor"), "UI assembly must not reference Editor.");
         }
 

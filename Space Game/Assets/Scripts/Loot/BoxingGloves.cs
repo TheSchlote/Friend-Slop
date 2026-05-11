@@ -50,14 +50,22 @@ namespace FriendSlop.Loot
         {
             var attackerId = rpcParams.Receive.SenderClientId;
             var attacker = NetworkFirstPersonController.FindByClientId(attackerId);
-            if (attacker == null || attacker.IsDead || !IsHeldBy(attackerId)) return;
-            if (!RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active)) return;
-            if (Time.time < _nextServerPunchTime) return;
+            var serverTime = Time.time;
+            if (!WeaponServerRules.CanBoxingGlovesPunch(
+                    attacker != null,
+                    attacker != null && attacker.IsDead,
+                    IsHeldBy(attackerId),
+                    RoundManagerRegistry.IsCurrentPhase(RoundPhase.Active),
+                    serverTime,
+                    _nextServerPunchTime))
+            {
+                return;
+            }
 
             origin = attacker.GetServerViewOrigin();
             direction = ResolveServerAimDirection(attacker, direction, maxServerAimAngle);
 
-            _nextServerPunchTime = Time.time + punchCooldown;
+            _nextServerPunchTime = serverTime + punchCooldown;
             if (!Physics.SphereCast(origin, punchRadius, direction, out var hit,
                     punchRange, punchMask, QueryTriggerInteraction.Ignore))
                 return;

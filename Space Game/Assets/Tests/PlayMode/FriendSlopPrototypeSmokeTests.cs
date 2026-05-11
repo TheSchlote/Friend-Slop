@@ -1,5 +1,5 @@
 using System.Collections;
-using System.Linq;
+using System.Text;
 using FriendSlop.Core;
 using FriendSlop.Hazards;
 using FriendSlop.Loot;
@@ -61,8 +61,8 @@ namespace FriendSlop.Tests.PlayMode
             AssertLaunchpadLayout();
             AssertShipPartSpawnPointsAreNearLaunchpadHemisphere();
 
-            var firstLootCount = FindSpawnedLootItems().Length;
-            var firstMonsterCount = FindSpawnedMonsters().Length;
+            var firstLootCount = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+            var firstMonsterCount = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
             Assert.Greater(firstLootCount, 0, "Host startup should spawn loot.");
             Assert.Greater(firstMonsterCount, 0, "Host startup should spawn monsters.");
             yield return StartRoundFromPilotStationAndWaitForActive();
@@ -76,6 +76,10 @@ namespace FriendSlop.Tests.PlayMode
             yield return null;
             Assert.IsFalse(FriendSlopUI.BlocksGameplayInput,
                 "Losing cursor lock should not be treated as an intentionally opened gameplay menu.");
+
+            yield return CompleteRocketObjectiveAndWaitForShipReturn();
+            AssertShipInteriorSceneLoaded();
+            AssertPlayerInsideShipInterior();
 
             yield return ShutdownAndWaitForSessionCleanup();
 
@@ -97,10 +101,51 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsFalse(FriendSlopUI.BlocksGameplayInput, "The restarted ship lobby should stay walkable.");
             Assert.AreEqual(1, Object.FindObjectsByType<RoundManager>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
                 "Restarting the host should not duplicate the RoundManager.");
-            Assert.AreEqual(firstLootCount, FindSpawnedLootItems().Length,
+            Assert.AreEqual(firstLootCount, Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
                 "Restarting the host should respawn the same amount of loot without duplicates.");
-            Assert.AreEqual(firstMonsterCount, FindSpawnedMonsters().Length,
+            Assert.AreEqual(firstMonsterCount, Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length,
                 "Restarting the host should respawn the same amount of monsters without duplicates.");
+
+            yield return ShutdownAndWaitForSessionCleanup();
+        }
+
+        [UnityTest]
+        public IEnumerator FinalTierSuccess_ReturnsToShipLobbyWhenHostRestarts()
+        {
+            yield return LoadPrototypeScene();
+
+            yield return StartLocalHostAndWaitForRoundManager();
+            yield return WaitForShipInteriorSceneLoaded();
+            yield return WaitForActivePlanetSceneLoaded();
+            yield return WaitForActivePlanetSpawnsPopulated();
+            yield return StartRoundFromPilotStationAndWaitForActive();
+
+            var round = RoundManagerRegistry.Current;
+            Assert.IsNotNull(round, "RoundManager should exist before forcing final-tier completion.");
+            round.CurrentTier.Value = round.FinalTier;
+
+            yield return CompleteRocketObjectiveAndWaitForShipReturn();
+
+            Assert.AreEqual(RoundPhase.Success, round.Phase.Value);
+            Assert.AreEqual(1, round.ExpeditionsCompleted.Value,
+                "Final-tier success should record a completed expedition before the host leaves the result screen.");
+            AssertPlayerInsideShipInterior();
+
+            round.RequestRestartRoundServerRpc();
+            yield return WaitForRoundPhase(RoundPhase.Lobby);
+
+            Assert.AreEqual(1, round.CurrentTier.Value,
+                "Returning from final-tier success should reset authored progression to tier 1.");
+            Assert.AreEqual(0, round.CollectedValue.Value,
+                "A new expedition lobby should not carry over the previous run's collected money.");
+            Assert.IsFalse(round.RocketAssembled.Value,
+                "A new expedition lobby should clear the prior rocket completion state.");
+            Assert.AreEqual(0, round.PlayersExpectedToLoad.Value,
+                "Returning to the ship lobby should clear loading readiness counters.");
+            Assert.AreEqual(1, round.ExpeditionsCompleted.Value,
+                "Returning to the lobby should keep the session completion count.");
+            AssertShipInteriorSceneLoaded();
+            AssertPlayerInsideShipInterior();
 
             yield return ShutdownAndWaitForSessionCleanup();
         }
@@ -116,7 +161,8 @@ namespace FriendSlop.Tests.PlayMode
                 if (HasActivePlanetEnvironment()) yield break;
                 yield return null;
             }
-            Assert.Fail("Active planet PlanetEnvironment should register within a few seconds of host start.");
+            Assert.Fail("Active planet PlanetEnvironment should register within a few seconds of host start. "
+                        + DescribeRoundSceneState());
         }
 
         // Bootstrapper defers loot/monster spawn until the active planet's env carries
@@ -126,8 +172,8 @@ namespace FriendSlop.Tests.PlayMode
         {
             for (var frame = 0; frame < 600; frame++)
             {
-                var lootCount = FindSpawnedLootItems().Length;
-                var monsterCount = FindSpawnedMonsters().Length;
+                var lootCount = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+                var monsterCount = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
                 if (lootCount > 0 && monsterCount > 0) yield break;
                 yield return null;
             }
@@ -142,6 +188,44 @@ namespace FriendSlop.Tests.PlayMode
             if (planet == null) return false;
             var env = PlanetEnvironment.FindFor(planet);
             return env != null && env.gameObject.activeInHierarchy;
+        }
+
+        private static string DescribeRoundSceneState()
+        {
+            var builder = new StringBuilder();
+            var rm = RoundManagerRegistry.Current;
+            builder.Append("Round=");
+            builder.Append(rm != null ? rm.name : "null");
+            if (rm != null)
+            {
+                builder.Append($", Phase={rm.Phase.Value}, Tier={rm.CurrentTier.Value}, PlanetIndex={rm.CurrentPlanetCatalogIndex.Value}");
+                builder.Append($", Planet={(rm.CurrentPlanet != null ? rm.CurrentPlanet.name : "null")}");
+            }
+
+            builder.Append(", Scenes=[");
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                if (i > 0) builder.Append("; ");
+                var scene = SceneManager.GetSceneAt(i);
+                builder.Append(scene.name);
+                builder.Append(scene.isLoaded ? ":loaded" : ":not-loaded");
+            }
+
+            builder.Append("], Environments=[");
+            for (var i = 0; i < PlanetEnvironment.AllEnvironments.Count; i++)
+            {
+                if (i > 0) builder.Append("; ");
+                var env = PlanetEnvironment.AllEnvironments[i];
+                builder.Append(env != null ? env.name : "null");
+                if (env != null)
+                {
+                    builder.Append(env.gameObject.activeInHierarchy ? ":active" : ":inactive");
+                    builder.Append($":planet={(env.Planet != null ? env.Planet.name : "null")}");
+                }
+            }
+
+            builder.Append(']');
+            return builder.ToString();
         }
 
         private static Scene AssertActivePlanetSceneLoaded()
@@ -165,7 +249,7 @@ namespace FriendSlop.Tests.PlayMode
 
         private static void AssertSpawnedActorsInActivePlanetScene(Scene activePlanetScene)
         {
-            var lootItems = FindSpawnedLootItems();
+            var lootItems = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             Assert.Greater(lootItems.Length, 0, "Host startup should spawn loot before validating scene ownership.");
             foreach (var loot in lootItems)
             {
@@ -173,7 +257,7 @@ namespace FriendSlop.Tests.PlayMode
                     $"Loot '{loot.name}' should spawn in the active planet scene, not the bootstrap scene.");
             }
 
-            var monsters = FindSpawnedMonsters();
+            var monsters = Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             Assert.Greater(monsters.Length, 0, "Host startup should spawn monsters before validating scene ownership.");
             foreach (var monster in monsters)
             {
@@ -193,22 +277,25 @@ namespace FriendSlop.Tests.PlayMode
             Assert.Fail("ShipInterior should load and register a ShipEnvironment after host start.");
         }
 
-        private static NetworkLootItem[] FindSpawnedLootItems()
-        {
-            return Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None)
-                .Where(loot => loot != null && loot.IsSpawned)
-                .ToArray();
-        }
-
-        private static RoamingMonster[] FindSpawnedMonsters()
-        {
-            return Object.FindObjectsByType<RoamingMonster>(FindObjectsInactive.Include, FindObjectsSortMode.None)
-                .Where(monster => monster != null && monster.NetworkObject != null && monster.NetworkObject.IsSpawned)
-                .ToArray();
-        }
-
         private static IEnumerator LoadPrototypeScene()
         {
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                NetworkManager.Singleton.Shutdown();
+                yield return null;
+            }
+
+            if (NetworkManager.Singleton != null)
+            {
+                Object.Destroy(NetworkManager.Singleton.gameObject);
+                for (var frame = 0; frame < 10 && NetworkManager.Singleton != null; frame++)
+                {
+                    yield return null;
+                }
+            }
+
+            yield return UnloadRuntimeAdditiveScenes();
+
             var operation = SceneManager.LoadSceneAsync("FriendSlopPrototype", LoadSceneMode.Single);
             while (operation != null && !operation.isDone)
             {
@@ -216,7 +303,25 @@ namespace FriendSlop.Tests.PlayMode
             }
 
             yield return null;
+            yield return UnloadRuntimeAdditiveScenes();
             yield return null;
+        }
+
+        private static IEnumerator UnloadRuntimeAdditiveScenes()
+        {
+            for (var i = SceneManager.sceneCount - 1; i >= 0; i--)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (!scene.isLoaded) continue;
+                if (scene.name == "FriendSlopPrototype") continue;
+                if (string.IsNullOrEmpty(scene.path) || !scene.path.StartsWith("Assets/Scenes/")) continue;
+
+                var unload = SceneManager.UnloadSceneAsync(scene);
+                while (unload != null && !unload.isDone)
+                {
+                    yield return null;
+                }
+            }
         }
 
         private static NetworkSessionManager FindSessionManager()
@@ -244,8 +349,15 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsNotNull(sessionManager, "NetworkSessionManager should exist before shutdown.");
             sessionManager.Shutdown();
 
-            for (var frame = 0; frame < 10; frame++)
+            for (var frame = 0; frame < 120; frame++)
             {
+                var networkStopped = NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening;
+                var roundManagers = Object.FindObjectsByType<RoundManager>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+                if (networkStopped && roundManagers.Length == 0)
+                    yield break;
+
                 yield return null;
             }
         }
@@ -277,6 +389,18 @@ namespace FriendSlop.Tests.PlayMode
                 "Round should leave loading and become active.");
         }
 
+        private static IEnumerator WaitForRoundPhase(RoundPhase phase)
+        {
+            var round = RoundManagerRegistry.Current;
+            Assert.IsNotNull(round, $"RoundManager should exist before waiting for {phase}.");
+            for (var frame = 0; frame < 180 && round.Phase.Value != phase; frame++)
+            {
+                yield return null;
+            }
+
+            Assert.AreEqual(phase, round.Phase.Value);
+        }
+
         private static IEnumerator StartLocalClientAndCancel()
         {
             var sessionManager = FindSessionManager();
@@ -301,6 +425,39 @@ namespace FriendSlop.Tests.PlayMode
             Assert.AreEqual("Connection cancelled.", sessionManager.Status);
             Assert.AreEqual(CursorLockMode.None, Cursor.lockState, "Cancel should leave the UI cursor unlocked.");
             Assert.IsTrue(Cursor.visible, "Cancel should leave the UI cursor visible.");
+        }
+
+        private static IEnumerator CompleteRocketObjectiveAndWaitForShipReturn()
+        {
+            var round = RoundManagerRegistry.Current;
+            Assert.IsNotNull(round, "RoundManager should exist before completing the objective.");
+            Assert.AreEqual(RoundPhase.Active, round.Phase.Value,
+                "Objective completion should be exercised from the active planet phase.");
+
+            var submittedParts = 0;
+            var lootItems = Object.FindObjectsByType<NetworkLootItem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var loot in lootItems)
+            {
+                if (loot == null || !loot.IsShipPart) continue;
+                round.ServerSubmitToLaunchpad(loot);
+                submittedParts++;
+            }
+
+            Assert.GreaterOrEqual(submittedParts, 3,
+                "Starter planet should spawn the cockpit, wings, and engine parts needed to complete the objective.");
+
+            var serverClientId = NetworkManager.ServerClientId;
+            round.ServerPlayerBoarded(serverClientId);
+
+            for (var frame = 0; frame < 180; frame++)
+            {
+                if (round.Phase.Value == RoundPhase.Success)
+                    yield break;
+                yield return null;
+            }
+
+            Assert.AreEqual(RoundPhase.Success, round.Phase.Value,
+                "Submitting all rocket parts and boarding should end the planet round successfully.");
         }
 
         private static void AssertConnectedMenuLayoutDoesNotOverlap()

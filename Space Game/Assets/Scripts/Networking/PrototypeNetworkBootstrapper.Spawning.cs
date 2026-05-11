@@ -73,7 +73,7 @@ namespace FriendSlop.Networking
                 var loot = Instantiate(prefab, pos, rot);
                 MoveToActivePlanetScene(loot.gameObject, activeEnv);
                 loot.ServerSetSpawnPose(pos, rot);
-                SpawnNetworkObjectInScene(loot.NetworkObject, activeEnv.gameObject.scene);
+                SpawnNetworkObjectInScene(loot.NetworkObject, activeEnv.gameObject.scene, destroyWithScene: true);
                 MoveToActivePlanetScene(loot.gameObject, activeEnv);
                 spawnedLootObjects.Add(loot.gameObject);
             }
@@ -145,7 +145,7 @@ namespace FriendSlop.Networking
 
                 var monster = Instantiate(monsterPrefab, spawnPoint.position, spawnPoint.rotation);
                 MoveToActivePlanetScene(monster.gameObject, activeEnv);
-                SpawnNetworkObjectInScene(monster.NetworkObject, activeEnv.gameObject.scene);
+                SpawnNetworkObjectInScene(monster.NetworkObject, activeEnv.gameObject.scene, destroyWithScene: true);
                 MoveToActivePlanetScene(monster.gameObject, activeEnv);
                 spawnedMonsterObjects.Add(monster.gameObject);
             }
@@ -153,7 +153,7 @@ namespace FriendSlop.Networking
             StartCoroutine(KeepSpawnedObjectsInScene(spawnedMonsterObjects, activeEnv.gameObject.scene));
         }
 
-        private void SpawnNetworkObjectInScene(NetworkObject networkObject, Scene targetScene)
+        private void SpawnNetworkObjectInScene(NetworkObject networkObject, Scene targetScene, bool destroyWithScene)
         {
             if (networkObject == null)
             {
@@ -172,7 +172,7 @@ namespace FriendSlop.Networking
 
             try
             {
-                SpawnNetworkObject(networkObject);
+                SpawnNetworkObject(networkObject, destroyWithScene);
             }
             finally
             {

@@ -1,10 +1,45 @@
 using FriendSlop.Loot;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace FriendSlop.Player
 {
     public partial class NetworkFirstPersonController
     {
+        public const int InventorySize = 4;
+        public NetworkVariable<int> ActiveInventorySlot = new(
+            0,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner);
+        private readonly NetworkLootItem[] inventory = new NetworkLootItem[InventorySize];
+
+        public NetworkLootItem HeldItem
+        {
+            get
+            {
+                var slot = Mathf.Clamp(ActiveInventorySlot.Value, 0, InventorySize - 1);
+                return inventory[slot];
+            }
+        }
+
+        public bool HasHeldItem => HeldItem != null && HeldItem.IsCarried.Value;
+
+        public NetworkLootItem GetInventoryItem(int slot)
+        {
+            if (slot < 0 || slot >= InventorySize) return null;
+            return inventory[slot];
+        }
+
+        public int InventoryCount
+        {
+            get
+            {
+                var count = 0;
+                for (var i = 0; i < InventorySize; i++) if (inventory[i] != null) count++;
+                return count;
+            }
+        }
+
         // Called from NetworkLootItem.OnCarrierChanged on every client when an item's
         // carrier becomes this player. SlotIndex on the item is authoritative.
         public void SetHeldItem(NetworkLootItem item)
@@ -13,7 +48,7 @@ namespace FriendSlop.Player
             var slot = item.SlotIndex.Value;
             if (slot < 0 || slot >= InventorySize)
             {
-                // Backward-compat path for callers that don't go through pickup: drop into
+                // Backward-compat path for callers that do not go through pickup: drop into
                 // the first empty slot.
                 if (!TryGetFreeInventorySlot(out slot)) return;
             }
