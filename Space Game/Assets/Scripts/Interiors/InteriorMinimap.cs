@@ -52,7 +52,7 @@ namespace FriendSlop.Interiors
             foreach (var room in layout.Rooms)
             {
                 var p = room.GridPosition;
-                var s = room.Definition.GridSize;
+                var s = room.RotatedGridSize;
                 if (p.x        < minX) minX = p.x;
                 if (p.z        < minZ) minZ = p.z;
                 if (p.x + s.x  > maxX) maxX = p.x + s.x;
@@ -100,26 +100,27 @@ namespace FriendSlop.Interiors
             var room   = layout.ExitRoom;
             var socket = layout.ExitSocket.Value;
             var p      = room.GridPosition;
-            var s      = room.Definition.GridSize;
+            var rs     = room.RotatedGridSize;
+            var dc     = InteriorLayoutGenerator.WorldDoorCellOffset(room.Definition, room.Rotation, socket);
 
             Vector2 a, b;
             switch (socket)
             {
                 case SocketDirection.North:
-                    a = new Vector2((p.x + 0.5f) - 0.4f, p.z + s.y);
-                    b = new Vector2((p.x + 0.5f) + 0.4f, p.z + s.y);
+                    a = new Vector2((p.x + dc.x + 0.5f) - 0.4f, p.z + rs.y);
+                    b = new Vector2((p.x + dc.x + 0.5f) + 0.4f, p.z + rs.y);
                     break;
                 case SocketDirection.South:
-                    a = new Vector2((p.x + 0.5f) - 0.4f, p.z);
-                    b = new Vector2((p.x + 0.5f) + 0.4f, p.z);
+                    a = new Vector2((p.x + dc.x + 0.5f) - 0.4f, p.z);
+                    b = new Vector2((p.x + dc.x + 0.5f) + 0.4f, p.z);
                     break;
                 case SocketDirection.East:
-                    a = new Vector2(p.x + s.x, (p.z + 0.5f) - 0.4f);
-                    b = new Vector2(p.x + s.x, (p.z + 0.5f) + 0.4f);
+                    a = new Vector2(p.x + rs.x, (p.z + dc.y + 0.5f) - 0.4f);
+                    b = new Vector2(p.x + rs.x, (p.z + dc.y + 0.5f) + 0.4f);
                     break;
                 case SocketDirection.West:
-                    a = new Vector2(p.x, (p.z + 0.5f) - 0.4f);
-                    b = new Vector2(p.x, (p.z + 0.5f) + 0.4f);
+                    a = new Vector2(p.x, (p.z + dc.y + 0.5f) - 0.4f);
+                    b = new Vector2(p.x, (p.z + dc.y + 0.5f) + 0.4f);
                     break;
                 default: return; // vertical socket — no minimap representation
             }
@@ -177,7 +178,7 @@ namespace FriendSlop.Interiors
             foreach (var room in layout.Rooms)
             {
                 var p = room.GridPosition;
-                var s = room.Definition.GridSize;
+                var s = room.RotatedGridSize;
                 var parent = GetOrCreateFloorContainer(p.y);
 
                 var go = new GameObject($"Room_{p.x}_{p.z}", typeof(Image));
@@ -204,27 +205,30 @@ namespace FriendSlop.Interiors
             {
                 if (conn.SocketA.IsVertical()) continue;
 
-                // Door always sits at the SW-most cell of each wall.
-                var p = conn.RoomA.GridPosition;
-                var s = conn.RoomA.Definition.GridSize;
+                // Door sits at the WORLD-mapped SW-most cell of each wall — use the
+                // rotated room's footprint and the rotated door-cell offset.
+                var p  = conn.RoomA.GridPosition;
+                var rs = conn.RoomA.RotatedGridSize;
+                var dc = InteriorLayoutGenerator.WorldDoorCellOffset(
+                    conn.RoomA.Definition, conn.RoomA.Rotation, conn.SocketA);
                 Vector2 a, b;
                 switch (conn.SocketA)
                 {
                     case SocketDirection.North:
-                        a = new Vector2((p.x + 0.5f) - 0.4f, p.z + s.y);
-                        b = new Vector2((p.x + 0.5f) + 0.4f, p.z + s.y);
+                        a = new Vector2((p.x + dc.x + 0.5f) - 0.4f, p.z + rs.y);
+                        b = new Vector2((p.x + dc.x + 0.5f) + 0.4f, p.z + rs.y);
                         break;
                     case SocketDirection.South:
-                        a = new Vector2((p.x + 0.5f) - 0.4f, p.z);
-                        b = new Vector2((p.x + 0.5f) + 0.4f, p.z);
+                        a = new Vector2((p.x + dc.x + 0.5f) - 0.4f, p.z);
+                        b = new Vector2((p.x + dc.x + 0.5f) + 0.4f, p.z);
                         break;
                     case SocketDirection.East:
-                        a = new Vector2(p.x + s.x, (p.z + 0.5f) - 0.4f);
-                        b = new Vector2(p.x + s.x, (p.z + 0.5f) + 0.4f);
+                        a = new Vector2(p.x + rs.x, (p.z + dc.y + 0.5f) - 0.4f);
+                        b = new Vector2(p.x + rs.x, (p.z + dc.y + 0.5f) + 0.4f);
                         break;
                     case SocketDirection.West:
-                        a = new Vector2(p.x, (p.z + 0.5f) - 0.4f);
-                        b = new Vector2(p.x, (p.z + 0.5f) + 0.4f);
+                        a = new Vector2(p.x, (p.z + dc.y + 0.5f) - 0.4f);
+                        b = new Vector2(p.x, (p.z + dc.y + 0.5f) + 0.4f);
                         break;
                     default: continue;
                 }
@@ -323,7 +327,7 @@ namespace FriendSlop.Interiors
             {
                 if (room.GridPosition.y != floor) continue;
                 var p = room.GridPosition;
-                var s = room.Definition.GridSize;
+                var s = room.RotatedGridSize;
                 if (lx < p.x || lx >= p.x + s.x) continue;
                 if (lz < p.z || lz >= p.z + s.y) continue;
                 return room;
@@ -332,7 +336,7 @@ namespace FriendSlop.Interiors
         }
 
         // "Room_Residential_Kitchen_1x1"   → "Kitchen"
-        // "Room_Residential_LivingRoom_2x2" → "Living Room"
+        // "Room_Residential_LivingRoom_3x3" → "Living Room"
         // "Room_Office_ManagerOffice_1x1"   → "Manager Office"
         // "Room_Stair_1x1"                  → "Stair"
         private static string PrettyRoomName(string raw)

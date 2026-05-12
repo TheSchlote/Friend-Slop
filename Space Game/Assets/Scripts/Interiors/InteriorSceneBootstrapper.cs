@@ -212,7 +212,7 @@ namespace FriendSlop.Interiors
             }
 
             var def = ResolveDefinition();
-            float halfCell = def != null ? def.GridCellMeters * 0.5f : 3.4f;
+            float halfCell = def != null ? def.GridCellMeters * 0.5f : 1.7f;
             float entryY   = def != null ? _entryFloor * def.FloorHeightMeters : 0f;
             // 0.15 m from the wall plane — slab back face lands flush with the wall pillars.
             var pos = _origin.Value + new Vector3(halfCell, entryY, 0.15f);
@@ -250,8 +250,13 @@ namespace FriendSlop.Interiors
             {
                 if (room.Definition.Prefab == null) continue;
                 var worldPos = InteriorLayoutGenerator.RoomWorldPosition(room, origin, def);
-                var go = Object.Instantiate(room.Definition.Prefab, worldPos, Quaternion.identity, root.transform);
-                go.name = $"{room.Definition.name} [{room.GridPosition}]";
+                // Rotating around the prefab's SW-corner pivot shifts the room out of the
+                // +X+Z quadrant. Compensate so the rotated room's SW corner stays at the
+                // grid-position world coords.
+                var rotation = Quaternion.Euler(0f, room.Rotation * 90f, 0f);
+                worldPos += RotationTranslation(room, def.GridCellMeters);
+                var go = Object.Instantiate(room.Definition.Prefab, worldPos, rotation, root.transform);
+                go.name = $"{room.Definition.name} [{room.GridPosition}, r{room.Rotation}]";
 
                 PatchUnconnectedSockets(go.transform, room, def);
                 if (themed != null) ApplyThemedMaterial(go, themed);
@@ -266,10 +271,16 @@ namespace FriendSlop.Interiors
                 if (!conn.IsOpenPassage) continue;
                 if (!_roomGoMap.TryGetValue(conn.RoomA, out var goA)) continue;
                 if (!_roomGoMap.TryGetValue(conn.RoomB, out var goB)) continue;
-                StripWallAtSocket(goA, conn.SocketA);
-                StripWallAtSocket(goB, conn.SocketB);
-                StripAnchorsAtWall(goA, conn.SocketA);
-                StripAnchorsAtWall(goB, conn.SocketB);
+                // Wall/anchor geometry is in DEF-local frame inside the prefab, so we
+                // need the def-socket that the world-socket maps back to.
+                var defSA = conn.SocketA.IsVertical() ? conn.SocketA
+                    : SocketDirectionExtensions.Rotate(conn.SocketA, -conn.RoomA.Rotation);
+                var defSB = conn.SocketB.IsVertical() ? conn.SocketB
+                    : SocketDirectionExtensions.Rotate(conn.SocketB, -conn.RoomB.Rotation);
+                StripWallAtSocket(goA, defSA);
+                StripWallAtSocket(goB, defSB);
+                StripAnchorsAtWall(goA, defSA);
+                StripAnchorsAtWall(goB, defSB);
             }
 
             return root;
@@ -334,22 +345,43 @@ namespace FriendSlop.Interiors
             var rng = new System.Random(roomSeed);
 
             // Collect surviving anchors (drop ones blocked by an active door cell).
+            // a.Wall is stored in the prefab's DEF-local frame; activeDoors contains
+            // WORLD sockets — convert via the room's rotation before comparing.
             var anchors = new List<FurnitureAnchor>(roomGo.GetComponentsInChildren<FurnitureAnchor>());
             for (int i = anchors.Count - 1; i >= 0; i--)
             {
                 var a = anchors[i];
-                if (a.Placement != AnchorPlacement.Center
-                    && activeDoors != null && activeDoors.Contains(a.Wall)
-                    && AnchorIsOnDoorCell(a, room.Definition, a.Wall))
-                {
+                if (a.Placement == AnchorPlacement.Center) continue;
+                if (activeDoors == null) continue;
+                var worldWall = a.Wall.IsVertical()
+                    ? a.Wall
+                    : SocketDirectionExtensions.Rotate(a.Wall, room.Rotation);
+                if (activeDoors.Contains(worldWall) && AnchorIsOnDoorCell(a, room.Definition, a.Wall))
                     anchors.RemoveAt(i);
-                }
             }
             ShuffleInPlace(anchors, rng);
 
             int placed = 0;
             var placedByKind = new Dictionary<string, int>();
             var placedFootprints = new List<Rect>();   // world-XZ rects of pieces placed in this room
+            var placedPieces    = new List<(FurnitureDefinition def, GameObject go)>(); // for tabletop pass
+
+            // Reserve a swing zone in front of each active door so big Center pieces
+            // (dining tables, console tables) can't park on top of a doorway. Wall/Corner
+            // anchors are already filtered above; this protects the room interior too.
+            if (activeDoors != null)
+            {
+                const float doorCellMetres = 3.4f;
+                foreach (var worldS in activeDoors)
+                {
+                    var defS = worldS.IsVertical()
+                        ? worldS
+                        : SocketDirectionExtensions.Rotate(worldS, -room.Rotation);
+                    var swing = DoorSwingFootprintWorld(defS, def, doorCellMetres, roomGo.transform);
+                    if (swing.width > 0f && swing.height > 0f)
+                        placedFootprints.Add(swing);
+                }
+            }
 
             // Phase 1: satisfy each rule's minimum count first. We try each anchor in
             // turn looking for a piece of the required kind that fits without colliding
@@ -369,7 +401,8 @@ namespace FriendSlop.Interiors
                         pick = c; hitIndex = i; break;
                     }
                     if (pick == null) break; // none of our anchors can host this kind — skip
-                    SpawnFurnitureInstance(pick, anchors[hitIndex].transform, roomGo);
+                    var pickedGo = SpawnFurnitureInstance(pick, anchors[hitIndex].transform, roomGo);
+                    placedPieces.Add((pick, pickedGo));
                     placedFootprints.Add(WorldFootprint(pick, anchors[hitIndex]));
                     anchors.RemoveAt(hitIndex);
                     placedByKind.TryGetValue(rule.Kind, out var n);
@@ -390,11 +423,79 @@ namespace FriendSlop.Interiors
                 var pick = PickFurnitureForAnchor(catalogList, tags, anchor, rng, rules, placedByKind);
                 if (pick == null) continue;
                 if (OverlapsExisting(pick, anchor, placedFootprints)) continue;
-                SpawnFurnitureInstance(pick, anchor.transform, roomGo);
+                var pickedGo = SpawnFurnitureInstance(pick, anchor.transform, roomGo);
+                placedPieces.Add((pick, pickedGo));
                 placedFootprints.Add(WorldFootprint(pick, anchor));
                 placedByKind.TryGetValue(pick.Kind, out var n);
                 placedByKind[pick.Kind] = n + 1;
                 placed++;
+            }
+
+            // Phase 3: tabletop pass. Every placed piece that has tabletop slots (table,
+            // counter, dresser, desk, etc.) spawns small themed items on top of it.
+            SpawnTabletopFurniture(placedPieces, tags, catalogList, rng);
+
+            // Phase 4: around-table pass. Each placed piece's AroundTableAnchors get a
+            // chair (or whatever else matches AnchorPlacement.AroundTable + the room's
+            // tags) facing inward toward the host piece.
+            SpawnAroundTableFurniture(placedPieces, tags, catalogList, rng);
+        }
+
+        // Walks each placed piece's tabletop anchors and fills them with small tabletop-
+        // placement furniture that matches the room's furniture tags and fits the slot.
+        private static void SpawnTabletopFurniture(
+            List<(FurnitureDefinition def, GameObject go)> placedPieces,
+            IReadOnlyList<string> roomTags,
+            IReadOnlyList<FurnitureDefinition> catalogList,
+            System.Random rng)
+        {
+            foreach (var (hostDef, hostGo) in placedPieces)
+            {
+                if (hostGo == null) continue;
+                int idx = 0;
+                foreach (var slot in hostDef.TabletopAnchors)
+                {
+                    // Create a transient FurnitureAnchor child so we can reuse the existing
+                    // picker pipeline (which filters by placement + footprint + tags).
+                    var anchorGo = new GameObject($"TabletopSlot_{idx++}");
+                    anchorGo.transform.SetParent(hostGo.transform, false);
+                    anchorGo.transform.localPosition = slot.localPosition;
+                    var anchor = anchorGo.AddComponent<FurnitureAnchor>();
+                    anchor.Configure(AnchorPlacement.Tabletop, SocketDirection.North, slot.footprintXZ);
+
+                    var pick = PickFurnitureForAnchor(catalogList, roomTags, anchor, rng);
+                    if (pick == null) continue;
+                    SpawnFurnitureInstance(pick, anchor.transform, hostGo);
+                }
+            }
+        }
+
+        // Walks each placed piece's around-table anchors and spawns chairs (or other
+        // AroundTable-tagged pieces) that match the room's tags. Each anchor carries its
+        // own yaw so the chair faces the host piece from whichever side it sits on.
+        private static void SpawnAroundTableFurniture(
+            List<(FurnitureDefinition def, GameObject go)> placedPieces,
+            IReadOnlyList<string> roomTags,
+            IReadOnlyList<FurnitureDefinition> catalogList,
+            System.Random rng)
+        {
+            foreach (var (hostDef, hostGo) in placedPieces)
+            {
+                if (hostGo == null) continue;
+                int idx = 0;
+                foreach (var slot in hostDef.AroundTableAnchors)
+                {
+                    var anchorGo = new GameObject($"AroundTableSlot_{idx++}");
+                    anchorGo.transform.SetParent(hostGo.transform, false);
+                    anchorGo.transform.localPosition    = slot.localPosition;
+                    anchorGo.transform.localEulerAngles = new Vector3(0f, slot.yawDegrees, 0f);
+                    var anchor = anchorGo.AddComponent<FurnitureAnchor>();
+                    anchor.Configure(AnchorPlacement.AroundTable, SocketDirection.North, slot.footprintXZ);
+
+                    var pick = PickFurnitureForAnchor(catalogList, roomTags, anchor, rng);
+                    if (pick == null) continue;
+                    SpawnFurnitureInstance(pick, anchor.transform, hostGo);
+                }
             }
         }
 
@@ -459,7 +560,7 @@ namespace FriendSlop.Interiors
             var localPos = a.transform.localPosition;
             // Door cell width — must match BuildingDefinition.gridCellMeters and the
             // builder's CellMetres constant.
-            float c = 6.8f;
+            float c = 3.4f;
             switch (wall)
             {
                 case SocketDirection.North:
@@ -470,6 +571,44 @@ namespace FriendSlop.Interiors
                     return localPos.z <= c + 0.001f;       // door-cell is z=0..c
             }
             return false;
+        }
+
+        // World-XZ rect covering the swing arc in front of a door. Door cells are SW-most
+        // along their wall; the swing extends `swingDepth` metres into the room. Returned
+        // as a world-aligned AABB by transforming the local corners through the room's
+        // (rotated, translated) transform.
+        private static Rect DoorSwingFootprintWorld(SocketDirection defSocket,
+            RoomDefinition roomDef, float cellMetres, Transform roomTr)
+        {
+            const float swingDepth = 1.5f;
+            float w = roomDef.GridSize.x * cellMetres;
+            float d = roomDef.GridSize.y * cellMetres;
+            float minX, maxX, minZ, maxZ;
+            switch (defSocket)
+            {
+                case SocketDirection.North:
+                    minX = 0f; maxX = cellMetres;
+                    minZ = Mathf.Max(0f, d - swingDepth); maxZ = d;
+                    break;
+                case SocketDirection.South:
+                    minX = 0f; maxX = cellMetres;
+                    minZ = 0f; maxZ = Mathf.Min(d, swingDepth);
+                    break;
+                case SocketDirection.East:
+                    minX = Mathf.Max(0f, w - swingDepth); maxX = w;
+                    minZ = 0f; maxZ = cellMetres;
+                    break;
+                case SocketDirection.West:
+                    minX = 0f; maxX = Mathf.Min(w, swingDepth);
+                    minZ = 0f; maxZ = cellMetres;
+                    break;
+                default: return new Rect(0f, 0f, 0f, 0f);
+            }
+            var a = roomTr.TransformPoint(new Vector3(minX, 0f, minZ));
+            var b = roomTr.TransformPoint(new Vector3(maxX, 0f, maxZ));
+            float xMin = Mathf.Min(a.x, b.x), xMax = Mathf.Max(a.x, b.x);
+            float zMin = Mathf.Min(a.z, b.z), zMax = Mathf.Max(a.z, b.z);
+            return Rect.MinMaxRect(xMin, zMin, xMax, zMax);
         }
 
         private static FurnitureDefinition PickFurnitureForAnchor(
@@ -522,7 +661,7 @@ namespace FriendSlop.Interiors
             return false;
         }
 
-        private static void SpawnFurnitureInstance(FurnitureDefinition def, Transform anchor, GameObject parent)
+        private static GameObject SpawnFurnitureInstance(FurnitureDefinition def, Transform anchor, GameObject parent)
         {
             GameObject go;
             if (def.Prefab != null)
@@ -554,6 +693,7 @@ namespace FriendSlop.Interiors
                 }
             }
             go.name = $"Furniture_{def.DisplayName ?? def.name}";
+            return go;
         }
 
         private static Shader _cachedPrimitiveShader;
@@ -626,21 +766,43 @@ namespace FriendSlop.Interiors
                 r.sharedMaterial = themed;
         }
 
+        // World-space translation to apply AFTER rotation so the rotated room's SW
+        // corner ends up at the same grid origin as the unrotated one. Rotation 0/2 are
+        // sized-(s.x, s.y); rotation 1/3 are sized-(s.y, s.x) — translation matches.
+        private static Vector3 RotationTranslation(PlacedRoom room, float cellMetres)
+        {
+            var s = room.Definition.GridSize;
+            return room.Rotation switch
+            {
+                0 => Vector3.zero,
+                1 => new Vector3(0f,            0f, s.x * cellMetres),
+                2 => new Vector3(s.x * cellMetres, 0f, s.y * cellMetres),
+                3 => new Vector3(s.y * cellMetres, 0f, 0f),
+                _ => Vector3.zero,
+            };
+        }
+
         // Plugs the door-frame opening for any socket the generator left unconnected.
         // Door openings live on the SW-most cell of each wall (matching BuildPerimeterWall).
         // Vertical sockets (Up/Down) leave 2×2 holes in ceiling/floor at the NW corner —
         // patch those too so the bottom/top of a stair stack doesn't open into the void.
         private static void PatchUnconnectedSockets(Transform roomRoot, PlacedRoom room, BuildingDefinition def)
         {
-            const float doorWidth  = 2f;
+            const float doorWidth  = 1.7f;
             const float doorHeight = 3f;
             const float wall       = 0.2f;
             // Match BuildFloorOrCeiling: 2 m wide × 4 m deep hole whose north edge sits
-            // at the top step (cellMetres - 1 m), covering the upper part of the staircase.
+            // at the top step (staircase_cells * cellMetres - 1 m). The stair room is 2
+            // cells wide in the doubled grid, hence the multiplier. The hole is shifted
+            // east by one cell so the bottom/top landings sit in the east cell, freeing
+            // the west cell for doors that won't crowd the stairs.
             const float holeW      = 2f;
             const float holeD      = 4f;
+            const int   stairCells = 2;
             float c                = def.GridCellMeters;
-            float holeNorthZ       = c - 1f;
+            float holeMinX         = c;
+            float holeCenterX      = holeMinX + holeW * 0.5f;
+            float holeNorthZ       = stairCells * c - 1f;
             float h = def.FloorHeightMeters;
             float w = room.Definition.GridSize.x * c;
             float d = room.Definition.GridSize.y * c;
@@ -654,9 +816,15 @@ namespace FriendSlop.Interiors
                 if (ramp != null) Object.Destroy(ramp.gameObject);
             }
 
+            // Patches are positioned in the room's DEF-local frame (the GameObject is
+            // rotated as a whole). So we iterate DEF sockets, but the connected-check
+            // compares against WORLD sockets — convert via the room's rotation.
             foreach (var s in room.Definition.Sockets)
             {
-                if (room.ConnectedSockets.Contains(s)) continue;
+                var worldS = s.IsVertical()
+                    ? s
+                    : SocketDirectionExtensions.Rotate(s, room.Rotation);
+                if (room.ConnectedSockets.Contains(worldS)) continue;
 
                 Vector3 localPos;
                 Vector3 size;
@@ -680,12 +848,12 @@ namespace FriendSlop.Interiors
                         break;
                     case SocketDirection.Up:
                         // Cap the ceiling hole — sits between holeSouthZ and holeNorthZ.
-                        localPos = new Vector3(holeW * 0.5f, h, holeNorthZ - holeD * 0.5f);
+                        localPos = new Vector3(holeCenterX, h, holeNorthZ - holeD * 0.5f);
                         size     = new Vector3(holeW, wall, holeD);
                         break;
                     case SocketDirection.Down:
                         // Cap the floor hole at the same XZ.
-                        localPos = new Vector3(holeW * 0.5f, 0f, holeNorthZ - holeD * 0.5f);
+                        localPos = new Vector3(holeCenterX, 0f, holeNorthZ - holeD * 0.5f);
                         size     = new Vector3(holeW, wall, holeD);
                         break;
                     default: continue;

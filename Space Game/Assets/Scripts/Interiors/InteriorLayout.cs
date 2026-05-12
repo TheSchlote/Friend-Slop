@@ -13,6 +13,19 @@ namespace FriendSlop.Interiors
         public int Seed       { get; set; }
         public int FloorCount { get; set; }
         public int EntryFloor { get; set; }
+        // When true, room placement rejects any grid position with z < 0 — the entry
+        // sits at z=0 and the southern facade of the building is the entry's south face.
+        public bool RestrictSouthOfEntry { get; set; }
+        // When true, every cell of a room placed above the entry floor must sit inside
+        // the bounding rectangle of the entry-floor footprint (NSEW extents), with one
+        // cell of slack on each side. Keeps the upper floor inside the house silhouette
+        // without forcing strict cell-over-cell support — bedrooms can shift around.
+        public bool RestrictUpperFloorOverhang { get; set; }
+        // Cached entry-floor bounding box (min/max grid coords on x/z), populated lazily
+        // the first time an upper-floor placement is attempted. Entry-floor cells are
+        // added before upper-floor placement begins, so the box is stable once computed.
+        public Vector2Int? EntryFloorMin { get; set; }
+        public Vector2Int? EntryFloorMax { get; set; }
         // The room that holds the building's exterior door, and which of its sockets the
         // exit uses. Null when no exterior door was reserved (legacy/test buildings).
         public PlacedRoom ExitRoom         { get; set; }

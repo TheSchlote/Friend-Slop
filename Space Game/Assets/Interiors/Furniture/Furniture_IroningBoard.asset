@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_IroningBoard
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Ironing Board
+  kind: ironing_board
+  tags:
+  - laundry
+  - bedroom
+  placement: 2
+  footprintXZ: {x: 1.4, y: 0.4}
+  weight: 1
+  interactable: 0
+  prefab: {fileID: 1046954642716216799, guid: 48a76ef3befea4b488dbd2bd596dc50f, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.85, z: 0}
+    localScale: {x: 1.3, y: 0.04, z: 0.32}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.85, g: 0.85, b: 0.92, a: 1}
+  - shape: 3
+    localPosition: {x: -0.3, y: 0.42, z: 0}
+    localScale: {x: 0.04, y: 0.85, z: 0.04}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.65, b: 0.7, a: 1}
+  - shape: 3
+    localPosition: {x: 0.3, y: 0.42, z: 0}
+    localScale: {x: 0.04, y: 0.85, z: 0.04}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.65, b: 0.7, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

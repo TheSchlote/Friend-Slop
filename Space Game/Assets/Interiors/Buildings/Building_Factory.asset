@@ -18,7 +18,7 @@ MonoBehaviour:
   minFloors: 3
   maxFloors: 4
   floorHeightMeters: 4
-  gridCellMeters: 6.8
+  gridCellMeters: 3.4
   requiredRooms:
   - definition: {fileID: 11400000, guid: cb7d9dc35861659429761e758e9a09b8, type: 2}
     count: 1
@@ -68,6 +68,9 @@ MonoBehaviour:
   downwardConnectorMirror: {fileID: 0}
   downConnectorParents: []
   skipBasementExpansion: 0
+  compactLayout: 1
+  doorsOnlyForPrivateRooms: 0
+  entryAtSouthernEdge: 0
   themeColor: {r: 0.75, g: 0.55, b: 0.35, a: 1}
   lootTable: {fileID: 0}
   monsterPool: {fileID: 0}

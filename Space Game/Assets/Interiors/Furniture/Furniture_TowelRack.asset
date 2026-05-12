@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_TowelRack
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Towel Rack
+  kind: towelrack
+  tags:
+  - bathroom
+  placement: 0
+  footprintXZ: {x: 0.6, y: 0.1}
+  weight: 2
+  interactable: 0
+  prefab: {fileID: 954414815380837015, guid: 0f984391106a0d7478ac0c97a8864b78, type: 3}
+  primitives:
+  - shape: 2
+    localPosition: {x: 0.25, y: 1.2, z: -0.04}
+    localScale: {x: 0.04, y: 0.04, z: 0.04}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.78, g: 0.8, b: 0.85, a: 1}
+  - shape: 2
+    localPosition: {x: -0.25, y: 1.2, z: -0.04}
+    localScale: {x: 0.04, y: 0.04, z: 0.04}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.78, g: 0.8, b: 0.85, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1.2, z: -0.05}
+    localScale: {x: 0.55, y: 0.04, z: 0.04}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.78, g: 0.8, b: 0.85, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1, z: -0.08}
+    localScale: {x: 0.3, y: 0.3, z: 0.04}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.85, g: 0.85, b: 0.92, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

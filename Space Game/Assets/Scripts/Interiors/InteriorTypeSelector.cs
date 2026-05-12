@@ -30,6 +30,21 @@ namespace FriendSlop.Interiors
         public override void OnNetworkSpawn()
         {
             _selectedIndex.OnValueChanged += OnIndexChanged;
+            // First-time default — pick the Residential building if it's in the catalog.
+            // The server sets the NetworkVariable; clients pick it up via OnValueChanged.
+            if (IsServer && catalog != null && catalog.Buildings.Count > 0)
+            {
+                for (int i = 0; i < catalog.Buildings.Count; i++)
+                {
+                    var def = catalog.Buildings[i];
+                    if (def == null) continue;
+                    if (def.name != null && def.name.Contains("Residential"))
+                    {
+                        _selectedIndex.Value = i;
+                        break;
+                    }
+                }
+            }
             RefreshLabel();
         }
 

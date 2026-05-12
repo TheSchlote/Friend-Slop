@@ -125,6 +125,7 @@ namespace FriendSlop.Editor
             so.FindProperty("category").enumValueIndex       = (int)spec.Category;
             so.FindProperty("isVerticalConnector").boolValue = spec.IsVerticalConnector;
             so.FindProperty("weight").intValue               = spec.Weight;
+            so.FindProperty("maxHorizontalConnections").intValue = spec.MaxHorizontalConnections;
             so.FindProperty("isEntryCandidate").boolValue    = spec.EntryCandidate;
             so.FindProperty("floorRestriction").enumValueIndex = (int)spec.FloorRestriction;
             so.FindProperty("furnitureCountRange").vector2IntValue = spec.FurnitureCountRange;
@@ -167,7 +168,12 @@ namespace FriendSlop.Editor
 
         // Cell size for room/door/anchor geometry. Must stay in sync with
         // BuildingDefinition.gridCellMeters and InteriorSceneBootstrapper.AnchorIsOnDoorCell.
-        private const float CellMetres = 6.8f;
+        // The grid is double-resolution — a "1×1 small room" occupies one 3.4 m cell, and
+        // every legacy "1×1 room" now uses GridSize(2,2) so its physical size stays 6.8 m.
+        private const float CellMetres = 3.4f;
+        // The staircase room footprint is 2 cells wide in the new grid (= 6.8 m physical),
+        // which keeps the ramp/hole at the original physical dimensions.
+        private const int   StaircaseCells = 2;
 
         private static void BuildRoomGeometry(GameObject root, RoomSpec spec)
         {
@@ -261,11 +267,13 @@ namespace FriendSlop.Editor
         }
 
         // Floor or ceiling slab. If hasHole, leaves an opening sized for one grid cell
-        // (CellMetres-1m from the south wall, StairHoleD deep). This keeps the hole in
-        // the SW cell regardless of room size — important for multi-cell mirror rooms
-        // like the 2x2 basement, where the hole must align with the 1x1 stair above.
+        // (CellMetres-1m from the south wall, StairHoleD deep). The hole sits in the
+        // EAST cell of the staircase footprint (x offset = CellMetres) so the doors —
+        // which always land in the SW-most cell of each wall — don't end up on top of
+        // the staircase.
         private const float StairHoleW = 2f;
         private const float StairHoleD = 4f;
+        private const float StairHoleXOffset = CellMetres; // shift hole east by one staircase cell
 
         private static void BuildFloorOrCeiling(GameObject root, string name, float y,
             float w, float d, float wall, bool hasHole)
@@ -277,22 +285,30 @@ namespace FriendSlop.Editor
             }
 
             float holeW       = Mathf.Min(StairHoleW, w);
-            float holeNorthZ  = Mathf.Min(CellMetres - 1f, d);       // top step's north edge
+            float holeMinX    = Mathf.Min(StairHoleXOffset, w - holeW);    // east of cell 0
+            float holeMaxX    = holeMinX + holeW;
+            float holeNorthZ  = Mathf.Min(StaircaseCells * CellMetres - 1f, d); // top step's north edge
             float holeSouthZ  = Mathf.Max(0f, holeNorthZ - StairHoleD);
 
-            // East strip — covers everything to the east of the hole (x=holeW..w, full Z).
-            AddBox(root, $"{name}_E",
-                new Vector3(holeW + (w - holeW) * 0.5f, y, d * 0.5f),
-                new Vector3(w - holeW, wall, d));
-            // South patch — solid floor south of the hole.
+            // West strip — solid floor from the west wall to the hole.
+            if (holeMinX > 0.001f)
+                AddBox(root, $"{name}_W",
+                    new Vector3(holeMinX * 0.5f, y, d * 0.5f),
+                    new Vector3(holeMinX, wall, d));
+            // East strip — solid floor from the hole to the east wall.
+            if (w - holeMaxX > 0.001f)
+                AddBox(root, $"{name}_E",
+                    new Vector3(holeMaxX + (w - holeMaxX) * 0.5f, y, d * 0.5f),
+                    new Vector3(w - holeMaxX, wall, d));
+            // South patch — solid floor south of the hole, inside the hole's x band.
             if (holeSouthZ > 0.001f)
-                AddBox(root, $"{name}_SW",
-                    new Vector3(holeW * 0.5f, y, holeSouthZ * 0.5f),
+                AddBox(root, $"{name}_S",
+                    new Vector3(holeMinX + holeW * 0.5f, y, holeSouthZ * 0.5f),
                     new Vector3(holeW, wall, holeSouthZ));
-            // North patch — solid floor between the top of the stairs and the wall.
+            // North patch — solid floor between the top of the stairs and the north wall.
             if (d - holeNorthZ > 0.001f)
-                AddBox(root, $"{name}_NW",
-                    new Vector3(holeW * 0.5f, y, holeNorthZ + (d - holeNorthZ) * 0.5f),
+                AddBox(root, $"{name}_N",
+                    new Vector3(holeMinX + holeW * 0.5f, y, holeNorthZ + (d - holeNorthZ) * 0.5f),
                     new Vector3(holeW, wall, d - holeNorthZ));
         }
 
@@ -305,11 +321,11 @@ namespace FriendSlop.Editor
         {
             const int   stepCount  = 16;
             const float rampWidth  = 2f;
-            const float rampX      = 1f;        // ramp centred at local x=1
+            const float rampX      = 1f + StairHoleXOffset; // ramp centred in the east stair cell
             const float runStart   = 1f;
-            // Clamp the ramp to a single grid cell so multi-cell mirror rooms (e.g. the
-            // 2x2 basement) don't get an absurdly long ramp spanning two cells.
-            float       runEnd     = Mathf.Min(d - 1f, CellMetres - 1f);
+            // Clamp the ramp to the staircase footprint so multi-cell mirror rooms (e.g. the
+            // basement) don't get an absurdly long ramp spanning the whole room.
+            float       runEnd     = Mathf.Min(d - 1f, StaircaseCells * CellMetres - 1f);
             float       run        = runEnd - runStart;
             float       stepDepth  = run / stepCount;
             float       stepHeight = h   / stepCount;
@@ -396,7 +412,7 @@ namespace FriendSlop.Editor
         private static void AddDoorFrameAtCell(GameObject root, SocketDirection s,
             float cellSize, float wallPos, float h, float wall, bool ns)
         {
-            const float dw = 2f;   // door opening width
+            const float dw = 1.7f; // door opening width
             const float dh = 3f;   // door opening height
             float sideW = (cellSize - dw) * 0.5f;
 
@@ -418,11 +434,16 @@ namespace FriendSlop.Editor
 
         // ── Door prefab ────────────────────────────────────────────────────────
 
+        // Must stay in sync with InteriorLayoutGenerator.DoorWidth and the door-opening
+        // width in BuildPerimeterWall / PatchUnconnectedSockets.
+        private const float DoorPrefabWidth  = 1.7f;
+        private const float DoorPrefabHeight = 3f;
+
         private static GameObject RepairDoorPrefab()
         {
             var prefabPath = $"{InteriorPrefabFolder}/InteriorDoor.prefab";
-            var existing   = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-            if (existing != null) return existing;
+            // Always overwrite — door geometry changes as we iterate, and SaveAsPrefabAsset
+            // preserves the asset GUID so NetworkPrefabsList references survive.
 
             var root = new GameObject("InteriorDoor");
             root.AddComponent<NetworkObject>();
@@ -431,15 +452,18 @@ namespace FriendSlop.Editor
             var pivot = new GameObject("DoorPivot");
             pivot.transform.SetParent(root.transform);
 
+            float halfW = DoorPrefabWidth * 0.5f;
+            float halfH = DoorPrefabHeight * 0.5f;
+
             var mesh = GameObject.CreatePrimitive(PrimitiveType.Cube);
             mesh.name = "DoorMesh";
             mesh.transform.SetParent(pivot.transform);
-            mesh.transform.localPosition = new Vector3(1f, 1.5f, 0);
-            mesh.transform.localScale    = new Vector3(2f, 3f, 0.1f);
+            mesh.transform.localPosition = new Vector3(halfW, halfH, 0);
+            mesh.transform.localScale    = new Vector3(DoorPrefabWidth, DoorPrefabHeight, 0.1f);
 
             var col = root.AddComponent<BoxCollider>();
-            col.size   = new Vector3(2f, 3f, 0.1f);
-            col.center = new Vector3(1f, 1.5f, 0);
+            col.size   = new Vector3(DoorPrefabWidth, DoorPrefabHeight, 0.1f);
+            col.center = new Vector3(halfW, halfH, 0);
 
             var so = new SerializedObject(door);
             so.FindProperty("doorCollider").objectReferenceValue = col;
@@ -524,6 +548,10 @@ namespace FriendSlop.Editor
             }
 
             so.FindProperty("skipBasementExpansion").boolValue = spec.SkipBasementExpansion;
+            so.FindProperty("compactLayout").boolValue         = spec.CompactLayout;
+            so.FindProperty("doorsOnlyForPrivateRooms").boolValue = spec.DoorsOnlyForPrivateRooms;
+            so.FindProperty("entryAtSouthernEdge").boolValue      = spec.EntryAtSouthernEdge;
+            so.FindProperty("restrictUpperFloorOverhang").boolValue = spec.RestrictUpperFloorOverhang;
 
             // Optional pool. If the spec didn't specify, fall back to every room (legacy behaviour).
             var optionalProp = so.FindProperty("optionalPool");
@@ -688,18 +716,18 @@ namespace FriendSlop.Editor
         private static RoomSpec[] GetRoomSpecs() => new[]
         {
             // Legacy generic rooms (kept so the existing Small/Medium/Large/Multifloor buildings still work).
-            new RoomSpec("Room_Entry_1x1",   new Vector2Int(1,1), RoomCategory.Entry,   AllHorizontalSockets, false, 10),
-            new RoomSpec("Room_Generic_1x1", new Vector2Int(1,1), RoomCategory.Generic, AllHorizontalSockets, false, 20),
-            new RoomSpec("Room_Generic_1x2", new Vector2Int(1,2), RoomCategory.Generic, AllHorizontalSockets, false, 15),
-            new RoomSpec("Room_Generic_2x2", new Vector2Int(2,2), RoomCategory.Generic, AllHorizontalSockets, false, 10),
-            new RoomSpec("Room_Utility_1x1", new Vector2Int(1,1), RoomCategory.Utility, new[]{SocketDirection.South}, false, 10),
-            new RoomSpec("Room_Special_2x2", new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 5),
-            new RoomSpec("Room_Stair_1x1",   new Vector2Int(1,1), RoomCategory.Generic, new[]{SocketDirection.North,SocketDirection.South,SocketDirection.Up,SocketDirection.Down}, true, 10),
+            new RoomSpec("Room_Entry_1x1",   new Vector2Int(2,2), RoomCategory.Entry,   AllHorizontalSockets, false, 10),
+            new RoomSpec("Room_Generic_1x1", new Vector2Int(2,2), RoomCategory.Generic, AllHorizontalSockets, false, 20),
+            new RoomSpec("Room_Generic_1x2", new Vector2Int(2,4), RoomCategory.Generic, AllHorizontalSockets, false, 15),
+            new RoomSpec("Room_Generic_2x2", new Vector2Int(4,4), RoomCategory.Generic, AllHorizontalSockets, false, 10),
+            new RoomSpec("Room_Utility_1x1", new Vector2Int(2,2), RoomCategory.Utility, new[]{SocketDirection.South}, false, 10),
+            new RoomSpec("Room_Special_2x2", new Vector2Int(4,4), RoomCategory.Special, AllHorizontalSockets, false, 5),
+            new RoomSpec("Room_Stair_1x1",   new Vector2Int(2,2), RoomCategory.Generic, new[]{SocketDirection.North,SocketDirection.South,SocketDirection.Up,SocketDirection.Down}, true, 10),
 
             // Residential type rooms.
-            new RoomSpec("Room_Residential_Entry_1x1",       new Vector2Int(1,1), RoomCategory.Entry,   AllHorizontalSockets, false, 10,
+            new RoomSpec("Room_Residential_Entry_1x1",       new Vector2Int(2,2), RoomCategory.Entry,   AllHorizontalSockets, false, 10,
                 furnitureTags: new[]{ FurnitureTags.Shared }),
-            new RoomSpec("Room_Residential_Kitchen_1x1",     new Vector2Int(1,1), RoomCategory.Generic, AllHorizontalSockets, false, 10,
+            new RoomSpec("Room_Residential_Kitchen_2x3",     new Vector2Int(2,3), RoomCategory.Generic, AllHorizontalSockets, false, 10,
                 furnitureTags: new[]{ FurnitureTags.Kitchen, FurnitureTags.Shared },
                 furnitureRules: new[]
                 {
@@ -708,14 +736,14 @@ namespace FriendSlop.Editor
                     Rule("sink",    min: 0, max: 1),
                     Rule("counter", min: 0, max: 2),
                 }),
-            new RoomSpec("Room_Residential_LivingRoom_2x2",  new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 5,
+            new RoomSpec("Room_Residential_LivingRoom_3x3",  new Vector2Int(3,3), RoomCategory.Special, AllHorizontalSockets, false, 5,
                 entryCandidate: true,
                 furnitureTags: new[]{ FurnitureTags.LivingRoom, FurnitureTags.Shared },
                 furnitureCountRange: new Vector2Int(3, 6)),
-            new RoomSpec("Room_Residential_Hallway_1x2",     new Vector2Int(1,2), RoomCategory.Generic, AllHorizontalSockets, false, 8,
+            new RoomSpec("Room_Residential_Hallway_4x1",     new Vector2Int(4,1), RoomCategory.Generic, AllHorizontalSockets, false, 8,
                 furnitureTags: new[]{ FurnitureTags.Hallway, FurnitureTags.Shared },
                 furnitureCountRange: new Vector2Int(1, 2)),
-            new RoomSpec("Room_Residential_Bedroom_1x1",     new Vector2Int(1,1), RoomCategory.Generic, AllHorizontalSockets, false, 15,
+            new RoomSpec("Room_Residential_Bedroom_1x1",     new Vector2Int(2,2), RoomCategory.Generic, AllHorizontalSockets, false, 15,
                 furnitureTags: new[]{ FurnitureTags.Bedroom, FurnitureTags.Shared },
                 furnitureRules: new[]
                 {
@@ -723,115 +751,224 @@ namespace FriendSlop.Editor
                     Rule("nightstand",  min: 0, max: 2),
                     Rule("dresser",     min: 0, max: 1),
                 }),
-            new RoomSpec("Room_Residential_Bathroom_1x1",    new Vector2Int(1,1), RoomCategory.Utility, new[]{SocketDirection.South}, false, 10,
+            new RoomSpec("Room_Residential_Bathroom_1x1",    new Vector2Int(2,2), RoomCategory.Utility, AllHorizontalSockets, false, 10,
+                floorRestriction: FloorRestriction.TopFloorOnly,
                 furnitureTags: new[]{ FurnitureTags.Bathroom, FurnitureTags.Utility },
                 furnitureRules: new[]
                 {
                     Rule("toilet",  min: 1, max: 1),
                     Rule("sink",    min: 1, max: 1),
                     Rule("bathtub", min: 0, max: 1),
-                }),
-            new RoomSpec("Room_Residential_DiningRoom_1x2",  new Vector2Int(1,2), RoomCategory.Special, AllHorizontalSockets, false, 5,
+                },
+                maxHorizontalConnections: 1),
+            new RoomSpec("Room_Residential_DiningRoom_2x1",  new Vector2Int(2,1), RoomCategory.Special, AllHorizontalSockets, false, 5,
                 furnitureTags: new[]{ FurnitureTags.Dining, FurnitureTags.Shared }),
-            new RoomSpec("Room_Residential_Basement_2x2",    new Vector2Int(2,2), RoomCategory.Special,
+            new RoomSpec("Room_Residential_Basement_2x2",    new Vector2Int(4,4), RoomCategory.Special,
                 new[]{SocketDirection.North,SocketDirection.South,SocketDirection.East,SocketDirection.West,SocketDirection.Up}, false, 5,
                 furnitureTags: new[]{ FurnitureTags.Basement, FurnitureTags.Storage, FurnitureTags.Shared }),
 
+            // Residential — small utility rooms.
+            new RoomSpec("Room_Residential_Laundry_1x1",     new Vector2Int(2,2), RoomCategory.Utility, AllHorizontalSockets, false, 4,
+                furnitureTags: new[]{ FurnitureTags.Laundry, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(2, 4),
+                furnitureRules: new[]
+                {
+                    Rule("washer", min: 1, max: 1),
+                    Rule("dryer",  min: 1, max: 1),
+                }),
+            new RoomSpec("Room_Residential_Pantry_2x1",      new Vector2Int(2,1), RoomCategory.Utility, AllHorizontalSockets, false, 4,
+                furnitureTags: new[]{ FurnitureTags.Storage, FurnitureTags.Kitchen, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(1, 3)),
+            new RoomSpec("Room_Residential_WalkinCloset_1x1", new Vector2Int(1,1), RoomCategory.Utility, AllHorizontalSockets, false, 4,
+                furnitureTags: new[]{ FurnitureTags.Closet, FurnitureTags.Bedroom, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(1, 3),
+                furnitureRules: new[] { Rule("dresser", min: 0, max: 2) },
+                maxHorizontalConnections: 1),
+            new RoomSpec("Room_Residential_PowderRoom_1x1",  new Vector2Int(1,1), RoomCategory.Utility, AllHorizontalSockets, false, 4,
+                floorRestriction: FloorRestriction.EntryFloorOnly,
+                furnitureTags: new[]{ FurnitureTags.Bathroom, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(2, 3),
+                furnitureRules: new[]
+                {
+                    Rule("toilet", min: 1, max: 1),
+                    Rule("sink",   min: 1, max: 1),
+                },
+                maxHorizontalConnections: 1),
+            new RoomSpec("Room_Residential_MudRoom_1x1",     new Vector2Int(1,1), RoomCategory.Utility, AllHorizontalSockets, false, 3,
+                furnitureTags: new[]{ FurnitureTags.MudRoom, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(2, 3)),
+            new RoomSpec("Room_Residential_LinenCloset_1x1", new Vector2Int(1,1), RoomCategory.Utility, AllHorizontalSockets, false, 3,
+                furnitureTags: new[]{ FurnitureTags.Closet, FurnitureTags.Storage, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(1, 2),
+                maxHorizontalConnections: 1),
+
+            // Residential — specialty living spaces.
+            new RoomSpec("Room_Residential_MasterBedroom_2x1", new Vector2Int(4,2), RoomCategory.Generic, AllHorizontalSockets, false, 6,
+                furnitureTags: new[]{ FurnitureTags.Bedroom, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(3, 5),
+                furnitureRules: new[]
+                {
+                    Rule("bed",         min: 1, max: 1),
+                    Rule("nightstand",  min: 0, max: 2),
+                    Rule("dresser",     min: 0, max: 2),
+                }),
+            new RoomSpec("Room_Residential_MasterBathroom_1x1", new Vector2Int(2,2), RoomCategory.Utility, AllHorizontalSockets, false, 4,
+                floorRestriction: FloorRestriction.TopFloorOnly,
+                furnitureTags: new[]{ FurnitureTags.Bathroom, FurnitureTags.Shared },
+                furnitureRules: new[]
+                {
+                    Rule("toilet",  min: 1, max: 1),
+                    Rule("sink",    min: 1, max: 1),
+                    Rule("bathtub", min: 0, max: 1),
+                },
+                maxHorizontalConnections: 1),
+            new RoomSpec("Room_Residential_Office_1x1",      new Vector2Int(2,2), RoomCategory.Generic, AllHorizontalSockets, false, 5,
+                floorRestriction: FloorRestriction.TopFloorOnly,
+                furnitureTags: new[]{ FurnitureTags.Office, FurnitureTags.Shared },
+                furnitureRules: new[]
+                {
+                    Rule("desk",      min: 1, max: 1),
+                    Rule("bookshelf", min: 0, max: 1),
+                }),
+            new RoomSpec("Room_Residential_Den_2x1",         new Vector2Int(4,2), RoomCategory.Special, AllHorizontalSockets, false, 5,
+                furnitureTags: new[]{ FurnitureTags.LivingRoom, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(3, 5)),
+            new RoomSpec("Room_Residential_SunRoom_1x2",     new Vector2Int(2,4), RoomCategory.Special, AllHorizontalSockets, false, 4,
+                furnitureTags: new[]{ FurnitureTags.LivingRoom, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(2, 4)),
+            new RoomSpec("Room_Residential_Library_1x1",     new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 4,
+                furnitureTags: new[]{ FurnitureTags.Office, FurnitureTags.LivingRoom, FurnitureTags.Shared },
+                furnitureRules: new[] { Rule("bookshelf", min: 2, max: 4) }),
+
+            // Residential — garage.
+            new RoomSpec("Room_Residential_Garage_2x2",      new Vector2Int(4,4), RoomCategory.Special, AllHorizontalSockets, false, 5,
+                furnitureTags: new[]{ FurnitureTags.Garage, FurnitureTags.Workshop, FurnitureTags.Storage, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(2, 4),
+                furnitureRules: new[]
+                {
+                    Rule("workbench", min: 0, max: 2),
+                    Rule("locker",    min: 0, max: 2),
+                }),
+
+            // Residential — basement-only extensions (FloorRestriction keeps them in the basement).
+            new RoomSpec("Room_Residential_GameRoom_1x2",    new Vector2Int(2,4), RoomCategory.Special, AllHorizontalSockets, false, 4,
+                floorRestriction: FloorRestriction.BottomFloorOnly,
+                furnitureTags: new[]{ FurnitureTags.GameRoom, FurnitureTags.LivingRoom, FurnitureTags.BreakRoom, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(3, 5)),
+            new RoomSpec("Room_Residential_WineCellar_1x1",  new Vector2Int(2,2), RoomCategory.Utility, AllHorizontalSockets, false, 4,
+                floorRestriction: FloorRestriction.BottomFloorOnly,
+                furnitureTags: new[]{ FurnitureTags.WineCellar, FurnitureTags.Storage, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(3, 5),
+                furnitureRules: new[] { Rule("wine_rack", min: 1, max: 3) }),
+            new RoomSpec("Room_Residential_Workshop_1x1",    new Vector2Int(2,2), RoomCategory.Utility, AllHorizontalSockets, false, 4,
+                floorRestriction: FloorRestriction.BottomFloorOnly,
+                furnitureTags: new[]{ FurnitureTags.Workshop, FurnitureTags.Shared },
+                furnitureRules: new[] { Rule("workbench", min: 1, max: 2) }),
+            new RoomSpec("Room_Residential_MechanicalRoom_1x1", new Vector2Int(2,2), RoomCategory.Utility, AllHorizontalSockets, false, 3,
+                floorRestriction: FloorRestriction.BottomFloorOnly,
+                furnitureTags: new[]{ FurnitureTags.Mechanical, FurnitureTags.Storage, FurnitureTags.Power, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(2, 4),
+                furnitureRules: new[]
+                {
+                    Rule("furnace",      min: 1, max: 1),
+                    Rule("water_heater", min: 1, max: 1),
+                }),
+
             // Office type rooms.
-            new RoomSpec("Room_Office_Lobby_2x2",            new Vector2Int(2,2), RoomCategory.Entry,   AllHorizontalSockets, false, 10,
+            new RoomSpec("Room_Office_Lobby_2x2",            new Vector2Int(4,4), RoomCategory.Entry,   AllHorizontalSockets, false, 10,
                 furnitureTags: new[]{ FurnitureTags.Lobby, FurnitureTags.Shared },
                 furnitureCountRange: new Vector2Int(3, 5)),
-            new RoomSpec("Room_Office_Reception_1x2",        new Vector2Int(1,2), RoomCategory.Special, AllHorizontalSockets, false, 5,
+            new RoomSpec("Room_Office_Reception_1x2",        new Vector2Int(2,4), RoomCategory.Special, AllHorizontalSockets, false, 5,
                 entryCandidate: true,
                 furnitureTags: new[]{ FurnitureTags.Lobby, FurnitureTags.Shared }),
-            new RoomSpec("Room_Office_Hallway_1x2",          new Vector2Int(1,2), RoomCategory.Generic, AllHorizontalSockets, false, 14,
+            new RoomSpec("Room_Office_Hallway_1x2",          new Vector2Int(2,4), RoomCategory.Generic, AllHorizontalSockets, false, 14,
                 furnitureTags: new[]{ FurnitureTags.Hallway, FurnitureTags.Shared },
                 furnitureCountRange: new Vector2Int(0, 1)),
-            new RoomSpec("Room_Office_Cubicle_1x1",          new Vector2Int(1,1), RoomCategory.Generic, AllHorizontalSockets, false, 15,
+            new RoomSpec("Room_Office_Cubicle_1x1",          new Vector2Int(2,2), RoomCategory.Generic, AllHorizontalSockets, false, 15,
                 furnitureTags: new[]{ FurnitureTags.Cubicle, FurnitureTags.Office, FurnitureTags.Shared },
                 furnitureRules: new[]
                 {
                     Rule("desk",  min: 1, max: 1),
                     Rule("chair", min: 0, max: 1),
                 }),
-            new RoomSpec("Room_Office_OpenPlan_2x2",         new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 6,
+            new RoomSpec("Room_Office_OpenPlan_2x2",         new Vector2Int(4,4), RoomCategory.Special, AllHorizontalSockets, false, 6,
                 furnitureTags: new[]{ FurnitureTags.Cubicle, FurnitureTags.Office, FurnitureTags.Shared },
                 furnitureCountRange: new Vector2Int(4, 7)),
-            new RoomSpec("Room_Office_Conference_1x2",       new Vector2Int(1,2), RoomCategory.Special, AllHorizontalSockets, false, 5,
+            new RoomSpec("Room_Office_Conference_1x2",       new Vector2Int(2,4), RoomCategory.Special, AllHorizontalSockets, false, 5,
                 furnitureTags: new[]{ FurnitureTags.Conference, FurnitureTags.Shared }),
-            new RoomSpec("Room_Office_ConferenceLarge_2x2",  new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 4,
+            new RoomSpec("Room_Office_ConferenceLarge_2x2",  new Vector2Int(4,4), RoomCategory.Special, AllHorizontalSockets, false, 4,
                 furnitureTags: new[]{ FurnitureTags.Conference, FurnitureTags.Shared },
                 furnitureCountRange: new Vector2Int(3, 5)),
-            new RoomSpec("Room_Office_ManagerOffice_1x1",    new Vector2Int(1,1), RoomCategory.Generic, AllHorizontalSockets, false, 8,
+            new RoomSpec("Room_Office_ManagerOffice_1x1",    new Vector2Int(2,2), RoomCategory.Generic, AllHorizontalSockets, false, 8,
                 furnitureTags: new[]{ FurnitureTags.Office, FurnitureTags.Shared },
                 furnitureRules: new[]
                 {
                     Rule("desk",       min: 1, max: 1),
                     Rule("bookshelf",  min: 0, max: 1),
                 }),
-            new RoomSpec("Room_Office_ServerRoom_1x1",       new Vector2Int(1,1), RoomCategory.Special, AllHorizontalSockets, false, 3,
+            new RoomSpec("Room_Office_ServerRoom_1x1",       new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 3,
                 floorRestriction: FloorRestriction.TopFloorOnly,
                 furnitureTags: new[]{ FurnitureTags.Server, FurnitureTags.Utility }),
-            new RoomSpec("Room_Office_BreakRoom_1x2",        new Vector2Int(1,2), RoomCategory.Generic, AllHorizontalSockets, false, 6,
+            new RoomSpec("Room_Office_BreakRoom_1x2",        new Vector2Int(2,4), RoomCategory.Generic, AllHorizontalSockets, false, 6,
                 furnitureTags: new[]{ FurnitureTags.BreakRoom, FurnitureTags.Shared }),
-            new RoomSpec("Room_Office_Bathroom_1x1",         new Vector2Int(1,1), RoomCategory.Utility, new[]{SocketDirection.South}, false, 10,
+            new RoomSpec("Room_Office_Bathroom_1x1",         new Vector2Int(2,2), RoomCategory.Utility, AllHorizontalSockets, false, 10,
                 furnitureTags: new[]{ FurnitureTags.Bathroom, FurnitureTags.Utility },
                 furnitureRules: new[]
                 {
                     Rule("toilet", min: 1, max: 2),
                     Rule("sink",   min: 1, max: 2),
                 }),
-            new RoomSpec("Room_Office_Storage_1x1",          new Vector2Int(1,1), RoomCategory.Utility, new[]{SocketDirection.South}, false, 5,
+            new RoomSpec("Room_Office_Storage_1x1",          new Vector2Int(2,2), RoomCategory.Utility, new[]{SocketDirection.South}, false, 5,
                 furnitureTags: new[]{ FurnitureTags.Storage, FurnitureTags.Utility }),
 
             // Factory type rooms.
-            new RoomSpec("Room_Factory_LoadingBay_2x2",       new Vector2Int(2,2), RoomCategory.Entry,   AllHorizontalSockets, false, 10,
+            new RoomSpec("Room_Factory_LoadingBay_2x2",       new Vector2Int(4,4), RoomCategory.Entry,   AllHorizontalSockets, false, 10,
                 furnitureTags: new[]{ FurnitureTags.LoadingBay, FurnitureTags.Factory },
                 furnitureCountRange: new Vector2Int(2, 4)),
-            new RoomSpec("Room_Factory_OfficeReception_1x1",  new Vector2Int(1,1), RoomCategory.Generic, AllHorizontalSockets, false, 6,
+            new RoomSpec("Room_Factory_OfficeReception_1x1",  new Vector2Int(2,2), RoomCategory.Generic, AllHorizontalSockets, false, 6,
                 entryCandidate: true,
                 furnitureTags: new[]{ FurnitureTags.Office, FurnitureTags.Lobby, FurnitureTags.Shared }),
-            new RoomSpec("Room_Factory_Catwalk_1x2",          new Vector2Int(1,2), RoomCategory.Generic, AllHorizontalSockets, false, 14,
+            new RoomSpec("Room_Factory_Catwalk_1x2",          new Vector2Int(2,4), RoomCategory.Generic, AllHorizontalSockets, false, 14,
                 furnitureTags: new[]{ FurnitureTags.Hallway, FurnitureTags.Factory },
                 furnitureCountRange: new Vector2Int(0, 1)),
-            new RoomSpec("Room_Factory_Workshop_2x2",         new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 6,
+            new RoomSpec("Room_Factory_Workshop_2x2",         new Vector2Int(4,4), RoomCategory.Special, AllHorizontalSockets, false, 6,
                 furnitureTags: new[]{ FurnitureTags.Workshop, FurnitureTags.Factory },
                 furnitureCountRange: new Vector2Int(3, 6),
                 furnitureRules: new[]
                 {
                     Rule("workbench", min: 1, max: 3),
                 }),
-            new RoomSpec("Room_Factory_AssemblyLine_2x2",     new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 5,
+            new RoomSpec("Room_Factory_AssemblyLine_2x2",     new Vector2Int(4,4), RoomCategory.Special, AllHorizontalSockets, false, 5,
                 furnitureTags: new[]{ FurnitureTags.Workshop, FurnitureTags.Factory },
                 furnitureCountRange: new Vector2Int(3, 6),
                 furnitureRules: new[]
                 {
                     Rule("workbench", min: 2, max: 4),
                 }),
-            new RoomSpec("Room_Factory_Storage_1x2",          new Vector2Int(1,2), RoomCategory.Generic, AllHorizontalSockets, false, 8,
+            new RoomSpec("Room_Factory_Storage_1x2",          new Vector2Int(2,4), RoomCategory.Generic, AllHorizontalSockets, false, 8,
                 furnitureTags: new[]{ FurnitureTags.Storage, FurnitureTags.Factory }),
-            new RoomSpec("Room_Factory_HazardStorage_1x1",    new Vector2Int(1,1), RoomCategory.Special, AllHorizontalSockets, false, 3,
+            new RoomSpec("Room_Factory_HazardStorage_1x1",    new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 3,
                 furnitureTags: new[]{ FurnitureTags.Storage, FurnitureTags.Factory }),
-            new RoomSpec("Room_Factory_ManagerOffice_1x1",    new Vector2Int(1,1), RoomCategory.Generic, AllHorizontalSockets, false, 6,
+            new RoomSpec("Room_Factory_ManagerOffice_1x1",    new Vector2Int(2,2), RoomCategory.Generic, AllHorizontalSockets, false, 6,
                 furnitureTags: new[]{ FurnitureTags.Office, FurnitureTags.Shared }),
-            new RoomSpec("Room_Factory_ForemanOffice_1x1",    new Vector2Int(1,1), RoomCategory.Special, AllHorizontalSockets, false, 3,
+            new RoomSpec("Room_Factory_ForemanOffice_1x1",    new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 3,
                 floorRestriction: FloorRestriction.TopFloorOnly,
                 furnitureTags: new[]{ FurnitureTags.Office, FurnitureTags.Shared }),
-            new RoomSpec("Room_Factory_ControlRoom_1x1",      new Vector2Int(1,1), RoomCategory.Special, AllHorizontalSockets, false, 3,
+            new RoomSpec("Room_Factory_ControlRoom_1x1",      new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 3,
                 floorRestriction: FloorRestriction.TopFloorOnly,
                 furnitureTags: new[]{ FurnitureTags.Control, FurnitureTags.Office, FurnitureTags.Factory }),
-            new RoomSpec("Room_Factory_PowerRoom_1x1",        new Vector2Int(1,1), RoomCategory.Special, AllHorizontalSockets, false, 4,
+            new RoomSpec("Room_Factory_PowerRoom_1x1",        new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 4,
                 floorRestriction: FloorRestriction.BottomFloorOnly,
                 furnitureTags: new[]{ FurnitureTags.Power, FurnitureTags.Utility, FurnitureTags.Factory }),
-            new RoomSpec("Room_Factory_Cafeteria_1x2",        new Vector2Int(1,2), RoomCategory.Generic, AllHorizontalSockets, false, 6,
+            new RoomSpec("Room_Factory_Cafeteria_1x2",        new Vector2Int(2,4), RoomCategory.Generic, AllHorizontalSockets, false, 6,
                 furnitureTags: new[]{ FurnitureTags.Cafeteria, FurnitureTags.BreakRoom, FurnitureTags.Shared }),
-            new RoomSpec("Room_Factory_LockerRoom_1x1",       new Vector2Int(1,1), RoomCategory.Utility, new[]{SocketDirection.South}, false, 5,
+            new RoomSpec("Room_Factory_LockerRoom_1x1",       new Vector2Int(2,2), RoomCategory.Utility, new[]{SocketDirection.South}, false, 5,
                 furnitureTags: new[]{ FurnitureTags.Locker, FurnitureTags.Factory, FurnitureTags.Utility },
                 furnitureRules: new[]
                 {
                     Rule("locker", min: 3, max: 6),
                 }),
-            new RoomSpec("Room_Factory_Bathroom_1x1",         new Vector2Int(1,1), RoomCategory.Utility, new[]{SocketDirection.South}, false, 8,
+            new RoomSpec("Room_Factory_Bathroom_1x1",         new Vector2Int(2,2), RoomCategory.Utility, AllHorizontalSockets, false, 8,
                 furnitureTags: new[]{ FurnitureTags.Bathroom, FurnitureTags.Utility },
                 furnitureRules: new[]
                 {
@@ -850,36 +987,78 @@ namespace FriendSlop.Editor
 
             // Typed buildings — required + optional recipes.
             new BuildingSpec("Building_Residential", "Residential",
-                // 6..10 rooms gives 1..3 bedrooms after the required slots are filled.
-                // minFloors=2, maxFloors=2 → every residential building has a basement.
-                minR: 6, maxR: 10, minF: 2, maxF: 2, minS: 1, maxS: 2,
+                // 12..22 rooms across 2–3 floors (basement + ground + optional upper).
+                // Bedrooms / master suite / office prefer the upper floor, so 3-floor
+                // houses get the classic "ground = social, upper = private" layout.
+                minR: 12, maxR: 22, minF: 2, maxF: 3, minS: 2, maxS: 4,
                 themeColor: new Color(0.95f, 0.85f, 0.70f),
+                // Placement order matters here. Entry is placed first (always). The
+                // LivingRoom comes next via the entry-candidate path (open passage off
+                // the Entry, or it IS the entry). Then ProcessAdjacencyConstraints walks
+                // this list in order: Kitchen is placed adjacent to the LivingRoom BEFORE
+                // any optional rooms exist, which gives the kitchen-faces-the-void rule
+                // the most empty cells to work with. DiningRoom comes after Kitchen.
                 required: new[]
                 {
                     Req("Room_Residential_Entry_1x1",      1),
-                    Req("Room_Residential_Kitchen_1x1",    1),
-                    Req("Room_Residential_LivingRoom_2x2", 1),
-                    Req("Room_Residential_Hallway_1x2",    1),
+                    Req("Room_Residential_LivingRoom_3x3", 1),
+                    // Kitchen must sit next to the LivingRoom. Placing it early — before
+                    // bedrooms/bathrooms fill the surrounding cells — makes it much more
+                    // likely that one of its 2-wide walls ends up facing the void.
+                    Req("Room_Residential_Kitchen_2x3",    1, "Room_Residential_LivingRoom_3x3"),
+                    Req("Room_Residential_Hallway_4x1",    1),
+                    // Top-floor full bathroom (TopFloorOnly). For 2-floor houses this is
+                    // the entry/top floor; for 3-floor houses this lands on the upper.
+                    Req("Room_Residential_Bathroom_1x1",   1),
+                    // Entry-floor powder room (EntryFloorOnly). Guarantees a half-bath on
+                    // the ground floor even when there's a full bath upstairs.
+                    Req("Room_Residential_PowderRoom_1x1", 1),
                     // DiningRoom must sit next to the Kitchen.
-                    Req("Room_Residential_DiningRoom_1x2", 1, "Room_Residential_Kitchen_1x1"),
+                    Req("Room_Residential_DiningRoom_2x1", 1, "Room_Residential_Kitchen_2x3"),
                 },
                 optionalRoomNames: new[]
                 {
+                    // Core repeatable rooms.
                     "Room_Residential_Bedroom_1x1",
                     "Room_Residential_Bathroom_1x1",
-                    "Room_Residential_Hallway_1x2",
-                    "Room_Stair_1x1",                // vertical connector pool entry
+                    "Room_Residential_Hallway_4x1",
+                    "Room_Stair_1x1",                       // vertical connector pool entry
+                    // Specialty bedroom suite — placement filter pairs them.
+                    "Room_Residential_MasterBedroom_2x1",
+                    "Room_Residential_MasterBathroom_1x1",  // adjacency rule: only off MasterBedroom
+                    "Room_Residential_WalkinCloset_1x1",    // adjacency rule: only off any bedroom
+                    // Small utility rooms.
+                    "Room_Residential_Laundry_1x1",
+                    "Room_Residential_Pantry_2x1",          // adjacency rule: only off Kitchen
+                    "Room_Residential_MudRoom_1x1",         // adjacency rule: only off Entry
+                    "Room_Residential_LinenCloset_1x1",
+                    // Specialty living spaces.
+                    "Room_Residential_Office_1x1",
+                    "Room_Residential_Den_2x1",
+                    "Room_Residential_SunRoom_1x2",         // post-validates one long wall facing the void
+                    "Room_Residential_Library_1x1",
+                    // Attached garage.
+                    "Room_Residential_Garage_2x2",          // post-validates at least one wall facing the void
+                    // Basement-only (FloorRestriction.BottomFloorOnly handles the placement).
+                    "Room_Residential_GameRoom_1x2",
+                    "Room_Residential_WineCellar_1x1",
+                    "Room_Residential_Workshop_1x1",
+                    "Room_Residential_MechanicalRoom_1x1",
                 },
                 // When the basement floor exists, the stair on the entry floor goes there
                 // — and must be placed adjacent to one of these rooms.
                 downwardConnectorMirrorName: "Room_Residential_Basement_2x2",
                 downConnectorParentNames: new[]
                 {
-                    "Room_Residential_Kitchen_1x1",
-                    "Room_Residential_LivingRoom_2x2",
-                    "Room_Residential_Hallway_1x2",
+                    "Room_Residential_Kitchen_2x3",
+                    "Room_Residential_LivingRoom_3x3",
+                    "Room_Residential_Hallway_4x1",
                 },
-                skipBasementExpansion: true),
+                skipBasementExpansion: false,    // basement can fill with GameRoom/Workshop/etc.
+                compactLayout: true,
+                doorsOnlyForPrivateRooms: true,
+                entryAtSouthernEdge: true,
+                restrictUpperFloorOverhang: true),
 
             new BuildingSpec("Building_Office", "Office",
                 // Larger so we can fit per-floor hallways + cubicles + meeting rooms.
@@ -959,13 +1138,15 @@ namespace FriendSlop.Editor
             public readonly string[] FurnitureTags;
             public readonly Vector2Int FurnitureCountRange;
             public readonly (string kind, int min, int max)[] FurnitureRules;
+            public readonly int MaxHorizontalConnections;
 
             public RoomSpec(string name, Vector2Int size, RoomCategory cat, SocketDirection[] sockets,
                 bool vertical, int weight, bool entryCandidate = false,
                 FloorRestriction floorRestriction = FloorRestriction.Any,
                 string[] furnitureTags = null,
                 Vector2Int furnitureCountRange = default,
-                (string kind, int min, int max)[] furnitureRules = null)
+                (string kind, int min, int max)[] furnitureRules = null,
+                int maxHorizontalConnections = -1)
             {
                 Name = name; GridSize = size; Category = cat; Sockets = sockets;
                 IsVerticalConnector = vertical; Weight = weight; EntryCandidate = entryCandidate;
@@ -973,6 +1154,7 @@ namespace FriendSlop.Editor
                 FurnitureTags = furnitureTags ?? new[] { FriendSlop.Interiors.FurnitureTags.Shared };
                 FurnitureCountRange = furnitureCountRange == default ? new Vector2Int(2, 4) : furnitureCountRange;
                 FurnitureRules = furnitureRules ?? System.Array.Empty<(string, int, int)>();
+                MaxHorizontalConnections = maxHorizontalConnections;
             }
         }
 
@@ -992,6 +1174,10 @@ namespace FriendSlop.Editor
             public readonly string DownwardConnectorMirrorName;
             public readonly string[] DownConnectorParentNames;
             public readonly bool SkipBasementExpansion;
+            public readonly bool CompactLayout;
+            public readonly bool DoorsOnlyForPrivateRooms;
+            public readonly bool EntryAtSouthernEdge;
+            public readonly bool RestrictUpperFloorOverhang;
 
             public BuildingSpec(string name, string displayName,
                 int minR, int maxR, int minF, int maxF, int minS, int maxS,
@@ -1000,7 +1186,11 @@ namespace FriendSlop.Editor
                 string[] optionalRoomNames,
                 string downwardConnectorMirrorName = null,
                 string[] downConnectorParentNames = null,
-                bool skipBasementExpansion = false)
+                bool skipBasementExpansion = false,
+                bool compactLayout = true,
+                bool doorsOnlyForPrivateRooms = false,
+                bool entryAtSouthernEdge = false,
+                bool restrictUpperFloorOverhang = false)
             {
                 Name = name; DisplayName = displayName;
                 MinRooms = minR; MaxRooms = maxR; MinFloors = minF; MaxFloors = maxF;
@@ -1011,6 +1201,10 @@ namespace FriendSlop.Editor
                 DownwardConnectorMirrorName = downwardConnectorMirrorName;
                 DownConnectorParentNames = downConnectorParentNames;
                 SkipBasementExpansion = skipBasementExpansion;
+                CompactLayout = compactLayout;
+                DoorsOnlyForPrivateRooms = doorsOnlyForPrivateRooms;
+                EntryAtSouthernEdge = entryAtSouthernEdge;
+                RestrictUpperFloorOverhang = restrictUpperFloorOverhang;
             }
 
             public static BuildingSpec Legacy(string name, string displayName,

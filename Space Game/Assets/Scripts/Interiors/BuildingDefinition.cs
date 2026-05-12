@@ -14,7 +14,7 @@ namespace FriendSlop.Interiors
         [SerializeField, Range(1, 10)]  private int minFloors = 1;
         [SerializeField, Range(1, 10)]  private int maxFloors = 2;
         [SerializeField] private float floorHeightMeters = 4f;
-        [SerializeField] private float gridCellMeters = 6.8f;
+        [SerializeField] private float gridCellMeters = 3.4f;
 
         [Header("Recipe")]
         [Tooltip("Rooms that must appear in every generated layout. The entry room (RoomCategory.Entry) is " +
@@ -40,6 +40,22 @@ namespace FriendSlop.Interiors
         [Tooltip("If true, the basement floor (lower of the down-link) is left with only the " +
                  "mirror room — no further expansion. Use when the basement is a single room.")]
         [SerializeField] private bool skipBasementExpansion;
+        [Tooltip("When true (default), the layout generator prefers placing new rooms adjacent to " +
+                 "multiple existing rooms, producing compact rectangular / L-shaped footprints like " +
+                 "real houses. Disable for buildings that should sprawl irregularly.")]
+        [SerializeField] private bool compactLayout = true;
+        [Tooltip("When true, only connections that involve a Bedroom, Bathroom, Stair, or Basement " +
+                 "get a door + framed wall. All other connections render as open archways. Use for " +
+                 "residential houses where the kitchen/dining/living-room are open-plan.")]
+        [SerializeField] private bool doorsOnlyForPrivateRooms;
+        [Tooltip("When true, the layout generator forbids any room from spawning south of the " +
+                 "entry room (z < entry.z). The entry's south face becomes the building's front " +
+                 "facade — what a normal house looks like.")]
+        [SerializeField] private bool entryAtSouthernEdge;
+        [Tooltip("When true, every cell on an upper floor must sit directly above a cell on the " +
+                 "floor immediately below. Prevents upper rooms from cantilevering off the ground " +
+                 "floor and looking like they're floating.")]
+        [SerializeField] private bool restrictUpperFloorOverhang;
 
         [Header("Phase 3+ hooks (optional)")]
         [Tooltip("Tint applied to wall/floor materials at runtime so each type reads as visually distinct.")]
@@ -69,6 +85,10 @@ namespace FriendSlop.Interiors
         public RoomDefinition DownwardConnectorMirror => downwardConnectorMirror;
         public IReadOnlyList<RoomDefinition> DownConnectorParents => downConnectorParents ?? Array.Empty<RoomDefinition>();
         public bool SkipBasementExpansion => skipBasementExpansion;
+        public bool CompactLayout         => compactLayout;
+        public bool DoorsOnlyForPrivateRooms => doorsOnlyForPrivateRooms;
+        public bool EntryAtSouthernEdge   => entryAtSouthernEdge;
+        public bool RestrictUpperFloorOverhang => restrictUpperFloorOverhang;
 
         // Back-compat shim — older code reads RoomPool as the full pool. Returns required ∪ optional
         // so existing callers (tests, scene builders) keep finding every room the building can produce.

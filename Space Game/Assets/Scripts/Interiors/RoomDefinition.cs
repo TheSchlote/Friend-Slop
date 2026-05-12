@@ -42,6 +42,10 @@ namespace FriendSlop.Interiors
         [SerializeField] private SocketDirection[] sockets = System.Array.Empty<SocketDirection>();
         [SerializeField] private bool isVerticalConnector;
         [SerializeField, Range(1, 100)] private int weight = 10;
+        [Tooltip("Maximum number of horizontal connections this room can have. -1 (default) " +
+                 "means unlimited — each free wall socket can become a door. Set to 1 for rooms " +
+                 "like a bathroom or powder room where only one door makes sense.")]
+        [SerializeField] private int maxHorizontalConnections = -1;
         [Tooltip("If true, this room can be picked as the building's entry even when its " +
                  "category isn't Entry (e.g. a LivingRoom that doubles as a foyer).")]
         [SerializeField] private bool isEntryCandidate;
@@ -66,6 +70,7 @@ namespace FriendSlop.Interiors
         public IReadOnlyList<SocketDirection> Sockets => sockets;
         public bool IsVerticalConnector  => isVerticalConnector;
         public int Weight                => weight;
+        public int MaxHorizontalConnections => maxHorizontalConnections;
         public bool IsEntryCandidate     => isEntryCandidate || category == RoomCategory.Entry;
         public FloorRestriction FloorRestriction => floorRestriction;
         public IReadOnlyList<string> FurnitureTags => furnitureTags ?? System.Array.Empty<string>();

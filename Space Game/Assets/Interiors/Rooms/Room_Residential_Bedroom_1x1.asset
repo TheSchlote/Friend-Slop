@@ -13,13 +13,14 @@ MonoBehaviour:
   m_Name: Room_Residential_Bedroom_1x1
   m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.RoomDefinition
   prefab: {fileID: 6797558002633433019, guid: 6edc4db103a3df044aa249e7f8ebeabe, type: 3}
-  gridSize: {x: 1, y: 1}
+  gridSize: {x: 2, y: 2}
   category: 1
   sockets: 00000000010000000200000003000000
   isVerticalConnector: 0
   weight: 15
+  maxHorizontalConnections: -1
   isEntryCandidate: 0
-  floorRestriction: 0
+  floorRestriction: 1
   furnitureTags:
   - bedroom
   - shared

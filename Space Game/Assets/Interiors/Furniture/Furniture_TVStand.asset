@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_TVStand
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: TV Stand
+  kind: tvstand
+  tags:
+  - livingroom
+  - breakroom
+  - gameroom
+  placement: 0
+  footprintXZ: {x: 1.6, y: 0.45}
+  weight: 3
+  interactable: 0
+  prefab: {fileID: 1353653532318847471, guid: 8ddffe88b7f9aab4e9ff808297be9b38, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.3, z: 0}
+    localScale: {x: 1.6, y: 0.6, z: 0.45}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: -0.5, y: 0.3, z: 0.23}
+    localScale: {x: 0.6, y: 0.4, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}
+  - shape: 3
+    localPosition: {x: 0.5, y: 0.3, z: 0.23}
+    localScale: {x: 0.6, y: 0.4, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}
+  tabletopAnchors:
+  - localPosition: {x: 0, y: 0.62, z: 0}
+    footprintXZ: {x: 0.5, y: 0.3}
+  aroundTableAnchors: []

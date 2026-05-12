@@ -30,6 +30,14 @@ namespace FriendSlop.Interiors
         [Tooltip("Modular primitives used when `prefab` is null. Each entry describes a " +
                  "single cube/cylinder/sphere placed under the spawned furniture root.")]
         [SerializeField] private PrimitiveBox[] primitives = Array.Empty<PrimitiveBox>();
+        [Tooltip("Spots ON TOP of this piece where smaller tabletop-tagged items can spawn. " +
+                 "Empty for non-table pieces. A Vase or Lamp at one of these positions sits on " +
+                 "the piece's surface.")]
+        [SerializeField] private TabletopAnchor[] tabletopAnchors = Array.Empty<TabletopAnchor>();
+        [Tooltip("Floor-level slots AROUND this piece where chairs (or similar) face inward " +
+                 "toward the table. Each anchor carries its own yaw so the chair points at the " +
+                 "table from whichever side it sits on.")]
+        [SerializeField] private AroundTableAnchor[] aroundTableAnchors = Array.Empty<AroundTableAnchor>();
 
         public string DisplayName        => displayName;
         public string Kind                => kind ?? "";
@@ -40,6 +48,8 @@ namespace FriendSlop.Interiors
         public bool Interactable         => interactable;
         public GameObject Prefab         => prefab;
         public IReadOnlyList<PrimitiveBox> Primitives => primitives;
+        public IReadOnlyList<TabletopAnchor> TabletopAnchors => tabletopAnchors;
+        public IReadOnlyList<AroundTableAnchor> AroundTableAnchors => aroundTableAnchors;
 
         public bool HasTag(string tag)
         {
@@ -48,6 +58,27 @@ namespace FriendSlop.Interiors
                 if (t == tag) return true;
             return false;
         }
+    }
+
+    // A spot on top of a piece of furniture where a tabletop-tagged item can spawn.
+    // localPosition is the centre of the surface area; footprintXZ caps the size of
+    // items that fit (a desk-top might allow 0.6 × 0.6 m items but not bigger).
+    [Serializable]
+    public struct TabletopAnchor
+    {
+        public Vector3 localPosition;
+        public Vector2 footprintXZ;
+    }
+
+    // A floor-level slot around a piece of furniture, used for chairs around tables.
+    // Same fields as TabletopAnchor plus a Y-rotation so the spawned chair faces the
+    // table regardless of which side it's on.
+    [Serializable]
+    public struct AroundTableAnchor
+    {
+        public Vector3 localPosition;
+        public Vector2 footprintXZ;
+        public float yawDegrees;
     }
 
     [Serializable]

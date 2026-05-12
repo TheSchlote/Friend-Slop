@@ -262,9 +262,12 @@ namespace FriendSlop.Editor
             Object.DestroyImmediate(mesh.GetComponent<Collider>());
 
             // Worldspace text above the pillar. Updated at runtime by InteriorTypeSelector.
+            // TextMesh faces local +Z; rotate 180° so the text reads correctly when the
+            // player approaches the pillar from the entrance side of the building.
             var labelGo = new GameObject("Label");
             labelGo.transform.SetParent(pillar.transform, false);
             labelGo.transform.localPosition = new Vector3(0f, 2.1f, 0f);
+            labelGo.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
             var tm = labelGo.AddComponent<TextMesh>();
             tm.text          = "Current: ...";
             tm.fontSize      = 64;

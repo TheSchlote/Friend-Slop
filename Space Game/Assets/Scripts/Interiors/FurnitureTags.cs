@@ -15,6 +15,13 @@ namespace FriendSlop.Interiors
         public const string Dining      = "dining";
         public const string Hallway     = "hallway";
         public const string Basement    = "basement";
+        public const string Laundry     = "laundry";
+        public const string Garage      = "garage";
+        public const string GameRoom    = "gameroom";
+        public const string WineCellar  = "winecellar";
+        public const string Mechanical  = "mechanical";
+        public const string MudRoom     = "mudroom";
+        public const string Closet      = "closet";
 
         // Office
         public const string Office      = "office";

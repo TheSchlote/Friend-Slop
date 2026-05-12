@@ -17,6 +17,7 @@ MonoBehaviour:
   tags:
   - workshop
   - factory
+  - garage
   placement: 0
   footprintXZ: {x: 2, y: 0.8}
   weight: 5
@@ -38,3 +39,9 @@ MonoBehaviour:
     localScale: {x: 0.1, y: 0.95, z: 0.7}
     localEulerAngles: {x: 0, y: 0, z: 0}
     tint: {r: 0.65, g: 0.65, b: 0.7, a: 1}
+  tabletopAnchors:
+  - localPosition: {x: -0.5, y: 0.99, z: 0}
+    footprintXZ: {x: 0.5, y: 0.5}
+  - localPosition: {x: 0.5, y: 0.99, z: 0}
+    footprintXZ: {x: 0.5, y: 0.5}
+  aroundTableAnchors: []

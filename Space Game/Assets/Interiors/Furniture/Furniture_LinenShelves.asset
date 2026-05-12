@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_LinenShelves
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Linen Shelves
+  kind: linen_shelves
+  tags:
+  - closet
+  - storage
+  placement: 0
+  footprintXZ: {x: 0.8, y: 0.4}
+  weight: 4
+  interactable: 0
+  prefab: {fileID: 5439419523089899877, guid: 50c32000655b0de419f3de46386fb946, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 1, z: 0}
+    localScale: {x: 0.8, y: 2, z: 0.4}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.4, z: 0.05}
+    localScale: {x: 0.65, y: 0.2, z: 0.3}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.85, g: 0.85, b: 0.92, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.9, z: 0.05}
+    localScale: {x: 0.65, y: 0.2, z: 0.3}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.2, b: 0.2, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1.4, z: 0.05}
+    localScale: {x: 0.65, y: 0.2, z: 0.3}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.2, g: 0.4, b: 0.25, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1.9, z: 0.05}
+    localScale: {x: 0.65, y: 0.2, z: 0.3}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.4, g: 0.45, b: 0.55, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []
