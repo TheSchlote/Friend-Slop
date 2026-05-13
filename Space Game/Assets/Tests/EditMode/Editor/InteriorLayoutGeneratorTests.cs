@@ -42,7 +42,7 @@ namespace FriendSlop.Tests.EditMode
             so.FindProperty("gridCellMeters").floatValue    = 8f;
             so.FindProperty("minSpecialRooms").intValue     = 0;
             so.FindProperty("maxSpecialRooms").intValue     = 0;
-            var arr = so.FindProperty("roomPool");
+            var arr = so.FindProperty("optionalPool");
             arr.arraySize = pool.Length;
             for (int i = 0; i < pool.Length; i++)
                 arr.GetArrayElementAtIndex(i).objectReferenceValue = pool[i];

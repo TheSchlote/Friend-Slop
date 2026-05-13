@@ -1,0 +1,41 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Washer
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Washing Machine
+  kind: washer
+  tags:
+  - laundry
+  placement: 0
+  footprintXZ: {x: 0.65, y: 0.65}
+  weight: 5
+  interactable: 0
+  prefab: {fileID: 6099748131834813498, guid: fd34fffba88c0bf458f8bec9f2a8ec9b, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.45, z: 0}
+    localScale: {x: 0.65, y: 0.9, z: 0.65}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.78, g: 0.8, b: 0.85, a: 1}
+  - shape: 2
+    localPosition: {x: 0, y: 0.55, z: 0.3}
+    localScale: {x: 0.3, y: 0.05, z: 0.3}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.75, b: 0.85, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.85, z: 0}
+    localScale: {x: 0.6, y: 0.06, z: 0.6}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

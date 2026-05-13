@@ -1,0 +1,81 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3830b0b9a65b185489ee24b6645642fd, type: 3}
+  m_Name: Building_Factory
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.BuildingDefinition
+  displayName: Factory
+  minRooms: 16
+  maxRooms: 28
+  minFloors: 3
+  maxFloors: 4
+  floorHeightMeters: 4
+  gridCellMeters: 3.4
+  requiredRooms:
+  - definition: {fileID: 11400000, guid: cb7d9dc35861659429761e758e9a09b8, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: f66599d96b5298a4195fe4ec41e0d9f0, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: b2ab0a4f90441ef468f79f8d9bdc19f0, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: d19a13970446f984aaebbd0862cc9f1d, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: 4ea2ea15c7172c1479a7dea5cc7cf1d8, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: 5c490a0cfd011bb4cbd61cdcf6dc6467, type: 2}
+    count: 1
+    adjacentToAny:
+    - {fileID: 11400000, guid: cb7d9dc35861659429761e758e9a09b8, type: 2}
+  - definition: {fileID: 11400000, guid: 1423135649547cf4899f5ba4469df85a, type: 2}
+    count: 1
+    adjacentToAny:
+    - {fileID: 11400000, guid: cb7d9dc35861659429761e758e9a09b8, type: 2}
+  - definition: {fileID: 11400000, guid: 45bb24425219a744ca1e88811f444366, type: 2}
+    count: 1
+    adjacentToAny:
+    - {fileID: 11400000, guid: b2ab0a4f90441ef468f79f8d9bdc19f0, type: 2}
+  - definition: {fileID: 11400000, guid: c8e60edc24eee2b4780bfd1fd168760f, type: 2}
+    count: 1
+    adjacentToAny:
+    - {fileID: 11400000, guid: b2ab0a4f90441ef468f79f8d9bdc19f0, type: 2}
+  optionalPool:
+  - {fileID: 11400000, guid: d19a13970446f984aaebbd0862cc9f1d, type: 2}
+  - {fileID: 11400000, guid: ba68c97f3091e0349b4facd2c39f8a8a, type: 2}
+  - {fileID: 11400000, guid: 5c490a0cfd011bb4cbd61cdcf6dc6467, type: 2}
+  - {fileID: 11400000, guid: b2ab0a4f90441ef468f79f8d9bdc19f0, type: 2}
+  - {fileID: 11400000, guid: 4ea2ea15c7172c1479a7dea5cc7cf1d8, type: 2}
+  - {fileID: 11400000, guid: c9005870edbea8c438592ac29f7d9015, type: 2}
+  - {fileID: 11400000, guid: 1f2625ea7f61baa47ba4a2d8dd925acf, type: 2}
+  - {fileID: 11400000, guid: 3411ef57b37fb464d9e5aec648b268db, type: 2}
+  - {fileID: 11400000, guid: 36a0fe64bc6f55347b1d121ef0353598, type: 2}
+  - {fileID: 11400000, guid: c8e60edc24eee2b4780bfd1fd168760f, type: 2}
+  - {fileID: 11400000, guid: dcc46ee5a3f76e04d99ab1be853af8e4, type: 2}
+  minSpecialRooms: 3
+  maxSpecialRooms: 5
+  downwardConnectorMirror: {fileID: 0}
+  fillerRoom: {fileID: 0}
+  downConnectorParents: []
+  skipBasementExpansion: 0
+  compactLayout: 1
+  doorsOnlyForPrivateRooms: 0
+  entryAtSouthernEdge: 0
+  restrictUpperFloorOverhang: 0
+  forceRectangularLayout: 0
+  restrictFrontFacade: 0
+  themeColor: {r: 0.75, g: 0.55, b: 0.35, a: 1}
+  lootTable: {fileID: 0}
+  monsterPool: {fileID: 0}
+  objective: {fileID: 0}

@@ -184,7 +184,8 @@ namespace Microdetail
             if (UnityEditor.AssetDatabase.Contains(Persistent)) 
                 return;
             
-            UnityEditor.AssetDatabase.AddObjectToAsset(Persistent, data);
+            var terrainData = UnityEditor.EditorUtility.InstanceIDToObject(data.GetInstanceID());
+            UnityEditor.AssetDatabase.AddObjectToAsset(Persistent, terrainData);
         }
 
         public void SaveIfDirty()

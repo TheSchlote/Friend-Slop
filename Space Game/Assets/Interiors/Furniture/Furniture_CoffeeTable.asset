@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_CoffeeTable
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Coffee Table
+  kind: coffeetable
+  tags:
+  - livingroom
+  - breakroom
+  placement: 2
+  footprintXZ: {x: 1.2, y: 0.7}
+  weight: 4
+  interactable: 0
+  prefab: {fileID: 1279052860332548703, guid: fe9478b0942b4584bbc0707acc2a4a2f, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.4, z: 0}
+    localScale: {x: 1.2, y: 0.04, z: 0.7}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: 0.55, y: 0.2, z: 0.3}
+    localScale: {x: 0.06, y: 0.4, z: 0.06}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: -0.55, y: 0.2, z: 0.3}
+    localScale: {x: 0.06, y: 0.4, z: 0.06}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: 0.55, y: 0.2, z: -0.3}
+    localScale: {x: 0.06, y: 0.4, z: 0.06}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: -0.55, y: 0.2, z: -0.3}
+    localScale: {x: 0.06, y: 0.4, z: 0.06}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  tabletopAnchors:
+  - localPosition: {x: -0.35, y: 0.43, z: 0}
+    footprintXZ: {x: 0.3, y: 0.3}
+  - localPosition: {x: 0.35, y: 0.43, z: 0}
+    footprintXZ: {x: 0.3, y: 0.3}
+  aroundTableAnchors: []

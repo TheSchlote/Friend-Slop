@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Couch
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Couch
+  kind: couch
+  tags:
+  - livingroom
+  - lobby
+  - breakroom
+  placement: 0
+  footprintXZ: {x: 2, y: 0.9}
+  weight: 4
+  interactable: 0
+  prefab: {fileID: 4927628415486518424, guid: d47f3e5c4f17f22409ffc4be3c90e7e4, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.25, z: 0}
+    localScale: {x: 2, y: 0.5, z: 0.9}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.4, g: 0.45, b: 0.55, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.55, z: -0.32}
+    localScale: {x: 2, y: 0.6, z: 0.2}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.4, g: 0.45, b: 0.55, a: 1}
+  - shape: 3
+    localPosition: {x: -0.9, y: 0.45, z: 0}
+    localScale: {x: 0.2, y: 0.4, z: 0.9}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.4, g: 0.45, b: 0.55, a: 1}
+  - shape: 3
+    localPosition: {x: 0.9, y: 0.45, z: 0}
+    localScale: {x: 0.2, y: 0.4, z: 0.9}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.4, g: 0.45, b: 0.55, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

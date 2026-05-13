@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_ElectricalPanel
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Electrical Panel
+  kind: electrical_panel
+  tags:
+  - mechanical
+  - power
+  - control
+  placement: 0
+  footprintXZ: {x: 0.5, y: 0.15}
+  weight: 3
+  interactable: 0
+  prefab: {fileID: 3275148538612041652, guid: 15957049f0bcfae4b8131cae56e8c465, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 1.3, z: -0.06}
+    localScale: {x: 0.4, y: 0.6, z: 0.1}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1.3, z: -0.02}
+    localScale: {x: 0.32, y: 0.5, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.65, b: 0.7, a: 1}
+  - shape: 3
+    localPosition: {x: -0.05, y: 1.45, z: -0.01}
+    localScale: {x: 0.04, y: 0.06, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.2, b: 0.2, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1.45, z: -0.01}
+    localScale: {x: 0.04, y: 0.06, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.2, b: 0.2, a: 1}
+  - shape: 3
+    localPosition: {x: 0.05, y: 1.45, z: -0.01}
+    localScale: {x: 0.04, y: 0.06, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.2, b: 0.2, a: 1}
+  - shape: 3
+    localPosition: {x: -0.05, y: 1.3, z: -0.01}
+    localScale: {x: 0.04, y: 0.06, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.2, b: 0.2, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1.3, z: -0.01}
+    localScale: {x: 0.04, y: 0.06, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.2, b: 0.2, a: 1}
+  - shape: 3
+    localPosition: {x: 0.05, y: 1.3, z: -0.01}
+    localScale: {x: 0.04, y: 0.06, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.2, b: 0.2, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

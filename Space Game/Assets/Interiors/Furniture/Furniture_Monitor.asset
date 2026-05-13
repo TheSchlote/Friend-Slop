@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Monitor
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Computer Monitor
+  kind: monitor
+  tags:
+  - office
+  - cubicle
+  - bedroom
+  placement: 3
+  footprintXZ: {x: 0.5, y: 0.2}
+  weight: 3
+  interactable: 0
+  prefab: {fileID: 8312519328170212875, guid: 1f3f4e8e83879fa4c8311106bf19dfee, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.05, z: 0}
+    localScale: {x: 0.2, y: 0.04, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.18, z: 0}
+    localScale: {x: 0.04, y: 0.22, z: 0.04}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.32, z: -0.02}
+    localScale: {x: 0.5, y: 0.28, z: 0.04}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.32, z: 0.01}
+    localScale: {x: 0.46, y: 0.24, z: 0.01}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.05, g: 0.05, b: 0.08, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

@@ -326,19 +326,33 @@ namespace FriendSlop.Editor
             var protoScene = EditorSceneManager.OpenScene(prototypeScenePath, OpenSceneMode.Single);
             EnsureTargetSceneExists(targetScenePath, out var targetScene);
 
-            var wrapper = FindRoot(targetScene, wrapperName);
+            var targetWrapper = FindRoot(targetScene, wrapperName);
+            var protoWrapper = FindRoot(protoScene, wrapperName);
             var changed = false;
-            if (wrapper == null)
+
+            if (targetWrapper == null && protoWrapper != null)
             {
-                wrapper = FindRoot(protoScene, wrapperName);
-                if (wrapper == null) return;
-                EditorSceneManager.MoveGameObjectToScene(wrapper, targetScene);
+                // First-time migration: move the wrapper from proto to target.
+                EditorSceneManager.MoveGameObjectToScene(protoWrapper, targetScene);
+                targetWrapper = protoWrapper;
+                protoWrapper = null;
+                changed = true;
+            }
+            else if (targetWrapper != null && protoWrapper != null)
+            {
+                // Stale duplicate left in proto after a prior partial migration. Delete it so
+                // the only live copy is in the scene that owns it. This is what completes the
+                // ValidateBootstrapDoesNotOwnShipInterior contract.
+                Object.DestroyImmediate(protoWrapper);
+                protoWrapper = null;
                 changed = true;
             }
 
-            if (!wrapper.activeSelf)
+            if (targetWrapper == null) return;
+
+            if (!targetWrapper.activeSelf)
             {
-                wrapper.SetActive(true);
+                targetWrapper.SetActive(true);
                 changed = true;
             }
 

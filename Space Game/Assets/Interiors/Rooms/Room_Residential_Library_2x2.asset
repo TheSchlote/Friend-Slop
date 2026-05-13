@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8ef438b75543f0489dd725db4d6323c, type: 3}
+  m_Name: Room_Residential_Library_2x2
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.RoomDefinition
+  prefab: {fileID: 4810184951223460896, guid: 458248bb3e658ac44b2bdf49ace58183, type: 3}
+  gridSize: {x: 2, y: 2}
+  category: 2
+  kind: 16
+  sockets: 00000000010000000200000003000000
+  isVerticalConnector: 0
+  weight: 4
+  maxHorizontalConnections: -1
+  maxCount: 0
+  isEntryCandidate: 0
+  floorRestriction: 0
+  furnitureTags:
+  - office
+  - livingroom
+  - shared
+  furnitureCountRange: {x: 2, y: 4}
+  furnitureRules:
+  - kind: bookshelf
+    min: 2
+    max: 4

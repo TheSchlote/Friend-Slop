@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using FriendSlop.Networking;
-using Unity.Netcode;
 using UnityEngine;
 
 namespace FriendSlop.Round
@@ -246,23 +245,21 @@ namespace FriendSlop.Round
             CreateLabel(slot.transform, prefab.name);
         }
 
-        // Neutralize gameplay on the display copy. These objects are visual references,
-        // not round actors; leaving NetworkBehaviours attached makes global actor queries
-        // see inactive showcase items as real loot/monsters.
+        // Neutralize physics and collisions on the display copy without disabling scripts.
+        // The prefabs' gameplay paths self-gate on IsServer / IsSpawned / RoundActive and
+        // those all return false on an instance that was never Spawn()'d, so leaving the
+        // MonoBehaviours enabled lets visual code (AnomalyOrb pulse, Animator, ParticleSystem,
+        // Light flickers, custom material updates, etc.) keep running while gameplay logic
+        // self-disables.
+        // We previously stripped scripts entirely for safety. Two things let us back off:
+        //   - NetworkObject is harmless when not spawned. NGO only acts on objects after an
+        //     explicit Spawn() call, which we never make on display copies.
+        //   - Every gameplay Update in this codebase guards with a server / phase check.
+        //     Without those guards an unconditional behaviour would still misbehave; if you
+        //     add a new prefab that drives gameplay from an unguarded Update, special-case
+        //     it here rather than re-disabling everything.
         private static void StripBehavioursForDisplay(GameObject root)
         {
-            var networkBehaviours = root.GetComponentsInChildren<NetworkBehaviour>(true);
-            for (var i = 0; i < networkBehaviours.Length; i++)
-            {
-                if (networkBehaviours[i] != null) DestroyComponent(networkBehaviours[i]);
-            }
-
-            var networkObjects = root.GetComponentsInChildren<NetworkObject>(true);
-            for (var i = 0; i < networkObjects.Length; i++)
-            {
-                if (networkObjects[i] != null) DestroyComponent(networkObjects[i]);
-            }
-
             // isKinematic = true drops the body out of the physics solver. Don't write
             // linearVelocity / angularVelocity afterwards - Unity rejects velocity writes on
             // kinematic bodies and logs an error per call.

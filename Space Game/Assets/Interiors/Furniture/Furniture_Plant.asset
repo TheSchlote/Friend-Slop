@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Plant
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Potted Plant
+  kind: plant
+  tags:
+  - shared
+  - lobby
+  - office
+  - livingroom
+  placement: 1
+  footprintXZ: {x: 0.5, y: 0.5}
+  weight: 2
+  interactable: 0
+  prefab: {fileID: 1337720071489930614, guid: 75614e9813dbcdc489f506a5ab5be5c7, type: 3}
+  primitives:
+  - shape: 2
+    localPosition: {x: 0, y: 0.25, z: 0}
+    localScale: {x: 0.5, y: 0.25, z: 0.5}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.45, g: 0.3, b: 0.2, a: 1}
+  - shape: 2
+    localPosition: {x: 0, y: 0.85, z: 0}
+    localScale: {x: 0.7, y: 0.6, z: 0.7}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.2, g: 0.55, b: 0.22, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

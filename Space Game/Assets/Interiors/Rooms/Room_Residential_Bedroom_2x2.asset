@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8ef438b75543f0489dd725db4d6323c, type: 3}
+  m_Name: Room_Residential_Bedroom_2x2
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.RoomDefinition
+  prefab: {fileID: 6797558002633433019, guid: 6edc4db103a3df044aa249e7f8ebeabe, type: 3}
+  gridSize: {x: 2, y: 2}
+  category: 1
+  kind: 6
+  sockets: 00000000010000000200000003000000
+  isVerticalConnector: 0
+  weight: 15
+  maxHorizontalConnections: -1
+  isEntryCandidate: 0
+  floorRestriction: 0
+  furnitureTags:
+  - bedroom
+  - shared
+  furnitureCountRange: {x: 2, y: 4}
+  furnitureRules:
+  - kind: bed
+    min: 1
+    max: 1
+  - kind: nightstand
+    min: 0
+    max: 2
+  - kind: dresser
+    min: 0
+    max: 1

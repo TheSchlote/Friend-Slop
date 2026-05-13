@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 namespace FriendSlop.Interiors
 {
-    // Top-right debug minimap. Drawn programmatically with UI Image rects — one per room,
+    // Top-right debug minimap. Drawn programmatically with UI Image rects â€” one per room,
     // plus thin connector lines for each door, plus a player marker that tracks the
     // local player's XZ position inside the building. Filters to the current floor and
     // shows a label so the player knows where they are in a multi-storey layout.
@@ -21,9 +21,11 @@ namespace FriendSlop.Interiors
         private RectTransform _content;
         private RectTransform _playerMarker;
         private Text _floorLabel;
+        private Text _roomLabel;
 
         private readonly Dictionary<int, GameObject> _floorContainers = new();
         private int _currentFloor = int.MinValue;
+        private PlacedRoom _currentRoom;
 
         public static InteriorMinimap Spawn(InteriorLayout layout, BuildingDefinition def, Vector3 origin)
         {
@@ -50,7 +52,7 @@ namespace FriendSlop.Interiors
             foreach (var room in layout.Rooms)
             {
                 var p = room.GridPosition;
-                var s = room.Definition.GridSize;
+                var s = room.RotatedGridSize;
                 if (p.x        < minX) minX = p.x;
                 if (p.z        < minZ) minZ = p.z;
                 if (p.x + s.x  > maxX) maxX = p.x + s.x;
@@ -69,12 +71,12 @@ namespace FriendSlop.Interiors
             bgRect.anchorMax = new Vector2(1f, 1f);
             bgRect.pivot     = new Vector2(1f, 1f);
             bgRect.anchoredPosition = new Vector2(-12f, -12f);
-            bgRect.sizeDelta = new Vector2(cellsX + Padding * 2f, cellsZ + Padding * 2f + 18f);
+            bgRect.sizeDelta = new Vector2(cellsX + Padding * 2f, cellsZ + Padding * 2f + 36f);
             bg.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.55f);
 
-            BuildFloorLabel(bg.transform);
+            BuildHeaderLabels(bg.transform);
 
-            // Content offsets rooms so (minX, minZ) → bottom-left of the panel.
+            // Content offsets rooms so (minX, minZ) â†’ bottom-left of the panel.
             var contentGo = new GameObject("Content", typeof(RectTransform));
             contentGo.transform.SetParent(bg.transform, false);
             _content = contentGo.GetComponent<RectTransform>();
@@ -86,26 +88,74 @@ namespace FriendSlop.Interiors
 
             DrawRooms(layout, def, minX, minZ);
             DrawConnections(layout, def, minX, minZ);
+            DrawExitDoor(layout, def, minX, minZ);
             BuildPlayerMarker();
         }
 
-        private void BuildFloorLabel(Transform parent)
+        // Draws the building's exterior exit door as a distinct green tick on the entry
+        // room's outside wall. Uses the same SW-most-cell convention as DrawConnections.
+        private void DrawExitDoor(InteriorLayout layout, BuildingDefinition def, int minX, int minZ)
         {
-            var go = new GameObject("FloorLabel", typeof(Text));
+            if (layout.ExitRoom == null || !layout.ExitSocket.HasValue) return;
+            var room   = layout.ExitRoom;
+            var socket = layout.ExitSocket.Value;
+            var p      = room.GridPosition;
+            var rs     = room.RotatedGridSize;
+            var dc     = InteriorLayoutGenerator.WorldDoorCellOffset(room.Definition, room.Rotation, socket);
+
+            Vector2 a, b;
+            switch (socket)
+            {
+                case SocketDirection.North:
+                    a = new Vector2((p.x + dc.x + 0.5f) - 0.4f, p.z + rs.y);
+                    b = new Vector2((p.x + dc.x + 0.5f) + 0.4f, p.z + rs.y);
+                    break;
+                case SocketDirection.South:
+                    a = new Vector2((p.x + dc.x + 0.5f) - 0.4f, p.z);
+                    b = new Vector2((p.x + dc.x + 0.5f) + 0.4f, p.z);
+                    break;
+                case SocketDirection.East:
+                    a = new Vector2(p.x + rs.x, (p.z + dc.y + 0.5f) - 0.4f);
+                    b = new Vector2(p.x + rs.x, (p.z + dc.y + 0.5f) + 0.4f);
+                    break;
+                case SocketDirection.West:
+                    a = new Vector2(p.x, (p.z + dc.y + 0.5f) - 0.4f);
+                    b = new Vector2(p.x, (p.z + dc.y + 0.5f) + 0.4f);
+                    break;
+                default: return; // vertical socket â€” no minimap representation
+            }
+
+            a = (a - new Vector2(minX, minZ)) * def.GridCellMeters * PixelsPerMetre;
+            b = (b - new Vector2(minX, minZ)) * def.GridCellMeters * PixelsPerMetre;
+            AddLine(GetOrCreateFloorContainer(p.y).transform,
+                a, b, new Color(0.25f, 1f, 0.4f, 1f), 5f);
+        }
+
+        private void BuildHeaderLabels(Transform parent)
+        {
+            _roomLabel  = BuildHeaderText(parent, "RoomLabel",  yOffset: -2f,  fontSize: 13, bold: true);
+            _floorLabel = BuildHeaderText(parent, "FloorLabel", yOffset: -20f, fontSize: 11, bold: false);
+        }
+
+        private static Text BuildHeaderText(Transform parent, string name, float yOffset, int fontSize, bool bold)
+        {
+            var go = new GameObject(name, typeof(Text));
             go.transform.SetParent(parent, false);
             var rt = go.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(1f, 1f);
             rt.pivot     = new Vector2(0.5f, 1f);
-            rt.anchoredPosition = new Vector2(0f, -2f);
+            rt.anchoredPosition = new Vector2(0f, yOffset);
             rt.sizeDelta = new Vector2(0f, 18f);
 
-            _floorLabel = go.GetComponent<Text>();
-            _floorLabel.font      = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            _floorLabel.fontSize  = 12;
-            _floorLabel.alignment = TextAnchor.MiddleCenter;
-            _floorLabel.color     = Color.white;
-            _floorLabel.text      = "";
+            var t = go.GetComponent<Text>();
+            t.font      = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            t.fontSize  = fontSize;
+            t.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.color     = Color.white;
+            t.text      = "";
+            return t;
         }
 
         private GameObject GetOrCreateFloorContainer(int floor)
@@ -128,7 +178,7 @@ namespace FriendSlop.Interiors
             foreach (var room in layout.Rooms)
             {
                 var p = room.GridPosition;
-                var s = room.Definition.GridSize;
+                var s = room.RotatedGridSize;
                 var parent = GetOrCreateFloorContainer(p.y);
 
                 var go = new GameObject($"Room_{p.x}_{p.z}", typeof(Image));
@@ -155,27 +205,30 @@ namespace FriendSlop.Interiors
             {
                 if (conn.SocketA.IsVertical()) continue;
 
-                // Door always sits at the SW-most cell of each wall.
-                var p = conn.RoomA.GridPosition;
-                var s = conn.RoomA.Definition.GridSize;
+                // Door sits at the WORLD-mapped SW-most cell of each wall â€” use the
+                // rotated room's footprint and the rotated door-cell offset.
+                var p  = conn.RoomA.GridPosition;
+                var rs = conn.RoomA.RotatedGridSize;
+                var dc = InteriorLayoutGenerator.WorldDoorCellOffset(
+                    conn.RoomA.Definition, conn.RoomA.Rotation, conn.SocketA);
                 Vector2 a, b;
                 switch (conn.SocketA)
                 {
                     case SocketDirection.North:
-                        a = new Vector2((p.x + 0.5f) - 0.4f, p.z + s.y);
-                        b = new Vector2((p.x + 0.5f) + 0.4f, p.z + s.y);
+                        a = new Vector2((p.x + dc.x + 0.5f) - 0.4f, p.z + rs.y);
+                        b = new Vector2((p.x + dc.x + 0.5f) + 0.4f, p.z + rs.y);
                         break;
                     case SocketDirection.South:
-                        a = new Vector2((p.x + 0.5f) - 0.4f, p.z);
-                        b = new Vector2((p.x + 0.5f) + 0.4f, p.z);
+                        a = new Vector2((p.x + dc.x + 0.5f) - 0.4f, p.z);
+                        b = new Vector2((p.x + dc.x + 0.5f) + 0.4f, p.z);
                         break;
                     case SocketDirection.East:
-                        a = new Vector2(p.x + s.x, (p.z + 0.5f) - 0.4f);
-                        b = new Vector2(p.x + s.x, (p.z + 0.5f) + 0.4f);
+                        a = new Vector2(p.x + rs.x, (p.z + dc.y + 0.5f) - 0.4f);
+                        b = new Vector2(p.x + rs.x, (p.z + dc.y + 0.5f) + 0.4f);
                         break;
                     case SocketDirection.West:
-                        a = new Vector2(p.x, (p.z + 0.5f) - 0.4f);
-                        b = new Vector2(p.x, (p.z + 0.5f) + 0.4f);
+                        a = new Vector2(p.x, (p.z + dc.y + 0.5f) - 0.4f);
+                        b = new Vector2(p.x, (p.z + dc.y + 0.5f) + 0.4f);
                         break;
                     default: continue;
                 }
@@ -230,10 +283,10 @@ namespace FriendSlop.Interiors
 
             // Re-compute extents (cheap, runs only while minimap exists).
             int minX = int.MaxValue, minZ = int.MaxValue;
-            foreach (var room in _layout.Rooms)
+            foreach (var r in _layout.Rooms)
             {
-                if (room.GridPosition.x < minX) minX = room.GridPosition.x;
-                if (room.GridPosition.z < minZ) minZ = room.GridPosition.z;
+                if (r.GridPosition.x < minX) minX = r.GridPosition.x;
+                if (r.GridPosition.z < minZ) minZ = r.GridPosition.z;
             }
             if (minX == int.MaxValue) return;
 
@@ -249,11 +302,83 @@ namespace FriendSlop.Interiors
                     _floorLabel.text = FloorLabelText(floor);
             }
 
+            // Locate the room the player is standing in (XZ inside the grid footprint).
+            var room = FindRoomAt(pos, floor);
+            if (room != _currentRoom)
+            {
+                _currentRoom = room;
+                if (_roomLabel != null)
+                    _roomLabel.text = room != null ? PrettyRoomName(room.Definition.name) : "â€”";
+            }
+
             float metresX = pos.x - _origin.x - minX * _def.GridCellMeters;
             float metresZ = pos.z - _origin.z - minZ * _def.GridCellMeters;
 
             _playerMarker.anchoredPosition = new Vector2(metresX, metresZ) * PixelsPerMetre;
             _playerMarker.localRotation    = Quaternion.Euler(0f, 0f, -local.transform.eulerAngles.y);
+        }
+
+        private PlacedRoom FindRoomAt(Vector3 worldPos, int floor)
+        {
+            float c = _def.GridCellMeters;
+            float lx = (worldPos.x - _origin.x) / c;
+            float lz = (worldPos.z - _origin.z) / c;
+            foreach (var room in _layout.Rooms)
+            {
+                if (room.GridPosition.y != floor) continue;
+                var p = room.GridPosition;
+                var s = room.RotatedGridSize;
+                if (lx < p.x || lx >= p.x + s.x) continue;
+                if (lz < p.z || lz >= p.z + s.y) continue;
+                return room;
+            }
+            return null;
+        }
+
+        // "Room_Residential_Kitchen_1x1"   â†’ "Kitchen"
+        // "Room_Residential_LivingRoom_3x3" â†’ "Living Room"
+        // "Room_Office_ManagerOffice_1x1"   â†’ "Manager Office"
+        // "Room_Stair_1x1"                  â†’ "Stair"
+        private static string PrettyRoomName(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "";
+            var s = raw;
+            if (s.StartsWith("Room_")) s = s.Substring(5);
+
+            // Strip NxM grid-size suffix like "_1x1", "_2x2".
+            int lastUnderscore = s.LastIndexOf('_');
+            if (lastUnderscore > 0 && lastUnderscore < s.Length - 1)
+            {
+                var suffix = s.Substring(lastUnderscore + 1);
+                if (suffix.Length >= 3 && suffix[1] == 'x'
+                    && char.IsDigit(suffix[0]) && char.IsDigit(suffix[2]))
+                    s = s.Substring(0, lastUnderscore);
+            }
+
+            // Keep only the room-type token (the last underscore-separated word). This
+            // drops the building-type prefix (Residential/Office/Factory) since every
+            // room in a given building shares it â€” the label is more useful without it.
+            int splitAt = s.LastIndexOf('_');
+            if (splitAt >= 0 && splitAt < s.Length - 1)
+                s = s.Substring(splitAt + 1);
+
+            return InsertSpacesBeforeCaps(s);
+        }
+
+        // "LivingRoom" â†’ "Living Room", "OpenPlan" â†’ "Open Plan". Leaves single-word
+        // names ("Kitchen", "Stair") untouched.
+        private static string InsertSpacesBeforeCaps(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            var sb = new System.Text.StringBuilder(s.Length + 4);
+            sb.Append(s[0]);
+            for (int i = 1; i < s.Length; i++)
+            {
+                if (char.IsUpper(s[i]) && !char.IsUpper(s[i - 1]))
+                    sb.Append(' ');
+                sb.Append(s[i]);
+            }
+            return sb.ToString();
         }
 
         private string FloorLabelText(int floor)

@@ -1,0 +1,76 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Car
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Car
+  kind: car
+  tags:
+  - garage
+  placement: 2
+  footprintXZ: {x: 4.2, y: 1.8}
+  weight: 6
+  interactable: 0
+  prefab: {fileID: 7110779932666011388, guid: ac50e300819db0b4e8810f162567e0d4, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.55, z: 0}
+    localScale: {x: 4, y: 0.5, z: 1.7}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.15, b: 0.15, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1, z: -0.05}
+    localScale: {x: 2.4, y: 0.5, z: 1.55}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.15, b: 0.15, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1, z: 0.78}
+    localScale: {x: 2.2, y: 0.4, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.05, g: 0.05, b: 0.08, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1, z: -0.78}
+    localScale: {x: 2.2, y: 0.4, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.05, g: 0.05, b: 0.08, a: 1}
+  - shape: 3
+    localPosition: {x: 1.2, y: 1, z: 0}
+    localScale: {x: 0.02, y: 0.4, z: 1.4}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.05, g: 0.05, b: 0.08, a: 1}
+  - shape: 3
+    localPosition: {x: -1.2, y: 1, z: 0}
+    localScale: {x: 0.02, y: 0.4, z: 1.4}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.05, g: 0.05, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: 1.4, y: 0.3, z: 0.85}
+    localScale: {x: 0.5, y: 0.15, z: 0.5}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: 1.4, y: 0.3, z: -0.85}
+    localScale: {x: 0.5, y: 0.15, z: 0.5}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: -1.4, y: 0.3, z: 0.85}
+    localScale: {x: 0.5, y: 0.15, z: 0.5}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: -1.4, y: 0.3, z: -0.85}
+    localScale: {x: 0.5, y: 0.15, z: 0.5}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []
