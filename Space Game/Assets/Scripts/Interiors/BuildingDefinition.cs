@@ -56,6 +56,10 @@ namespace FriendSlop.Interiors
                  "floor immediately below. Prevents upper rooms from cantilevering off the ground " +
                  "floor and looking like they're floating.")]
         [SerializeField] private bool restrictUpperFloorOverhang;
+        [Tooltip("When true, all rooms are constrained to fit inside a square-ish axis-aligned " +
+                 "rectangle sized from MaxRooms. Produces clean rectangular house footprints; no " +
+                 "L-shapes. Sits on top of the southern-edge / overhang restrictions.")]
+        [SerializeField] private bool forceRectangularLayout;
 
         [Header("Phase 3+ hooks (optional)")]
         [Tooltip("Tint applied to wall/floor materials at runtime so each type reads as visually distinct.")]
@@ -89,6 +93,7 @@ namespace FriendSlop.Interiors
         public bool DoorsOnlyForPrivateRooms => doorsOnlyForPrivateRooms;
         public bool EntryAtSouthernEdge   => entryAtSouthernEdge;
         public bool RestrictUpperFloorOverhang => restrictUpperFloorOverhang;
+        public bool ForceRectangularLayout => forceRectangularLayout;
 
         // Back-compat shim — older code reads RoomPool as the full pool. Returns required ∪ optional
         // so existing callers (tests, scene builders) keep finding every room the building can produce.

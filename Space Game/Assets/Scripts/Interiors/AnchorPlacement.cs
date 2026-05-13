@@ -9,5 +9,6 @@ namespace FriendSlop.Interiors
         Center,       // Free-floating in the room centre (tables, rugs).
         Tabletop,     // Sits on top of another piece (vase on a table, microwave on counter).
         AroundTable,  // Floor-level slot around a table — dining chairs facing the table.
+        WallHanging,  // On the wall above floor-furniture height — clocks, art, mirrors.
     }
 }

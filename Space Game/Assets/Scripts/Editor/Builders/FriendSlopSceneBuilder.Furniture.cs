@@ -465,6 +465,31 @@ namespace FriendSlop.Editor
                         Cube(new Vector3(0f, 0.9f, 0f), new Vector3(0.5f, 1.8f, 0.5f), darkMetal),
                         Cube(new Vector3(0f, 1.0f, 0.26f), new Vector3(0.4f, 0.05f, 0.02f), metal),
                     }),
+                // Sedan-shape Car. Garage-only (Garage tag), Center placement so it lands at
+                // the room midpoint. High weight so it almost always wins the Center slot.
+                // Footprint 4.5×2 m fits inside the 3×3 (10.2×10.2 m) garage with clearance.
+                new FurnitureSpec("Furniture_Car", "Car", "car",
+                    new[] { FurnitureTags.Garage },
+                    AnchorPlacement.Center, new Vector2(4.5f, 2.0f), weight: 50, interactable: false,
+                    new[]
+                    {
+                        // Body — long lower box from front bumper to rear bumper.
+                        Cube(new Vector3( 0.0f, 0.55f,  0.0f), new Vector3(4.4f, 0.55f, 1.85f), book),
+                        // Greenhouse — narrower, taller box on top of the body.
+                        Cube(new Vector3(-0.2f, 1.10f,  0.0f), new Vector3(2.4f, 0.55f, 1.7f),  fabric),
+                        // Roof.
+                        Cube(new Vector3(-0.2f, 1.36f,  0.0f), new Vector3(2.4f, 0.05f, 1.7f),  book),
+                        // Hood (slight bump in front of windshield).
+                        Cube(new Vector3( 1.4f, 0.85f,  0.0f), new Vector3(1.6f, 0.05f, 1.8f),  book),
+                        // Wheels (4 cylinders, rotated so the round face is sideways).
+                        Cyl(new Vector3( 1.45f, 0.30f,  0.85f), new Vector3(0.55f, 0.20f, 0.55f), darkMetal, new Vector3(90f, 0f, 0f)),
+                        Cyl(new Vector3( 1.45f, 0.30f, -0.85f), new Vector3(0.55f, 0.20f, 0.55f), darkMetal, new Vector3(90f, 0f, 0f)),
+                        Cyl(new Vector3(-1.45f, 0.30f,  0.85f), new Vector3(0.55f, 0.20f, 0.55f), darkMetal, new Vector3(90f, 0f, 0f)),
+                        Cyl(new Vector3(-1.45f, 0.30f, -0.85f), new Vector3(0.55f, 0.20f, 0.55f), darkMetal, new Vector3(90f, 0f, 0f)),
+                        // Headlights (front, small bright cubes).
+                        Cube(new Vector3( 2.18f, 0.65f,  0.6f), new Vector3(0.04f, 0.18f, 0.3f), porcelain),
+                        Cube(new Vector3( 2.18f, 0.65f, -0.6f), new Vector3(0.04f, 0.18f, 0.3f), porcelain),
+                    }),
 
                 // ── Shared / decorative ─────────────────────────────────────
                 new FurnitureSpec("Furniture_Table", "Table", "table",
@@ -603,7 +628,7 @@ namespace FriendSlop.Editor
                 new FurnitureSpec("Furniture_WallMirror", "Wall Mirror", "mirror",
                     new[] { FurnitureTags.Bedroom, FurnitureTags.Bathroom, FurnitureTags.Hallway,
                             FurnitureTags.Shared },
-                    AnchorPlacement.Wall, new Vector2(0.8f, 0.2f), weight: 2, interactable: false,
+                    AnchorPlacement.WallHanging, new Vector2(0.8f, 0.2f), weight: 2, interactable: false,
                     new[]
                     {
                         Cube(new Vector3(0f, 1.5f, -0.08f), new Vector3(0.7f, 1.2f, 0.04f), darkWood),
@@ -646,7 +671,7 @@ namespace FriendSlop.Editor
                     }),
                 new FurnitureSpec("Furniture_BathroomMirror", "Bathroom Mirror", "mirror",
                     new[] { FurnitureTags.Bathroom },
-                    AnchorPlacement.Wall, new Vector2(0.6f, 0.15f), weight: 3, interactable: false,
+                    AnchorPlacement.WallHanging, new Vector2(0.6f, 0.15f), weight: 3, interactable: false,
                     new[]
                     {
                         Cube(new Vector3(0f, 1.5f, -0.06f), new Vector3(0.6f, 0.5f, 0.03f), darkWood),
@@ -654,7 +679,7 @@ namespace FriendSlop.Editor
                     }),
                 new FurnitureSpec("Furniture_TowelRack", "Towel Rack", "towelrack",
                     new[] { FurnitureTags.Bathroom },
-                    AnchorPlacement.Wall, new Vector2(0.6f, 0.1f), weight: 2, interactable: false,
+                    AnchorPlacement.WallHanging, new Vector2(0.6f, 0.1f), weight: 2, interactable: false,
                     new[]
                     {
                         Cyl(new Vector3( 0.25f, 1.2f, -0.04f), new Vector3(0.04f, 0.04f, 0.04f), stainless),
@@ -665,7 +690,7 @@ namespace FriendSlop.Editor
                     }),
                 new FurnitureSpec("Furniture_ToiletPaperHolder", "Toilet Paper Holder", "tpholder",
                     new[] { FurnitureTags.Bathroom },
-                    AnchorPlacement.Wall, new Vector2(0.3f, 0.1f), weight: 1, interactable: false,
+                    AnchorPlacement.WallHanging, new Vector2(0.3f, 0.1f), weight: 1, interactable: false,
                     new[]
                     {
                         Cube(new Vector3(0f, 0.7f, -0.04f), new Vector3(0.06f, 0.06f, 0.05f), stainless),
@@ -782,21 +807,25 @@ namespace FriendSlop.Editor
                     AnchorPlacement.Wall, new Vector2(1.2f, 0.4f), weight: 4, interactable: false,
                     new[]
                     {
-                        // Top surface — sits 0.3m forward of the anchor so the table's back
-                        // face lands at the wall plane (anchor wallInset is 0.5m).
-                        Cube(new Vector3(0f, 0.78f, -0.3f),       new Vector3(1.2f, 0.04f, 0.4f), wood),
+                        // Anchor sits 0.5 m from the wall centre, but the wall is 0.2 m
+                        // thick, so its interior face is at world z = 0.1. Back face of
+                        // every primitive lands at local z = -0.4 (= 0.5 + -0.4 = 0.1)
+                        // so the table sits flush with the wall surface, not 0.1 m
+                        // inside it.
+                        // Top surface — back face at local z = -0.4.
+                        Cube(new Vector3(0f, 0.78f, -0.2f),       new Vector3(1.2f, 0.04f, 0.4f), wood),
                         // 4 thin legs at the corners of the top
-                        Cube(new Vector3( 0.55f, 0.39f, -0.12f),  new Vector3(0.06f, 0.78f, 0.06f), wood),
-                        Cube(new Vector3(-0.55f, 0.39f, -0.12f),  new Vector3(0.06f, 0.78f, 0.06f), wood),
-                        Cube(new Vector3( 0.55f, 0.39f, -0.48f),  new Vector3(0.06f, 0.78f, 0.06f), wood),
-                        Cube(new Vector3(-0.55f, 0.39f, -0.48f),  new Vector3(0.06f, 0.78f, 0.06f), wood),
+                        Cube(new Vector3( 0.55f, 0.39f, -0.02f),  new Vector3(0.06f, 0.78f, 0.06f), wood),
+                        Cube(new Vector3(-0.55f, 0.39f, -0.02f),  new Vector3(0.06f, 0.78f, 0.06f), wood),
+                        Cube(new Vector3( 0.55f, 0.39f, -0.38f),  new Vector3(0.06f, 0.78f, 0.06f), wood),
+                        Cube(new Vector3(-0.55f, 0.39f, -0.38f),  new Vector3(0.06f, 0.78f, 0.06f), wood),
                         // Optional lower shelf for "real console table" feel
-                        Cube(new Vector3(0f, 0.2f, -0.3f),        new Vector3(1.1f, 0.03f, 0.36f), wood),
+                        Cube(new Vector3(0f, 0.2f, -0.2f),        new Vector3(1.1f, 0.03f, 0.36f), wood),
                     },
                     tabletopAnchors: new[]
                     {
-                        TopAnchor(-0.4f, 0.82f, -0.3f, 0.3f, 0.3f),
-                        TopAnchor( 0.4f, 0.82f, -0.3f, 0.3f, 0.3f),
+                        TopAnchor(-0.4f, 0.82f, -0.2f, 0.3f, 0.3f),
+                        TopAnchor( 0.4f, 0.82f, -0.2f, 0.3f, 0.3f),
                     }),
                 new FurnitureSpec("Furniture_EndTable", "End Table", "endtable",
                     new[] { FurnitureTags.LivingRoom, FurnitureTags.Bedroom },
@@ -830,7 +859,7 @@ namespace FriendSlop.Editor
                 new FurnitureSpec("Furniture_WallArt", "Wall Art", "wallart",
                     new[] { FurnitureTags.LivingRoom, FurnitureTags.Bedroom, FurnitureTags.Office,
                             FurnitureTags.Hallway, FurnitureTags.Shared },
-                    AnchorPlacement.Wall, new Vector2(0.8f, 0.1f), weight: 3, interactable: false,
+                    AnchorPlacement.WallHanging, new Vector2(0.8f, 0.1f), weight: 3, interactable: false,
                     new[]
                     {
                         Cube(new Vector3(0f, 1.6f, -0.04f), new Vector3(0.7f, 0.5f, 0.04f), darkWood),
@@ -1445,7 +1474,7 @@ namespace FriendSlop.Editor
                 new FurnitureSpec("Furniture_WallClock", "Wall Clock", "wall_clock",
                     new[] { FurnitureTags.LivingRoom, FurnitureTags.Kitchen, FurnitureTags.Office,
                             FurnitureTags.Hallway, FurnitureTags.Shared },
-                    AnchorPlacement.Wall, new Vector2(0.5f, 0.1f), weight: 2, interactable: false,
+                    AnchorPlacement.WallHanging, new Vector2(0.5f, 0.1f), weight: 2, interactable: false,
                     new[]
                     {
                         Cyl(new Vector3(0f, 1.8f, -0.04f), new Vector3(0.4f, 0.04f, 0.4f), darkWood),

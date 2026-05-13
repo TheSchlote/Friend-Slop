@@ -22,6 +22,8 @@ namespace FriendSlop.Interiors
                 var layout = TryGenerate(def, seed + i, reservedExitSocket);
                 if (layout != null) return layout;
             }
+            UnityEngine.Debug.LogWarning(
+                $"[Interiors] {def?.name ?? "<null>"} exhausted {MaxGenerationAttempts} seeds (base={seed}); falling back to 1-room layout. Constraints may be too tight.");
             return GenerateFallback(def, seed);
         }
 
@@ -53,6 +55,17 @@ namespace FriendSlop.Interiors
             // Carry over the building-level overhang constraint so TryPlaceAt can reject
             // upper-floor placements that aren't supported by the floor below.
             layout.RestrictUpperFloorOverhang = def.RestrictUpperFloorOverhang;
+            // Compute the target rectangle for forceRectangularLayout. Side ≈ sqrt(N×6)
+            // where N=MaxRooms and 6 is a rough avg cells/room (mix of 1×1, 2×2, 4×4).
+            // Width is centred on the entry's X (entry is at x=0); depth extends north.
+            if (def.ForceRectangularLayout)
+            {
+                layout.RestrictToRectangle = true;
+                int side = Mathf.CeilToInt(Mathf.Sqrt(def.MaxRooms * 6f));
+                int half = side / 2;
+                layout.RectMinXZ = new Vector2Int(-half,            0);
+                layout.RectMaxXZ = new Vector2Int(side - 1 - half,  side - 1);
+            }
             // Carry over the building-level southern-edge constraint so TryPlaceAt can
             // reject any room that would land south of the entry.
             layout.RestrictSouthOfEntry = def.EntryAtSouthernEdge;
@@ -599,7 +612,7 @@ namespace FriendSlop.Interiors
                 foreach (var candidate in required)
                 {
                     if (!PassesPlacementConstraints(open.Room, open.Socket, candidate,
-                        bedroomCount, blockHallway, enforceHallwaySides)) continue;
+                        bedroomCount, blockHallway, enforceHallwaySides, layout)) continue;
                     var room = TryPlaceCandidate(layout, open, needed, candidate, rng, enforceHallwaySides);
                     if (room != null)
                     {
@@ -626,7 +639,7 @@ namespace FriendSlop.Interiors
             foreach (var candidate in candidates)
             {
                 if (!PassesPlacementConstraints(open.Room, open.Socket, candidate,
-                    bedroomCount, blockHallway, enforceHallwaySides)) continue;
+                    bedroomCount, blockHallway, enforceHallwaySides, layout)) continue;
                 var room = TryPlaceCandidate(layout, open, needed, candidate, rng, enforceHallwaySides);
                 if (room != null)
                 {
@@ -649,10 +662,13 @@ namespace FriendSlop.Interiors
         private static bool PassesPlacementConstraints(
             PlacedRoom parent, SocketDirection parentWorldSocket,
             RoomDefinition candidate, int bedroomCount, bool blockHallway,
-            bool enforceHallwaySides)
+            bool enforceHallwaySides, InteriorLayout layout = null)
         {
             if (candidate == null) return false;
             if (blockHallway && IsHallway(candidate)) return false;
+            // Per-building cap on instances of this room (e.g. Garage = 1).
+            if (layout != null && candidate.MaxCount > 0
+                && CountWhere(layout, r => r == candidate) >= candidate.MaxCount) return false;
             if (!CanAdjacentlyConnect(parent.Definition, candidate, bedroomCount)) return false;
 
             // Parent-side hallway long-side rule — depends on parent's rotation, which we
@@ -703,14 +719,34 @@ namespace FriendSlop.Interiors
             if (IsWalkinCloset(parent) && !IsBedroom(child)) return false;
             if (IsWalkinCloset(child)  && !IsBedroom(parent)) return false;
 
+            // Stairs may only open horizontally onto public/transit rooms — keeps
+            // bedrooms private (you walk down a hallway to reach the stairs, not
+            // straight out of a bedroom).
+            if (IsStair(parent) && !IsStairNeighbor(child)) return false;
+            if (IsStair(child)  && !IsStairNeighbor(parent)) return false;
+
             return true;
         }
+
+        private static bool IsStair(RoomDefinition def) =>
+            def != null && def.Kind == RoomKind.Stair;
+
+        // Rooms a Stair may open onto via a horizontal socket. Vertical (Up/Down) stair
+        // links between floors bypass CanAdjacentlyConnect entirely so they're unaffected.
+        private static bool IsStairNeighbor(RoomDefinition def) =>
+            def != null && (
+                def.Kind == RoomKind.Hallway    ||
+                def.Kind == RoomKind.LivingRoom ||
+                def.Kind == RoomKind.Entry      ||
+                def.Kind == RoomKind.Den        ||
+                def.Kind == RoomKind.Office     ||
+                def.Kind == RoomKind.Kitchen);
 
         private static bool IsBathroomNeighbor(RoomDefinition def) =>
             IsBedroom(def) || IsHallway(def) || IsLivingRoom(def);
 
         private static bool IsHallway(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("Hallway");
+            def != null && def.Kind == RoomKind.Hallway;
 
         // Minimum doors a hallway should have. A single-connection hallway is functionally
         // just a stub — the post-pass tries to attach more rooms at its other open sockets
@@ -746,30 +782,33 @@ namespace FriendSlop.Interiors
                 }
             }
         }
+        // Bedroom/Bathroom predicates intentionally include their Master- counterparts —
+        // adjacency rules like "bathrooms can only touch bedrooms or hallways" historically
+        // treated MasterBedroom as a Bedroom (the string Contains check matched both).
         private static bool IsBedroom(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("Bedroom");
+            def != null && (def.Kind == RoomKind.Bedroom || def.Kind == RoomKind.MasterBedroom);
         private static bool IsBathroom(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("Bathroom");
+            def != null && (def.Kind == RoomKind.Bathroom || def.Kind == RoomKind.MasterBathroom);
         private static bool IsLivingRoom(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("LivingRoom");
+            def != null && def.Kind == RoomKind.LivingRoom;
         private static bool IsMasterBedroom(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("MasterBedroom");
+            def != null && def.Kind == RoomKind.MasterBedroom;
         private static bool IsMasterBathroom(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("MasterBathroom");
+            def != null && def.Kind == RoomKind.MasterBathroom;
         private static bool IsKitchen(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("Kitchen");
+            def != null && def.Kind == RoomKind.Kitchen;
         private static bool IsPantry(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("Pantry");
+            def != null && def.Kind == RoomKind.Pantry;
         private static bool IsMudRoom(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("MudRoom");
+            def != null && def.Kind == RoomKind.MudRoom;
         private static bool IsWalkinCloset(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("WalkinCloset");
+            def != null && def.Kind == RoomKind.WalkinCloset;
         private static bool IsEntry(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("Entry");
+            def != null && def.Kind == RoomKind.Entry;
         private static bool IsGarage(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("Garage");
+            def != null && def.Kind == RoomKind.Garage;
         private static bool IsSunRoom(RoomDefinition def) =>
-            def != null && def.name != null && def.name.Contains("SunRoom");
+            def != null && def.Kind == RoomKind.SunRoom;
 
         private static int CountWhere(InteriorLayout layout, System.Func<RoomDefinition, bool> pred)
         {
@@ -790,6 +829,12 @@ namespace FriendSlop.Interiors
                 var defSocket = SocketDirectionExtensions.Rotate(needed, -rot);
                 if (!candidate.HasSocket(defSocket)) continue;
 
+                // DiningRoom convention: its def-South wall is the "kitchen-facing" wall
+                // (the prefab's dining-table anchor is baked there). Reject any rotation
+                // where def-South wouldn't end up facing the parent.
+                if (candidate.Kind == RoomKind.DiningRoom && defSocket != SocketDirection.South)
+                    continue;
+
                 // Candidate-side hallway long-side rule — only valid when we know the
                 // candidate's rotation (which determines what's "long" vs "short").
                 if (enforceHallwaySides && IsHallway(candidate))
@@ -804,6 +849,15 @@ namespace FriendSlop.Interiors
                 if (pos.y != open.Room.GridPosition.y) continue;
                 var room = TryPlaceAt(layout, candidate, pos, rot);
                 if (room == null) continue;
+                // DiningRoom may only spawn if its kitchen-facing side is a LONG side
+                // and every cell on that side is inside the Kitchen — i.e. the dining
+                // room's full long wall is shared with the Kitchen, not a corner clip.
+                if (candidate.Kind == RoomKind.DiningRoom
+                    && !DiningSatisfiesKitchenLongSideRule(layout, room, needed, open.Room))
+                {
+                    UndoPlacement(layout, room);
+                    continue;
+                }
                 RegisterConnection(layout, open.Room, open.Socket, room, needed);
                 return room;
             }
@@ -881,7 +935,11 @@ namespace FriendSlop.Interiors
             foreach (var open in candidates)
             {
                 if (!connDef.HasSocket(open.Socket.Opposite())) continue;
-                var pos  = NeighborOrigin(open.Room, open.Socket, connDef.GridSize);
+                // Use the rotation-aware NeighborOrigin so a connector placed off a
+                // rotated parent (e.g. Garage r3) lands with door cells aligned. The
+                // legacy 3-arg overload assumes door cells at (0,0) for both rooms,
+                // which is only true for non-rotated rooms.
+                var pos  = NeighborOrigin(open.Room, open.Socket, connDef, nbrRotation: 0);
                 var room = TryPlaceAt(layout, connDef, pos);
                 if (room != null)
                 {
@@ -903,6 +961,18 @@ namespace FriendSlop.Interiors
             var room = new PlacedRoom(def, pos, rotation);
             foreach (var cell in room.OccupiedCells())
                 if (layout.IsCellOccupied(cell)) return null;
+
+            // Rectangular-footprint constraint — every cell must lie inside the target box.
+            if (layout.RestrictToRectangle && layout.RectMinXZ.HasValue && layout.RectMaxXZ.HasValue)
+            {
+                var rlo = layout.RectMinXZ.Value;
+                var rhi = layout.RectMaxXZ.Value;
+                foreach (var cell in room.OccupiedCells())
+                {
+                    if (cell.x < rlo.x || cell.x > rhi.x || cell.z < rlo.y || cell.z > rhi.y)
+                        return null;
+                }
+            }
 
             // Bounding-silhouette constraint — upper-floor rooms must sit inside the
             // entry-floor footprint's NSEW extents (with 1-cell of slack so a bedroom
@@ -929,6 +999,57 @@ namespace FriendSlop.Interiors
                 layout.Grid[cell] = room;
             layout.Rooms.Add(room);
             return room;
+        }
+
+        // Reverses TryPlaceAt for a placement we don't want to keep (e.g. a DiningRoom
+        // that turned out not to share its long side with a Kitchen). Removes both the
+        // grid cells and the room itself; doesn't touch ConnectedSockets because we
+        // call this BEFORE RegisterConnection runs.
+        private static void UndoPlacement(InteriorLayout layout, PlacedRoom room)
+        {
+            foreach (var cell in room.OccupiedCells())
+                layout.Grid.Remove(cell);
+            layout.Rooms.Remove(room);
+        }
+
+        // True iff `dining` was just placed against `parent` such that every cell along
+        // the dining room's `needed`-facing wall (= the wall facing the parent) is a
+        // long-side cell AND is adjacent to a `parent` cell. Enforces the "dining room
+        // long side fully against kitchen" rule.
+        private static bool DiningSatisfiesKitchenLongSideRule(InteriorLayout layout,
+            PlacedRoom dining, SocketDirection needed, PlacedRoom parent)
+        {
+            if (parent.Definition.Kind != RoomKind.Kitchen) return false;
+            var rs = dining.RotatedGridSize;
+            bool ns = (needed == SocketDirection.North || needed == SocketDirection.South);
+            int wallLen  = ns ? rs.x : rs.y;
+            int otherLen = ns ? rs.y : rs.x;
+            if (wallLen <= otherLen) return false;  // not the long side
+            int dx = 0, dz = 0;
+            switch (needed)
+            {
+                case SocketDirection.North: dz =  1; break;
+                case SocketDirection.South: dz = -1; break;
+                case SocketDirection.East:  dx =  1; break;
+                case SocketDirection.West:  dx = -1; break;
+                default: return false;
+            }
+            foreach (var cell in dining.OccupiedCells())
+            {
+                bool onSide = needed switch
+                {
+                    SocketDirection.North => cell.z == dining.GridPosition.z + rs.y - 1,
+                    SocketDirection.South => cell.z == dining.GridPosition.z,
+                    SocketDirection.East  => cell.x == dining.GridPosition.x + rs.x - 1,
+                    SocketDirection.West  => cell.x == dining.GridPosition.x,
+                    _ => false,
+                };
+                if (!onSide) continue;
+                var beyond = new Vector3Int(cell.x + dx, cell.y, cell.z + dz);
+                if (!layout.Grid.TryGetValue(beyond, out var occupant) || occupant != parent)
+                    return false;
+            }
+            return true;
         }
 
         // Walks the layout's grid once and caches the NSEW extents of the entry-floor

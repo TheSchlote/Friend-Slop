@@ -39,6 +39,10 @@ namespace FriendSlop.Interiors
         [SerializeField] private GameObject prefab;
         [SerializeField] private Vector2Int gridSize = Vector2Int.one;
         [SerializeField] private RoomCategory category;
+        [Tooltip("Functional identity used by the layout generator for adjacency / restriction " +
+                 "logic (\"is this a bedroom?\"). Set to Unspecified for rooms that don't " +
+                 "participate in those rules.")]
+        [SerializeField] private RoomKind kind = RoomKind.Unspecified;
         [SerializeField] private SocketDirection[] sockets = System.Array.Empty<SocketDirection>();
         [SerializeField] private bool isVerticalConnector;
         [SerializeField, Range(1, 100)] private int weight = 10;
@@ -46,6 +50,10 @@ namespace FriendSlop.Interiors
                  "means unlimited — each free wall socket can become a door. Set to 1 for rooms " +
                  "like a bathroom or powder room where only one door makes sense.")]
         [SerializeField] private int maxHorizontalConnections = -1;
+        [Tooltip("Maximum number of instances of this room per generated building. 0 (default) " +
+                 "means unlimited. Set to 1 for rooms that should be unique per house (Garage, " +
+                 "MasterBedroom, MechanicalRoom).")]
+        [SerializeField, Min(0)] private int maxCount;
         [Tooltip("If true, this room can be picked as the building's entry even when its " +
                  "category isn't Entry (e.g. a LivingRoom that doubles as a foyer).")]
         [SerializeField] private bool isEntryCandidate;
@@ -67,10 +75,12 @@ namespace FriendSlop.Interiors
         public GameObject Prefab         => prefab;
         public Vector2Int GridSize       => gridSize;
         public RoomCategory Category     => category;
+        public RoomKind Kind             => kind;
         public IReadOnlyList<SocketDirection> Sockets => sockets;
         public bool IsVerticalConnector  => isVerticalConnector;
         public int Weight                => weight;
         public int MaxHorizontalConnections => maxHorizontalConnections;
+        public int MaxCount              => maxCount;
         public bool IsEntryCandidate     => isEntryCandidate || category == RoomCategory.Entry;
         public FloorRestriction FloorRestriction => floorRestriction;
         public IReadOnlyList<string> FurnitureTags => furnitureTags ?? System.Array.Empty<string>();

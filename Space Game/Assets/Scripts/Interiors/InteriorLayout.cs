@@ -21,6 +21,13 @@ namespace FriendSlop.Interiors
         // cell of slack on each side. Keeps the upper floor inside the house silhouette
         // without forcing strict cell-over-cell support — bedrooms can shift around.
         public bool RestrictUpperFloorOverhang { get; set; }
+        // When true, every cell of every room must fall inside the axis-aligned target
+        // rectangle (RectMinXZ..RectMaxXZ inclusive). Produces house-style rectangular
+        // footprints with no L-shapes. Min/Max are computed once in TryGenerate based on
+        // the building's MaxRooms count.
+        public bool RestrictToRectangle { get; set; }
+        public Vector2Int? RectMinXZ { get; set; }
+        public Vector2Int? RectMaxXZ { get; set; }
         // Cached entry-floor bounding box (min/max grid coords on x/z), populated lazily
         // the first time an upper-floor placement is attempted. Entry-floor cells are
         // added before upper-floor placement begins, so the box is stable once computed.
