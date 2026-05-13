@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using FriendSlop.Core;
 using FriendSlop.Loot;
 using FriendSlop.Round;
@@ -45,40 +43,43 @@ namespace FriendSlop.Networking
                 : null;
 
             var count = Mathf.Min(lootPrefabs.Length, anchors.Length);
-            var spawnedLootObjects = new List<GameObject>(count);
-            for (var i = 0; i < count; i++)
+
+            // Swap active scene around the whole batch: Instantiate places objects into the
+            // active scene, and NetworkObject.Spawn(destroyWithScene:true) latches its
+            // SceneOriginHandle to the GameObject's scene at spawn time. With NGO scene
+            // management enabled, attempting to MoveGameObjectToScene after Spawn is
+            // unreliable - the cleaner contract is "be in the right scene before Spawn".
+            using (new ActiveSceneScope(activeEnv.gameObject.scene))
             {
-                var prefab = lootPrefabs[i];
-                var spawnPoint = anchors[i];
-                if (prefab == null || spawnPoint == null)
+                for (var i = 0; i < count; i++)
                 {
-                    continue;
-                }
+                    var prefab = lootPrefabs[i];
+                    var spawnPoint = anchors[i];
+                    if (prefab == null || spawnPoint == null)
+                    {
+                        continue;
+                    }
 
-                Vector3 pos;
-                Quaternion rot;
-                // Ship parts ignore their authored spawn point and instead drop within an
-                // angular cone around the launchpad on the same hemisphere - keeps the rocket
-                // assembly fetch quest tight on the first planet.
-                if (prefab.IsShipPart && launchpadTransform != null && launchpadWorld != null)
-                {
-                    ResolveShipPartSpawnPose(launchpadTransform.position, launchpadWorld, out pos, out rot);
-                }
-                else
-                {
-                    pos = spawnPoint.position;
-                    rot = spawnPoint.rotation;
-                }
+                    Vector3 pos;
+                    Quaternion rot;
+                    // Ship parts ignore their authored spawn point and instead drop within an
+                    // angular cone around the launchpad on the same hemisphere - keeps the rocket
+                    // assembly fetch quest tight on the first planet.
+                    if (prefab.IsShipPart && launchpadTransform != null && launchpadWorld != null)
+                    {
+                        ResolveShipPartSpawnPose(launchpadTransform.position, launchpadWorld, out pos, out rot);
+                    }
+                    else
+                    {
+                        pos = spawnPoint.position;
+                        rot = spawnPoint.rotation;
+                    }
 
-                var loot = Instantiate(prefab, pos, rot);
-                MoveToActivePlanetScene(loot.gameObject, activeEnv);
-                loot.ServerSetSpawnPose(pos, rot);
-                SpawnNetworkObjectInScene(loot.NetworkObject, activeEnv.gameObject.scene, destroyWithScene: true);
-                MoveToActivePlanetScene(loot.gameObject, activeEnv);
-                spawnedLootObjects.Add(loot.gameObject);
+                    var loot = Instantiate(prefab, pos, rot);
+                    loot.ServerSetSpawnPose(pos, rot);
+                    SpawnNetworkObject(loot.NetworkObject, destroyWithScene: true);
+                }
             }
-
-            StartCoroutine(KeepSpawnedObjectsInScene(spawnedLootObjects, activeEnv.gameObject.scene));
         }
 
         private static bool HasSceneOwnedLootSpawner(PlanetEnvironment activeEnv)
@@ -135,90 +136,48 @@ namespace FriendSlop.Networking
             var anchors = hasPlanetAnchors ? activeEnv.MonsterSpawnPoints : monsterSpawnPoints;
             if (anchors == null) return;
 
-            var spawnedMonsterObjects = new List<GameObject>(anchors.Length);
-            foreach (var spawnPoint in anchors)
+            // See SpawnLoot for why the active-scene swap surrounds the batch.
+            using (new ActiveSceneScope(activeEnv.gameObject.scene))
             {
-                if (spawnPoint == null)
+                foreach (var spawnPoint in anchors)
                 {
-                    continue;
-                }
-
-                var monster = Instantiate(monsterPrefab, spawnPoint.position, spawnPoint.rotation);
-                MoveToActivePlanetScene(monster.gameObject, activeEnv);
-                SpawnNetworkObjectInScene(monster.NetworkObject, activeEnv.gameObject.scene, destroyWithScene: true);
-                MoveToActivePlanetScene(monster.gameObject, activeEnv);
-                spawnedMonsterObjects.Add(monster.gameObject);
-            }
-
-            StartCoroutine(KeepSpawnedObjectsInScene(spawnedMonsterObjects, activeEnv.gameObject.scene));
-        }
-
-        private void SpawnNetworkObjectInScene(NetworkObject networkObject, Scene targetScene, bool destroyWithScene)
-        {
-            if (networkObject == null)
-            {
-                return;
-            }
-
-            var previousActiveScene = SceneManager.GetActiveScene();
-            var changedActiveScene = targetScene.IsValid()
-                                     && targetScene.isLoaded
-                                     && previousActiveScene != targetScene;
-
-            if (changedActiveScene)
-            {
-                SceneManager.SetActiveScene(targetScene);
-            }
-
-            try
-            {
-                SpawnNetworkObject(networkObject, destroyWithScene);
-            }
-            finally
-            {
-                if (changedActiveScene && previousActiveScene.IsValid() && previousActiveScene.isLoaded)
-                {
-                    SceneManager.SetActiveScene(previousActiveScene);
-                }
-            }
-        }
-
-        private IEnumerator KeepSpawnedObjectsInScene(IReadOnlyList<GameObject> objects, Scene targetScene)
-        {
-            if (!targetScene.IsValid() || !targetScene.isLoaded || objects == null)
-            {
-                yield break;
-            }
-
-            for (var frame = 0; frame < 30; frame++)
-            {
-                for (var i = 0; i < objects.Count; i++)
-                {
-                    var obj = objects[i];
-                    if (obj != null && obj.scene != targetScene)
+                    if (spawnPoint == null)
                     {
-                        SceneManager.MoveGameObjectToScene(obj, targetScene);
+                        continue;
                     }
-                }
 
-                yield return null;
+                    var monster = Instantiate(monsterPrefab, spawnPoint.position, spawnPoint.rotation);
+                    SpawnNetworkObject(monster.NetworkObject, destroyWithScene: true);
+                }
             }
         }
 
-        private static void MoveToActivePlanetScene(GameObject spawnedObject, PlanetEnvironment activeEnv)
+        // Sets the active scene to `target` for the lifetime of the scope, restoring the
+        // previous active scene on dispose. Use around Instantiate + NetworkObject.Spawn so
+        // freshly spawned objects land in `target` instead of the caller's scene. Inline
+        // ref-struct so it does not allocate.
+        private readonly ref struct ActiveSceneScope
         {
-            if (spawnedObject == null || activeEnv == null)
+            private readonly Scene _previous;
+            private readonly bool _changed;
+
+            public ActiveSceneScope(Scene target)
             {
-                return;
+                _previous = SceneManager.GetActiveScene();
+                _changed = target.IsValid() && target.isLoaded && _previous != target;
+                if (_changed)
+                {
+                    SceneManager.SetActiveScene(target);
+                }
             }
 
-            var targetScene = activeEnv.gameObject.scene;
-            if (!targetScene.IsValid() || !targetScene.isLoaded || spawnedObject.scene == targetScene)
+            public void Dispose()
             {
-                return;
+                if (_changed && _previous.IsValid() && _previous.isLoaded)
+                {
+                    SceneManager.SetActiveScene(_previous);
+                }
             }
-
-            SceneManager.MoveGameObjectToScene(spawnedObject, targetScene);
         }
 
         private static void DisableLaunchpadInterference()

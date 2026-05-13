@@ -97,33 +97,45 @@ namespace FriendSlop.Loot
             }
 
             spawnedThisSession = true;
-            var spawnedThisPass = new List<GameObject>();
-            for (var i = 0; i < spawnPoints.Length; i++)
+
+            // See PrototypeNetworkBootstrapper.Spawning.ActiveSceneScope - swap active scene
+            // around the whole batch so Instantiate places clones in ownerScene and
+            // NetworkObject.Spawn(destroyWithScene:true) captures it as the SceneOriginHandle.
+            // MoveGameObjectToScene-after-Spawn fights NGO scene management and is unreliable.
+            var previousActiveScene = SceneManager.GetActiveScene();
+            var shouldRestoreActiveScene = ownerScene != previousActiveScene;
+            if (shouldRestoreActiveScene)
+                SceneManager.SetActiveScene(ownerScene);
+
+            try
             {
-                var spawn = spawnPoints[i];
-                if (spawn == null) continue;
-
-                for (var roll = 0; roll < rollsPerSpawnPoint; roll++)
+                for (var i = 0; i < spawnPoints.Length; i++)
                 {
-                    var prefab = lootPool.Roll();
-                    if (prefab == null) continue;
+                    var spawn = spawnPoints[i];
+                    if (spawn == null) continue;
 
-                    var pos = spawn.position + spawn.up * spawnSurfaceLift;
-                    var rot = spawn.rotation;
-                    var loot = Instantiate(prefab, pos, rot);
-                    SceneManager.MoveGameObjectToScene(loot.gameObject, ownerScene);
-                    loot.ServerSetSpawnPose(pos, rot);
-                    if (loot.NetworkObject != null)
+                    for (var roll = 0; roll < rollsPerSpawnPoint; roll++)
                     {
-                        SpawnInScene(loot.NetworkObject, ownerScene);
-                        SceneManager.MoveGameObjectToScene(loot.gameObject, ownerScene);
-                        spawnedObjects.Add(loot.NetworkObject);
-                        spawnedThisPass.Add(loot.gameObject);
+                        var prefab = lootPool.Roll();
+                        if (prefab == null) continue;
+
+                        var pos = spawn.position + spawn.up * spawnSurfaceLift;
+                        var rot = spawn.rotation;
+                        var loot = Instantiate(prefab, pos, rot);
+                        loot.ServerSetSpawnPose(pos, rot);
+                        if (loot.NetworkObject != null)
+                        {
+                            loot.NetworkObject.Spawn(destroyWithScene: true);
+                            spawnedObjects.Add(loot.NetworkObject);
+                        }
                     }
                 }
             }
-
-            StartCoroutine(KeepSpawnedObjectsInScene(spawnedThisPass, ownerScene));
+            finally
+            {
+                if (shouldRestoreActiveScene && previousActiveScene.IsValid() && previousActiveScene.isLoaded)
+                    SceneManager.SetActiveScene(previousActiveScene);
+            }
         }
 
         private void HandleServerStopped(bool wasHost)
@@ -195,43 +207,5 @@ namespace FriendSlop.Loot
             waitingForLoadedScene = false;
         }
 
-        private static void SpawnInScene(NetworkObject networkObject, Scene targetScene)
-        {
-            var previousActiveScene = SceneManager.GetActiveScene();
-            var changedActiveScene = targetScene.IsValid()
-                                     && targetScene.isLoaded
-                                     && previousActiveScene != targetScene;
-
-            if (changedActiveScene)
-                SceneManager.SetActiveScene(targetScene);
-
-            try
-            {
-                networkObject.Spawn(destroyWithScene: true);
-            }
-            finally
-            {
-                if (changedActiveScene && previousActiveScene.IsValid() && previousActiveScene.isLoaded)
-                    SceneManager.SetActiveScene(previousActiveScene);
-            }
-        }
-
-        private static IEnumerator KeepSpawnedObjectsInScene(IReadOnlyList<GameObject> objects, Scene targetScene)
-        {
-            if (!targetScene.IsValid() || !targetScene.isLoaded || objects == null)
-                yield break;
-
-            for (var frame = 0; frame < 30; frame++)
-            {
-                for (var i = 0; i < objects.Count; i++)
-                {
-                    var obj = objects[i];
-                    if (obj != null && obj.scene != targetScene)
-                        SceneManager.MoveGameObjectToScene(obj, targetScene);
-                }
-
-                yield return null;
-            }
-        }
     }
 }
