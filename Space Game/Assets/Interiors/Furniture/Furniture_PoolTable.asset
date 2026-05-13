@@ -1,0 +1,106 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_PoolTable
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Pool Table
+  kind: pool_table
+  tags:
+  - gameroom
+  placement: 2
+  footprintXZ: {x: 2.4, y: 1.3}
+  weight: 5
+  interactable: 0
+  prefab: {fileID: 1244047040694688809, guid: 3db3a363bb58c3941b095f5ba8d839a1, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.78, z: 0}
+    localScale: {x: 2.4, y: 0.06, z: 1.3}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.82, z: 0}
+    localScale: {x: 2.2, y: 0.02, z: 1.1}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.2, g: 0.4, b: 0.25, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.84, z: 0.6}
+    localScale: {x: 2.2, y: 0.08, z: 0.1}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.84, z: -0.6}
+    localScale: {x: 2.2, y: 0.08, z: 0.1}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: 1.1, y: 0.84, z: 0}
+    localScale: {x: 0.1, y: 0.08, z: 1.1}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: -1.1, y: 0.84, z: 0}
+    localScale: {x: 0.1, y: 0.08, z: 1.1}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 2
+    localPosition: {x: 1.05, y: 0.83, z: 0.55}
+    localScale: {x: 0.15, y: 0.03, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: -1.05, y: 0.83, z: 0.55}
+    localScale: {x: 0.15, y: 0.03, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: 1.05, y: 0.83, z: -0.55}
+    localScale: {x: 0.15, y: 0.03, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: -1.05, y: 0.83, z: -0.55}
+    localScale: {x: 0.15, y: 0.03, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: 0, y: 0.83, z: 0.55}
+    localScale: {x: 0.15, y: 0.03, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: 0, y: 0.83, z: -0.55}
+    localScale: {x: 0.15, y: 0.03, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 3
+    localPosition: {x: 1, y: 0.4, z: 0.55}
+    localScale: {x: 0.15, y: 0.78, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: -1, y: 0.4, z: 0.55}
+    localScale: {x: 0.15, y: 0.78, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: 1, y: 0.4, z: -0.55}
+    localScale: {x: 0.15, y: 0.78, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  - shape: 3
+    localPosition: {x: -1, y: 0.4, z: -0.55}
+    localScale: {x: 0.15, y: 0.78, z: 0.15}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.18, b: 0.1, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

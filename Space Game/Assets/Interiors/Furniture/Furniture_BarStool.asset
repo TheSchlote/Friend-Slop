@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_BarStool
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Bar Stool
+  kind: barstool
+  tags:
+  - kitchen
+  - gameroom
+  - breakroom
+  placement: 2
+  footprintXZ: {x: 0.4, y: 0.4}
+  weight: 3
+  interactable: 0
+  prefab: {fileID: 232384546462004145, guid: 5735615422b36fc44a2d0a0719432975, type: 3}
+  primitives:
+  - shape: 2
+    localPosition: {x: 0, y: 0.78, z: 0}
+    localScale: {x: 0.36, y: 0.04, z: 0.36}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.32, b: 0.17, a: 1}
+  - shape: 2
+    localPosition: {x: 0, y: 0.4, z: 0}
+    localScale: {x: 0.05, y: 0.4, z: 0.05}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.65, b: 0.7, a: 1}
+  - shape: 2
+    localPosition: {x: 0, y: 0.05, z: 0}
+    localScale: {x: 0.36, y: 0.04, z: 0.36}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.65, b: 0.7, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

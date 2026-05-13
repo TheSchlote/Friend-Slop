@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_ToolChest
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Tool Chest
+  kind: tool_chest
+  tags:
+  - garage
+  - workshop
+  - factory
+  placement: 0
+  footprintXZ: {x: 0.8, y: 0.5}
+  weight: 3
+  interactable: 0
+  prefab: {fileID: 1112641301249766843, guid: aa0958d6d04001649a289fe4175b4b90, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 1.1, z: 0}
+    localScale: {x: 0.8, y: 0.6, z: 0.5}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.5, z: 0}
+    localScale: {x: 0.8, y: 0.9, z: 0.5}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.55, g: 0.2, b: 0.2, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 0.95, z: 0.26}
+    localScale: {x: 0.7, y: 0.05, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.65, g: 0.65, b: 0.7, a: 1}
+  - shape: 2
+    localPosition: {x: -0.32, y: 0.04, z: 0.18}
+    localScale: {x: 0.08, y: 0.04, z: 0.08}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: 0.32, y: 0.04, z: 0.18}
+    localScale: {x: 0.08, y: 0.04, z: 0.08}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: -0.32, y: 0.04, z: -0.18}
+    localScale: {x: 0.08, y: 0.04, z: 0.08}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 2
+    localPosition: {x: 0.32, y: 0.04, z: -0.18}
+    localScale: {x: 0.08, y: 0.04, z: 0.08}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

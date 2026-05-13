@@ -15,6 +15,7 @@ namespace FriendSlop.Interiors
 
         public void Interact(NetworkFirstPersonController player)
         {
+<<<<<<< HEAD
             RequestExitRpc();
         }
 
@@ -22,6 +23,14 @@ namespace FriendSlop.Interiors
         private void RequestExitRpc(RpcParams rpcParams = default)
         {
             var clientId = rpcParams.Receive.SenderClientId;
+=======
+            RequestExitRpc(player.OwnerClientId);
+        }
+
+        [Rpc(SendTo.Server)]
+        private void RequestExitRpc(ulong clientId)
+        {
+>>>>>>> origin/interiors-changes
             var player = FindPlayer(clientId);
             if (player == null) return;
 

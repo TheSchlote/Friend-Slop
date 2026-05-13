@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_TV
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Television
+  kind: tv
+  tags:
+  - livingroom
+  - breakroom
+  - gameroom
+  placement: 0
+  footprintXZ: {x: 1.4, y: 0.15}
+  weight: 4
+  interactable: 0
+  prefab: {fileID: 5327637265333979679, guid: c45f5eb06e2e7034594d6d9cf308c571, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 1.4, z: -0.06}
+    localScale: {x: 1.4, y: 0.85, z: 0.05}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  - shape: 3
+    localPosition: {x: 0, y: 1.4, z: -0.04}
+    localScale: {x: 1.3, y: 0.75, z: 0.02}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.05, g: 0.05, b: 0.08, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []

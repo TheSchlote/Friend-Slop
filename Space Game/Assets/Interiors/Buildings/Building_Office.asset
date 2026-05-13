@@ -1,0 +1,66 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3830b0b9a65b185489ee24b6645642fd, type: 3}
+  m_Name: Building_Office
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.BuildingDefinition
+  displayName: Office
+  minRooms: 10
+  maxRooms: 18
+  minFloors: 2
+  maxFloors: 3
+  floorHeightMeters: 4
+  gridCellMeters: 3.4
+  requiredRooms:
+  - definition: {fileID: 11400000, guid: a08910612dc4a7a41a29337a5450c046, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: d08473ed0481c60489550494eef18512, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: 3d8ee497b9fb42a4abb889a2f2bccfc2, type: 2}
+    count: 1
+    adjacentToAny: []
+  - definition: {fileID: 11400000, guid: 86271f573316a4048aac821d0d976b5b, type: 2}
+    count: 1
+    adjacentToAny:
+    - {fileID: 11400000, guid: 3d8ee497b9fb42a4abb889a2f2bccfc2, type: 2}
+  - definition: {fileID: 11400000, guid: 4045026432478884da6ff98c02d80696, type: 2}
+    count: 1
+    adjacentToAny:
+    - {fileID: 11400000, guid: 3d8ee497b9fb42a4abb889a2f2bccfc2, type: 2}
+  optionalPool:
+  - {fileID: 11400000, guid: cfc4cdb4ffa46114c93cbe773eb5cbd9, type: 2}
+  - {fileID: 11400000, guid: 3d8ee497b9fb42a4abb889a2f2bccfc2, type: 2}
+  - {fileID: 11400000, guid: c33a9dae2e04a5441829b860f0edee69, type: 2}
+  - {fileID: 11400000, guid: 3d480baa39bb3514081890dcb53dc107, type: 2}
+  - {fileID: 11400000, guid: d5f3ea84a51979b4396e30980cb6ad62, type: 2}
+  - {fileID: 11400000, guid: 1922a9db9ded108498a830f35616c154, type: 2}
+  - {fileID: 11400000, guid: 4045026432478884da6ff98c02d80696, type: 2}
+  - {fileID: 11400000, guid: 37e2cc84c4281a9428d27e86c060332d, type: 2}
+  - {fileID: 11400000, guid: a8d79f5b05a7ee745bb3b973ae81eccf, type: 2}
+  - {fileID: 11400000, guid: dcc46ee5a3f76e04d99ab1be853af8e4, type: 2}
+  minSpecialRooms: 2
+  maxSpecialRooms: 4
+  downwardConnectorMirror: {fileID: 0}
+  fillerRoom: {fileID: 0}
+  downConnectorParents: []
+  skipBasementExpansion: 0
+  compactLayout: 1
+  doorsOnlyForPrivateRooms: 0
+  entryAtSouthernEdge: 0
+  restrictUpperFloorOverhang: 0
+  forceRectangularLayout: 0
+  restrictFrontFacade: 0
+  themeColor: {r: 0.7, g: 0.8, b: 0.95, a: 1}
+  lootTable: {fileID: 0}
+  monsterPool: {fileID: 0}
+  objective: {fileID: 0}

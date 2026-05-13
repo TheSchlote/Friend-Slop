@@ -9,7 +9,11 @@ namespace FriendSlop.Editor
     // Editor window for adding bloom-triggering emission to specific material slots on a
     // Renderer. Bloom is a screen-space effect driven by HDR brightness, so "add bloom to
     // part of a mesh" means "make that material emissive with an HDR color > 1.0". The
+<<<<<<< HEAD
     // project already has a Bloom volume override configured in the URP default volume profile,
+=======
+    // project already has a Bloom volume override configured (see Assets/glow PP.asset),
+>>>>>>> origin/interiors-changes
     // so anything emissive shows up bloomed automatically.
     //
     // How to use:

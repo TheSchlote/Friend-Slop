@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60bb36d617707f944bb03e323b2e5bbd, type: 3}
+  m_Name: Furniture_Stove
+  m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.FurnitureDefinition
+  displayName: Stove
+  kind: stove
+  tags:
+  - kitchen
+  placement: 0
+  footprintXZ: {x: 0.7, y: 0.7}
+  weight: 5
+  interactable: 0
+  prefab: {fileID: 313116999526314257, guid: 860ec84cf8f52c040981e643f869f05f, type: 3}
+  primitives:
+  - shape: 3
+    localPosition: {x: 0, y: 0.45, z: 0}
+    localScale: {x: 0.7, y: 0.9, z: 0.7}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.78, g: 0.8, b: 0.85, a: 1}
+  - shape: 2
+    localPosition: {x: 0.2, y: 0.92, z: 0.2}
+    localScale: {x: 0.18, y: 0.02, z: 0.18}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  - shape: 2
+    localPosition: {x: -0.2, y: 0.92, z: 0.2}
+    localScale: {x: 0.18, y: 0.02, z: 0.18}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  - shape: 2
+    localPosition: {x: 0.2, y: 0.92, z: -0.2}
+    localScale: {x: 0.18, y: 0.02, z: 0.18}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  - shape: 2
+    localPosition: {x: -0.2, y: 0.92, z: -0.2}
+    localScale: {x: 0.18, y: 0.02, z: 0.18}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    tint: {r: 0.3, g: 0.3, b: 0.35, a: 1}
+  tabletopAnchors: []
+  aroundTableAnchors: []
