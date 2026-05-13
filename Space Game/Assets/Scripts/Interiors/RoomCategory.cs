@@ -1,8 +1,6 @@
 namespace FriendSlop.Interiors
 {
     public enum RoomCategory { Entry, Generic, Special, Utility }
-<<<<<<< HEAD
-=======
 
     // Functional identity of a room, used by adjacency / restriction logic in the
     // layout generator. Replaces brittle name-substring checks like
@@ -39,5 +37,4 @@ namespace FriendSlop.Interiors
         MudRoom,
         Stair,
     }
->>>>>>> origin/interiors-changes
 }

@@ -14,17 +14,14 @@ namespace FriendSlop.Interiors
     {
         [SerializeField] private BuildingDefinition definition;
         [SerializeField] private string interiorScenePath = "Assets/Scenes/Building_Interior.unity";
-<<<<<<< HEAD
-=======
         [Tooltip("Optional. When assigned, the entrance reads its definition from the selector " +
-                 "instead of the inline 'definition' field — used by the test-scene type picker.")]
+                 "instead of the inline 'definition' field â€” used by the test-scene type picker.")]
         [SerializeField] private InteriorTypeSelector typeSelector;
 
         private BuildingDefinition ActiveDefinition =>
             typeSelector != null && typeSelector.CurrentDefinition != null
                 ? typeSelector.CurrentDefinition
                 : definition;
->>>>>>> origin/interiors-changes
 
         private readonly NetworkVariable<int> _seed =
             new(-1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -34,11 +31,7 @@ namespace FriendSlop.Interiors
 
         public void Interact(NetworkFirstPersonController player)
         {
-<<<<<<< HEAD
-            RequestEnterRpc();
-=======
             RequestEnterRpc(player.OwnerClientId);
->>>>>>> origin/interiors-changes
         }
 
         // Called by the bootstrapper when the interior scene fully unloads (last player
@@ -50,31 +43,19 @@ namespace FriendSlop.Interiors
         }
 
         [Rpc(SendTo.Server)]
-<<<<<<< HEAD
-        private void RequestEnterRpc(RpcParams rpcParams = default)
-        {
-            if (definition == null) return;
-
-            var requestingClientId = rpcParams.Receive.SenderClientId;
-=======
         private void RequestEnterRpc(ulong requestingClientId)
         {
             var resolvedDef = ActiveDefinition;
             if (resolvedDef == null) return;
->>>>>>> origin/interiors-changes
 
             if (_seed.Value < 0)
                 _seed.Value = UnityEngine.Random.Range(1, int.MaxValue);
 
             InteriorSessionData.Seed              = _seed.Value;
-<<<<<<< HEAD
-            InteriorSessionData.Definition        = definition;
-=======
             InteriorSessionData.Definition        = resolvedDef;
             // Clear any blueprint left over from a previous BlueprintEntrance
             // session so this procedural entry doesn't accidentally re-load it.
             InteriorSessionData.Blueprint         = null;
->>>>>>> origin/interiors-changes
             // Return position: 1 m above ground, 5 m in front of the building origin
             // (clear of the 8 m shell's +Z face). transform.forward is the building's
             // surface-tangent forward direction.
@@ -92,21 +73,21 @@ namespace FriendSlop.Interiors
             if (wasStarted || sceneLoaded)
             {
                 var bootstrapper = Object.FindFirstObjectByType<InteriorSceneBootstrapper>(FindObjectsInactive.Include);
-                Debug.Log($"[Interior] Re-entry — wasStarted={wasStarted} sceneLoaded={sceneLoaded} bootstrapper={(bootstrapper != null ? "found" : "MISSING")}");
+                Debug.Log($"[Interior] Re-entry â€” wasStarted={wasStarted} sceneLoaded={sceneLoaded} bootstrapper={(bootstrapper != null ? "found" : "MISSING")}");
                 if (bootstrapper != null)
                 {
                     bootstrapper.TeleportPlayerIn(requestingClientId);
                 }
                 else
                 {
-                    // Scene was unloaded but the service tracker is stale — load fresh.
-                    Debug.Log("[Interior] Stale tracker — forcing fresh scene load.");
+                    // Scene was unloaded but the service tracker is stale â€” load fresh.
+                    Debug.Log("[Interior] Stale tracker â€” forcing fresh scene load.");
                     service.ServerLoadScenePath(interiorScenePath, LoadSceneMode.Additive);
                 }
             }
             else
             {
-                Debug.Log($"[Interior] First entry — loading scene {interiorScenePath}");
+                Debug.Log($"[Interior] First entry â€” loading scene {interiorScenePath}");
                 service.ServerLoadScenePath(interiorScenePath, LoadSceneMode.Additive);
             }
         }

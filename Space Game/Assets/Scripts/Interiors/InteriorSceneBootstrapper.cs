@@ -11,11 +11,7 @@ namespace FriendSlop.Interiors
     // Placed in Building_Interior.unity. Reads InteriorSessionData on the server,
     // replicates seed/origin to clients, then all clients generate rooms locally.
     // Server also spawns door NetworkObjects and teleports the requesting player in.
-<<<<<<< HEAD
     public partial class InteriorSceneBootstrapper : NetworkBehaviour
-=======
-    public class InteriorSceneBootstrapper : NetworkBehaviour
->>>>>>> origin/interiors-changes
     {
         [SerializeField] private Transform spawnPoint;
         [SerializeField] private GameObject doorPrefab;
@@ -40,16 +36,13 @@ namespace FriendSlop.Interiors
         private InteriorMinimap _minimap;
         private BuildingDefinition _definition;
         private int _entryFloor;
-<<<<<<< HEAD
-=======
         private readonly Dictionary<PlacedRoom, GameObject> _roomGoMap = new();
->>>>>>> origin/interiors-changes
         private readonly List<ulong> _playersInside = new();
 
         public Vector3 ReturnPosition => _returnPosition.Value;
         public Quaternion ReturnRotation => _returnRotation.Value;
 
-        // ── Network lifecycle ──────────────────────────────────────────────────
+        // â”€â”€ Network lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         public override void OnNetworkSpawn()
         {
@@ -57,10 +50,10 @@ namespace FriendSlop.Interiors
             {
                 // The entrance fills InteriorSessionData before triggering the scene load.
                 // If we spawn without a definition, the scene was opened some other way
-                // (e.g., left open in the editor) — sit idle so we don't replicate junk.
+                // (e.g., left open in the editor) â€” sit idle so we don't replicate junk.
                 if (InteriorSessionData.Definition == null)
                 {
-                    Debug.LogWarning("[Interior] Bootstrapper spawned with no session data — idling.");
+                    Debug.LogWarning("[Interior] Bootstrapper spawned with no session data â€” idling.");
                     return;
                 }
 
@@ -88,7 +81,7 @@ namespace FriendSlop.Interiors
             DestroyInterior();
         }
 
-        // ── Public API for InteriorEntrance (scene already loaded case) ────────
+        // â”€â”€ Public API for InteriorEntrance (scene already loaded case) â”€â”€â”€â”€â”€â”€â”€â”€
 
         public void TeleportPlayerIn(ulong clientId)
         {
@@ -123,13 +116,13 @@ namespace FriendSlop.Interiors
             _playersInside.Remove(clientId);
             if (_playersInside.Count != 0) return;
 
-            // Roll fresh layouts for the next visit — clear all entrance seeds.
+            // Roll fresh layouts for the next visit â€” clear all entrance seeds.
             foreach (var entrance in Object.FindObjectsByType<InteriorEntrance>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
                 entrance.ResetSeed();
 
             // Route through NetworkSceneTransitionService so its load-tracker stays
-            // in sync — otherwise re-entering the building after exit takes a stale
+            // in sync â€” otherwise re-entering the building after exit takes a stale
             // "already loaded" branch and the bootstrapper never spawns again.
             var service = Object.FindFirstObjectByType<FriendSlop.SceneManagement.NetworkSceneTransitionService>(
                 FindObjectsInactive.Exclude);
@@ -139,7 +132,7 @@ namespace FriendSlop.Interiors
                 NetworkManager.SceneManager.UnloadScene(gameObject.scene);
         }
 
-        // ── Generation pipeline ────────────────────────────────────────────────
+        // â”€â”€ Generation pipeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private IEnumerator GenerateAndTeleport(ulong requestingClientId)
         {
@@ -148,9 +141,6 @@ namespace FriendSlop.Interiors
 
             if (_definition != null)
             {
-<<<<<<< HEAD
-                var layout = InteriorLayoutGenerator.Generate(_definition, _seed.Value, SocketDirection.South);
-=======
                 // Blueprint mode: bypass the procedural generator and materialise the
                 // designer-authored layout instead. Definition is still used for cell
                 // size, theme, etc. Set by BlueprintEntrance before scene load.
@@ -166,24 +156,17 @@ namespace FriendSlop.Interiors
                 {
                     layout = InteriorLayoutGenerator.Generate(_definition, _seed.Value, SocketDirection.South);
                 }
->>>>>>> origin/interiors-changes
                 _entryFloor = layout.EntryFloor;
                 _interiorRoot = BuildRooms(layout, _origin.Value);
                 _minimap = InteriorMinimap.Spawn(layout, _definition, _origin.Value);
                 yield return null;
-<<<<<<< HEAD
-                BakeNavMesh(_interiorRoot);
-                yield return null;
-                SpawnDoors(layout, _origin.Value);
-=======
                 SpawnDoors(layout, _origin.Value);
                 yield return null;
                 // Furniture must be placed BEFORE the NavMesh bake so its colliders become
-                // obstacles. Stripping the bake order: rooms → doors → furniture → bake.
+                // obstacles. Stripping the bake order: rooms â†’ doors â†’ furniture â†’ bake.
                 SpawnFurniture(layout);
                 yield return null;
                 BakeNavMesh(_interiorRoot);
->>>>>>> origin/interiors-changes
                 PositionExitDoor();
             }
 
@@ -207,10 +190,7 @@ namespace FriendSlop.Interiors
             _entryFloor = layout.EntryFloor;
             _interiorRoot = BuildRooms(layout, _origin.Value);
             _minimap = InteriorMinimap.Spawn(layout, defAsset, _origin.Value);
-<<<<<<< HEAD
-=======
             SpawnFurniture(layout);
->>>>>>> origin/interiors-changes
             PositionExitDoor();
 
             InteriorEvents.SetLoading(false);
@@ -241,18 +221,14 @@ namespace FriendSlop.Interiors
 
             if (exit == null)
             {
-                Debug.LogWarning("[Interior] Exit door not found in scene — was 'Repair Interior Scene' run?");
+                Debug.LogWarning("[Interior] Exit door not found in scene â€” was 'Repair Interior Scene' run?");
                 yield break;
             }
 
             var def = ResolveDefinition();
-<<<<<<< HEAD
-            float halfCell = def != null ? def.GridCellMeters * 0.5f : 4f;
-=======
             float halfCell = def != null ? def.GridCellMeters * 0.5f : 1.7f;
->>>>>>> origin/interiors-changes
             float entryY   = def != null ? _entryFloor * def.FloorHeightMeters : 0f;
-            // 0.15 m from the wall plane — slab back face lands flush with the wall pillars.
+            // 0.15 m from the wall plane â€” slab back face lands flush with the wall pillars.
             var pos = _origin.Value + new Vector3(halfCell, entryY, 0.15f);
             exit.transform.position = pos;
             exit.transform.rotation = Quaternion.identity;
@@ -266,7 +242,7 @@ namespace FriendSlop.Interiors
             StartCoroutine(GenerateLocal());
         }
 
-        // ── Room / door helpers ────────────────────────────────────────────────
+        // â”€â”€ Room / door helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private GameObject BuildRooms(InteriorLayout layout, Vector3 origin)
         {
@@ -278,15 +254,13 @@ namespace FriendSlop.Interiors
             var def = ResolveDefinition();
             if (def == null) return root;
 
-<<<<<<< HEAD
-=======
             // One tinted material instance, shared across every renderer in this building.
             Material themed = CreateThemedMaterial(def);
 
-            // Reset the persistent room→GO map; SpawnFurniture reads it after rooms exist.
+            // Reset the persistent roomâ†’GO map; SpawnFurniture reads it after rooms exist.
             _roomGoMap.Clear();
 
-            // Sanity pass — any registered connection whose two rooms don't actually share
+            // Sanity pass â€” any registered connection whose two rooms don't actually share
             // an edge at the connection's socket leaves a door cell open to the void on
             // RoomA's side (because PatchUnconnectedSockets sees the socket as connected
             // and skips the patch, but no neighbor wall is there to back it up). Remove
@@ -299,26 +273,15 @@ namespace FriendSlop.Interiors
                 if (c.RoomA == layout.ExitRoom && layout.ExitSocket.HasValue && c.SocketA == layout.ExitSocket.Value) continue;
                 if (c.RoomB == layout.ExitRoom && layout.ExitSocket.HasValue && c.SocketB == layout.ExitSocket.Value) continue;
                 if (RoomsShareEdge(c.RoomA, c.RoomB, c.SocketA)) continue;
-                Debug.LogWarning($"[Interiors] Connection {c.RoomA.Definition.name}@{c.RoomA.GridPosition} <-> {c.RoomB.Definition.name}@{c.RoomB.GridPosition} via {c.SocketA} doesn't share a grid edge — plugging the door cell instead of opening to the void.");
+                Debug.LogWarning($"[Interiors] Connection {c.RoomA.Definition.name}@{c.RoomA.GridPosition} <-> {c.RoomB.Definition.name}@{c.RoomB.GridPosition} via {c.SocketA} doesn't share a grid edge â€” plugging the door cell instead of opening to the void.");
                 c.RoomA.ConnectedSockets.Remove(c.SocketA);
                 c.RoomB.ConnectedSockets.Remove(c.SocketB);
             }
 
->>>>>>> origin/interiors-changes
             foreach (var room in layout.Rooms)
             {
                 if (room.Definition.Prefab == null) continue;
                 var worldPos = InteriorLayoutGenerator.RoomWorldPosition(room, origin, def);
-<<<<<<< HEAD
-                var go = Object.Instantiate(room.Definition.Prefab, worldPos, Quaternion.identity, root.transform);
-                go.name = $"{room.Definition.name} [{room.GridPosition}]";
-
-                PatchUnconnectedSockets(go.transform, room, def);
-            }
-            return root;
-        }
-
-=======
                 // Rotating around the prefab's SW-corner pivot shifts the room out of the
                 // +X+Z quadrant. Compensate so the rotated room's SW corner stays at the
                 // grid-position world coords.
@@ -335,13 +298,13 @@ namespace FriendSlop.Interiors
 
             // Strip wall geometry for open-passage connections so the two rooms read as one
             // continuous space (no door, no wall, no door-frame pillars). Also remove any
-            // anchors against the stripped wall — they'd be floating in air.
+            // anchors against the stripped wall â€” they'd be floating in air.
             foreach (var conn in layout.Connections)
             {
                 if (!conn.IsOpenPassage) continue;
                 Debug.Log($"[Interiors] Archway {conn.RoomA.Definition.name}@{conn.RoomA.GridPosition}r{conn.RoomA.Rotation}/{conn.SocketA} <-> {conn.RoomB.Definition.name}@{conn.RoomB.GridPosition}r{conn.RoomB.Rotation}/{conn.SocketB}");
-                if (!_roomGoMap.TryGetValue(conn.RoomA, out var goA)) { Debug.LogWarning($"[Interiors]   ↑ RoomA missing from _roomGoMap (Prefab null?)"); continue; }
-                if (!_roomGoMap.TryGetValue(conn.RoomB, out var goB)) { Debug.LogWarning($"[Interiors]   ↑ RoomB missing from _roomGoMap (Prefab null?)"); continue; }
+                if (!_roomGoMap.TryGetValue(conn.RoomA, out var goA)) { Debug.LogWarning($"[Interiors]   â†‘ RoomA missing from _roomGoMap (Prefab null?)"); continue; }
+                if (!_roomGoMap.TryGetValue(conn.RoomB, out var goB)) { Debug.LogWarning($"[Interiors]   â†‘ RoomB missing from _roomGoMap (Prefab null?)"); continue; }
                 // Sanity: the two rooms should actually share a grid edge along the
                 // connection's socket. If they don't, stripping leaves a hole opening
                 // into the void with no neighbor on the other side.
@@ -420,7 +383,7 @@ namespace FriendSlop.Interiors
             return false;
         }
 
-        // Remove FurnitureAnchors whose `Wall` matches the destroyed boundary — they'd
+        // Remove FurnitureAnchors whose `Wall` matches the destroyed boundary â€” they'd
         // be hanging in empty air at the seam between two open-passage rooms.
         private static void StripAnchorsAtWall(GameObject roomRoot, SocketDirection wall)
         {
@@ -428,7 +391,7 @@ namespace FriendSlop.Interiors
                 if (anchor.Wall == wall) Destroy(anchor.gameObject);
         }
 
-        // ── Furniture placement ───────────────────────────────────────────────
+        // â”€â”€ Furniture placement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private void SpawnFurniture(InteriorLayout layout)
         {
@@ -438,7 +401,7 @@ namespace FriendSlop.Interiors
 
             // Build the per-room set of sockets that need door-cell clearance.
             // `room.ConnectedSockets` already contains every interior connection AND the
-            // building's reserved exterior exit socket — both must be kept clear so a piece
+            // building's reserved exterior exit socket â€” both must be kept clear so a piece
             // doesn't spawn in the doorway. We skip Up/Down (no door swing on stairs).
             var doorsByRoom = new Dictionary<PlacedRoom, HashSet<SocketDirection>>();
             foreach (var room in layout.Rooms)
@@ -481,7 +444,7 @@ namespace FriendSlop.Interiors
 
             // Collect surviving anchors (drop ones blocked by an active door cell).
             // a.Wall is stored in the prefab's DEF-local frame; activeDoors contains
-            // WORLD sockets — convert via the room's rotation before comparing.
+            // WORLD sockets â€” convert via the room's rotation before comparing.
             var anchors = new List<FurnitureAnchor>(roomGo.GetComponentsInChildren<FurnitureAnchor>());
             for (int i = anchors.Count - 1; i >= 0; i--)
             {
@@ -501,8 +464,8 @@ namespace FriendSlop.Interiors
             var placedFootprints = new List<Rect>();   // world-XZ rects of pieces placed in this room
             var placedPieces    = new List<(FurnitureDefinition def, GameObject go)>(); // for tabletop pass
             // Track anchors that hosted a spawn so we can destroy the unused ones at the
-            // end. Each room prefab carries dozens of anchors (Wall × cells × WallHanging
-            // doubled + Corner + Center); typical rooms place 4–8 pieces — destroying the
+            // end. Each room prefab carries dozens of anchors (Wall Ã— cells Ã— WallHanging
+            // doubled + Corner + Center); typical rooms place 4â€“8 pieces â€” destroying the
             // remainder cuts GameObject count by ~80% and speeds up NavMesh bake.
             var usedAnchors = new HashSet<FurnitureAnchor>();
 
@@ -537,13 +500,13 @@ namespace FriendSlop.Interiors
                     {
                         var c = PickFurnitureOfKindForAnchor(catalogList, tags, anchors[i], rule.Kind, rng);
                         if (c == null) continue;
-                        // Hanging items sit above floor furniture — they share XZ with what's
+                        // Hanging items sit above floor furniture â€” they share XZ with what's
                         // below, but never the same height. Skip the floor-rect overlap test.
                         if (anchors[i].Placement != AnchorPlacement.WallHanging
                             && OverlapsExisting(c, anchors[i], placedFootprints)) continue;
                         pick = c; hitIndex = i; break;
                     }
-                    if (pick == null) break; // none of our anchors can host this kind — skip
+                    if (pick == null) break; // none of our anchors can host this kind â€” skip
                     ApplyAnchorJitter(anchors[hitIndex], rng);
                     var pickedGo = SpawnFurnitureInstance(pick, anchors[hitIndex].transform, roomGo);
                     placedPieces.Add((pick, pickedGo));
@@ -568,7 +531,7 @@ namespace FriendSlop.Interiors
                 var anchor = anchors[i];
                 var pick = PickFurnitureForAnchor(catalogList, tags, anchor, rng, rules, placedByKind);
                 if (pick == null) continue;
-                // WallHanging sits above floor furniture in Y — skip the floor-rect overlap test.
+                // WallHanging sits above floor furniture in Y â€” skip the floor-rect overlap test.
                 if (anchor.Placement != AnchorPlacement.WallHanging
                     && OverlapsExisting(pick, anchor, placedFootprints)) continue;
                 ApplyAnchorJitter(anchor, rng);
@@ -591,8 +554,8 @@ namespace FriendSlop.Interiors
             // tags) facing inward toward the host piece.
             SpawnAroundTableFurniture(placedPieces, tags, catalogList, rng);
 
-            // Phase 5: prune unused anchors. A typical residential room carries 40–60
-            // FurnitureAnchor children (Wall + WallHanging × wall-cells + Corner + Center)
+            // Phase 5: prune unused anchors. A typical residential room carries 40â€“60
+            // FurnitureAnchor children (Wall + WallHanging Ã— wall-cells + Corner + Center)
             // and only a handful host a piece. Destroying the rest cuts hierarchy
             // traversal cost for every subsequent operation (NavMesh bake, minimap, etc.)
             // and quiets the editor inspector. Tabletop/AroundTable transient anchors
@@ -609,8 +572,8 @@ namespace FriendSlop.Interiors
 
         // Walks each placed piece's tabletop anchors and fills them with small tabletop-
         // placement furniture that matches the room's furniture tags and fits the slot.
-        // Each item gets a full 360° yaw and an XZ offset sized to the slack between its
-        // own footprint and the slot's — never clips off the surface. If the rolled pose
+        // Each item gets a full 360Â° yaw and an XZ offset sized to the slack between its
+        // own footprint and the slot's â€” never clips off the surface. If the rolled pose
         // overlaps an already-placed item on the same host, re-rolls up to TabletopMaxRolls
         // times; if still colliding, the slot is left empty rather than clipping.
         private const int TabletopMaxRolls = 4;
@@ -626,7 +589,7 @@ namespace FriendSlop.Interiors
                 int idx = 0;
                 var placedOnHost  = new List<Rect>();
                 // Per-host de-dup sets so we don't end up with two of the same lamp / vase
-                // / clock on a single table. Tracks both the def and its Kind tag — two
+                // / clock on a single table. Tracks both the def and its Kind tag â€” two
                 // distinct lamp prefabs that share kind="table_lamp" still collide.
                 var placedDefs    = new HashSet<FurnitureDefinition>();
                 var placedKinds   = new HashSet<string>();
@@ -644,7 +607,7 @@ namespace FriendSlop.Interiors
                         excludeDefs: placedDefs, excludeKinds: placedKinds);
                     if (pick == null) continue;
 
-                    // Half the slack between the slot and item on each axis — keeps the
+                    // Half the slack between the slot and item on each axis â€” keeps the
                     // jittered item entirely over the slot's surface footprint.
                     float slackX = Mathf.Max(0f, (slot.footprintXZ.x - pick.FootprintXZ.x) * 0.5f);
                     float slackZ = Mathf.Max(0f, (slot.footprintXZ.y - pick.FootprintXZ.y) * 0.5f);
@@ -688,7 +651,7 @@ namespace FriendSlop.Interiors
             {
                 case AnchorPlacement.WallHanging:
                 {
-                    // Triangle distribution centred on 0 — most pieces near-level, occasional crooked.
+                    // Triangle distribution centred on 0 â€” most pieces near-level, occasional crooked.
                     float t   = (float)rng.NextDouble() - (float)rng.NextDouble();
                     var leul  = anchor.transform.localEulerAngles;
                     anchor.transform.localEulerAngles = new Vector3(leul.x, leul.y + t * WallHangingYawJitterDegrees, leul.z);
@@ -711,8 +674,8 @@ namespace FriendSlop.Interiors
         // Walks each placed piece's around-table anchors and spawns chairs (or other
         // AroundTable-tagged pieces) that match the room's tags. Each anchor carries its
         // own yaw so the chair faces the host piece from whichever side it sits on.
-        // A small XZ offset and ±AroundTableYawJitterDegrees yaw jitter is applied to each
-        // anchor so chairs don't line up perfectly — looks pushed in by a person, not
+        // A small XZ offset and Â±AroundTableYawJitterDegrees yaw jitter is applied to each
+        // anchor so chairs don't line up perfectly â€” looks pushed in by a person, not
         // placed by a robot.
         private const float AroundTableJitterMetres      = 0.10f;
         private const float AroundTableYawJitterDegrees  = 20f;
@@ -804,7 +767,7 @@ namespace FriendSlop.Interiors
         private static bool AnchorIsOnDoorCell(FurnitureAnchor a, RoomDefinition roomDef, SocketDirection wall, float cellMetres)
         {
             var localPos = a.transform.localPosition;
-            // Door cell width — read from BuildingDefinition.GridCellMeters at the call
+            // Door cell width â€” read from BuildingDefinition.GridCellMeters at the call
             // site so non-default cell sizes work correctly.
             float c = cellMetres;
             switch (wall)
@@ -930,7 +893,7 @@ namespace FriendSlop.Interiors
                     piece.transform.localPosition    = p.localPosition;
                     piece.transform.localScale       = p.localScale;
                     piece.transform.localEulerAngles = p.localEulerAngles;
-                    // Default primitive material is the Standard shader — magenta under
+                    // Default primitive material is the Standard shader â€” magenta under
                     // URP. Swap to a cached URP/Lit material keyed by tint so the SRP
                     // batcher can group draws and we don't leak materials on regen.
                     var r = piece.GetComponent<MeshRenderer>();
@@ -951,7 +914,7 @@ namespace FriendSlop.Interiors
         }
 
         // Tinted-material cache. Keyed by 24-bit RGB so two primitives that ask for the
-        // same colour share one Material instance — SRP batcher then groups their draws.
+        // same colour share one Material instance â€” SRP batcher then groups their draws.
         // Static for the process lifetime; survives interior regen so we don't leak.
         private static readonly Dictionary<int, Material> _tintedMaterials = new();
         private static Material GetCachedTintedMaterial(Color tint)
@@ -977,7 +940,7 @@ namespace FriendSlop.Interiors
 
         // Removes the door-cell frame pieces (and any runtime wall-patch) on the given side
         // of a room so the room opens fully onto its neighbour AT THE SHARED door cell only.
-        // Wall_{s}_Rest is left intact — for multi-cell rooms it's the portion of the wall
+        // Wall_{s}_Rest is left intact â€” for multi-cell rooms it's the portion of the wall
         // that doesn't touch the neighbour and would otherwise expose the room to the void.
         // Number of cells along `worldSocket`'s side of A that are immediately adjacent
         // to a cell of B. Used to detect "full long-side" shared walls (e.g. dining
@@ -1025,7 +988,7 @@ namespace FriendSlop.Interiors
         // geometry past the neighbor.
         private static void StripWallAtSocket(GameObject roomRoot, SocketDirection s)
         {
-            // The two pillars become unnecessary — the opening is the full door cell.
+            // The two pillars become unnecessary â€” the opening is the full door cell.
             // The wall patch (added for unconnected sockets) is also destroyed in case
             // it was somehow left around for a now-open passage.
             foreach (var name in new[] { $"Frame_{s}_L", $"Frame_{s}_R", $"WallPatch_{s}" })
@@ -1072,7 +1035,7 @@ namespace FriendSlop.Interiors
 
         // World-space translation to apply AFTER rotation so the rotated room's SW
         // corner ends up at the same grid origin as the unrotated one. Rotation 0/2 are
-        // sized-(s.x, s.y); rotation 1/3 are sized-(s.y, s.x) — translation matches.
+        // sized-(s.x, s.y); rotation 1/3 are sized-(s.y, s.x) â€” translation matches.
         private static Vector3 RotationTranslation(PlacedRoom room, float cellMetres)
         {
             var s = room.Definition.GridSize;
@@ -1086,29 +1049,16 @@ namespace FriendSlop.Interiors
             };
         }
 
->>>>>>> origin/interiors-changes
         // Plugs the door-frame opening for any socket the generator left unconnected.
         // Door openings live on the SW-most cell of each wall (matching BuildPerimeterWall).
-        // Vertical sockets (Up/Down) leave 2×2 holes in ceiling/floor at the NW corner —
+        // Vertical sockets (Up/Down) leave 2Ã—2 holes in ceiling/floor at the NW corner â€”
         // patch those too so the bottom/top of a stair stack doesn't open into the void.
         private static void PatchUnconnectedSockets(Transform roomRoot, PlacedRoom room, BuildingDefinition def)
         {
-<<<<<<< HEAD
-            const float doorWidth  = 2f;
-            const float doorHeight = 3f;
-            const float wall       = 0.2f;
-            // Match BuildFloorOrCeiling in the editor builder: 2 m wide × 4 m deep
-            // hole whose north edge is at the top step (z=7), covering the upper part
-            // of the staircase. Solid floor between the stair top and the wall.
-            const float holeW      = 2f;
-            const float holeD      = 4f;
-            const float holeNorthZ = 7f;
-            float c = def.GridCellMeters;
-=======
             const float doorWidth  = 1.7f;
             const float doorHeight = 3f;
             const float wall       = 0.2f;
-            // Match BuildFloorOrCeiling: 2 m wide × 4 m deep hole whose north edge sits
+            // Match BuildFloorOrCeiling: 2 m wide Ã— 4 m deep hole whose north edge sits
             // at the top step (staircase_cells * cellMetres - 1 m). The stair room is 2
             // cells wide in the doubled grid, hence the multiplier. The hole is shifted
             // east by one cell so the bottom/top landings sit in the east cell, freeing
@@ -1120,13 +1070,12 @@ namespace FriendSlop.Interiors
             float holeMinX         = c;
             float holeCenterX      = holeMinX + holeW * 0.5f;
             float holeNorthZ       = stairCells * c - 1f;
->>>>>>> origin/interiors-changes
             float h = def.FloorHeightMeters;
             float w = room.Definition.GridSize.x * c;
             float d = room.Definition.GridSize.y * c;
 
             // If the room's Up socket is unconnected, the ramp leads to a patched ceiling
-            // and is just a dead end — remove it so the player isn't confused.
+            // and is just a dead end â€” remove it so the player isn't confused.
             if (room.Definition.HasSocket(SocketDirection.Up) &&
                 !room.ConnectedSockets.Contains(SocketDirection.Up))
             {
@@ -1134,21 +1083,15 @@ namespace FriendSlop.Interiors
                 if (ramp != null) Object.Destroy(ramp.gameObject);
             }
 
-<<<<<<< HEAD
-            foreach (var s in room.Definition.Sockets)
-            {
-                if (room.ConnectedSockets.Contains(s)) continue;
-=======
             // Patches are positioned in the room's DEF-local frame (the GameObject is
             // rotated as a whole). So we iterate DEF sockets, but the connected-check
-            // compares against WORLD sockets — convert via the room's rotation.
+            // compares against WORLD sockets â€” convert via the room's rotation.
             foreach (var s in room.Definition.Sockets)
             {
                 var worldS = s.IsVertical()
                     ? s
                     : SocketDirectionExtensions.Rotate(s, room.Rotation);
                 if (room.ConnectedSockets.Contains(worldS)) continue;
->>>>>>> origin/interiors-changes
 
                 Vector3 localPos;
                 Vector3 size;
@@ -1171,21 +1114,13 @@ namespace FriendSlop.Interiors
                         size     = new Vector3(wall, doorHeight, doorWidth);
                         break;
                     case SocketDirection.Up:
-                        // Cap the ceiling hole — sits between holeSouthZ and holeNorthZ.
-<<<<<<< HEAD
-                        localPos = new Vector3(holeW * 0.5f, h, holeNorthZ - holeD * 0.5f);
-=======
+                        // Cap the ceiling hole â€” sits between holeSouthZ and holeNorthZ.
                         localPos = new Vector3(holeCenterX, h, holeNorthZ - holeD * 0.5f);
->>>>>>> origin/interiors-changes
                         size     = new Vector3(holeW, wall, holeD);
                         break;
                     case SocketDirection.Down:
                         // Cap the floor hole at the same XZ.
-<<<<<<< HEAD
-                        localPos = new Vector3(holeW * 0.5f, 0f, holeNorthZ - holeD * 0.5f);
-=======
                         localPos = new Vector3(holeCenterX, 0f, holeNorthZ - holeD * 0.5f);
->>>>>>> origin/interiors-changes
                         size     = new Vector3(holeW, wall, holeD);
                         break;
                     default: continue;
@@ -1199,10 +1134,8 @@ namespace FriendSlop.Interiors
             }
         }
 
-<<<<<<< HEAD
-=======
         // For a Garage room, replace the wall geometry on whichever side faces the void
-        // (no neighbouring room) with a panelled garage-door visual. Decorative — doesn't
+        // (no neighbouring room) with a panelled garage-door visual. Decorative â€” doesn't
         // open and isn't a real connection. Side priority: South, West, East, North so
         // the garage door tends to land on the front-facing side of the building.
         private static void TryAddGarageDoor(Transform roomRoot, PlacedRoom room,
@@ -1235,7 +1168,7 @@ namespace FriendSlop.Interiors
             BuildGarageDoorPanel(roomRoot, defSide, room.Definition, def);
         }
 
-        // True if every cell along `worldSide`'s outer edge of `room` is unoccupied —
+        // True if every cell along `worldSide`'s outer edge of `room` is unoccupied â€”
         // i.e. there's no neighbour, so this side of the room is on the building's
         // outer perimeter and faces the void.
         private static bool IsRoomSideVoidFacing(InteriorLayout layout, PlacedRoom room, SocketDirection worldSide)
@@ -1342,7 +1275,6 @@ namespace FriendSlop.Interiors
             if (r != null) r.sharedMaterial = GetCachedTintedMaterial(color);
         }
 
->>>>>>> origin/interiors-changes
         private static void BakeNavMesh(GameObject root)
         {
             var surface = root.AddComponent<NavMeshSurface>();
@@ -1360,15 +1292,9 @@ namespace FriendSlop.Interiors
             foreach (var conn in layout.Connections)
             {
                 if (conn.SocketA.IsVertical()) continue;
-<<<<<<< HEAD
-                var (pos, rot) = InteriorLayoutGenerator.DoorTransform(conn, origin, def);
-                Debug.Log($"[Interior] Door at {pos} rot={rot.eulerAngles} " +
-                          $"(RoomA grid={conn.RoomA.GridPosition} size={conn.RoomA.Definition.GridSize} socket={conn.SocketA})");
-=======
                 if (conn.IsOpenPassage) continue;   // archways have no door
                 var (pos, rot) = InteriorLayoutGenerator.DoorTransform(conn, origin, def);
                 Debug.Log($"[Interiors] Door {conn.RoomA.Definition.name}@{conn.RoomA.GridPosition}r{conn.RoomA.Rotation}/{conn.SocketA} <-> {conn.RoomB.Definition.name}@{conn.RoomB.GridPosition}r{conn.RoomB.Rotation}/{conn.SocketB} at world {pos}");
->>>>>>> origin/interiors-changes
                 var door = Object.Instantiate(doorPrefab, pos, rot);
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(door, gameObject.scene);
                 ApplyDoorColor(door);
@@ -1388,7 +1314,7 @@ namespace FriendSlop.Interiors
             renderer.sharedMaterial = mat;
         }
 
-        // ── Utility ───────────────────────────────────────────────────────────
+        // â”€â”€ Utility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         // On the server _definition is set directly; on clients look it up via the replicated index.
         private BuildingDefinition ResolveDefinition()
@@ -1414,21 +1340,5 @@ namespace FriendSlop.Interiors
             return null;
         }
 
-<<<<<<< HEAD
-=======
-        private void DestroyInterior()
-        {
-            if (_interiorRoot != null)
-            {
-                Destroy(_interiorRoot);
-                _interiorRoot = null;
-            }
-            if (_minimap != null)
-            {
-                Destroy(_minimap.gameObject);
-                _minimap = null;
-            }
-        }
->>>>>>> origin/interiors-changes
     }
 }

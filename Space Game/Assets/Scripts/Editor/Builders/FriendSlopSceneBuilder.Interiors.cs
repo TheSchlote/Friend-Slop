@@ -25,12 +25,8 @@ namespace FriendSlop.Editor
             var roomDefs = RepairRoomDefinitions();
             var doorPrefab = RepairDoorPrefab();
             RepairBuildingDefinitions(roomDefs);
-<<<<<<< HEAD
-            RepairInteriorCatalog();
-=======
             var furnitureDefs = RepairFurnitureAssetsInternal();
             RepairInteriorCatalog(furnitureDefs);
->>>>>>> origin/interiors-changes
             RepairDoorInNetworkPrefabsList(doorPrefab);
 
             AssetDatabase.SaveAssets();
@@ -84,7 +80,7 @@ namespace FriendSlop.Editor
             Debug.Log("[Friend Slop] Test building spawned. Press Play to test.");
         }
 
-        // ── Room definitions ───────────────────────────────────────────────────
+        // â”€â”€ Room definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static RoomDefinition[] RepairRoomDefinitions()
         {
@@ -100,33 +96,21 @@ namespace FriendSlop.Editor
             var assetPath = $"{InteriorRoomDefFolder}/{spec.Name}.asset";
             var existing  = AssetDatabase.LoadAssetAtPath<RoomDefinition>(assetPath);
 
-            // Always rebuild the prefab — geometry rules iterate. The .asset itself can be reused.
+            // Always rebuild the prefab â€” geometry rules iterate. The .asset itself can be reused.
             var prefab = RepairRoomPrefab(spec);
 
             if (existing != null)
             {
-<<<<<<< HEAD
-                // Make sure the existing definition still points at the rebuilt prefab.
-                var existingSo = new SerializedObject(existing);
-                existingSo.FindProperty("prefab").objectReferenceValue = prefab;
-=======
                 // Re-sync all spec-driven fields so flag changes (e.g. EntryCandidate) take
                 // effect without manually deleting the asset.
                 var existingSo = new SerializedObject(existing);
                 WriteRoomFields(existingSo, spec, prefab);
->>>>>>> origin/interiors-changes
                 existingSo.ApplyModifiedPropertiesWithoutUndo();
                 return existing;
             }
 
             var def = ScriptableObject.CreateInstance<RoomDefinition>();
             var so  = new SerializedObject(def);
-<<<<<<< HEAD
-            so.FindProperty("gridSize").vector2IntValue = spec.GridSize;
-            so.FindProperty("category").enumValueIndex  = (int)spec.Category;
-            so.FindProperty("isVerticalConnector").boolValue = spec.IsVerticalConnector;
-            so.FindProperty("weight").intValue          = spec.Weight;
-=======
             WriteRoomFields(so, spec, prefab);
             so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -147,20 +131,12 @@ namespace FriendSlop.Editor
             so.FindProperty("isEntryCandidate").boolValue    = spec.EntryCandidate;
             so.FindProperty("floorRestriction").enumValueIndex = (int)spec.FloorRestriction;
             so.FindProperty("furnitureCountRange").vector2IntValue = spec.FurnitureCountRange;
->>>>>>> origin/interiors-changes
 
             var socketsArr = so.FindProperty("sockets");
             socketsArr.arraySize = spec.Sockets.Length;
             for (int i = 0; i < spec.Sockets.Length; i++)
                 socketsArr.GetArrayElementAtIndex(i).enumValueIndex = (int)spec.Sockets[i];
 
-<<<<<<< HEAD
-            so.FindProperty("prefab").objectReferenceValue = prefab;
-            so.ApplyModifiedPropertiesWithoutUndo();
-
-            AssetDatabase.CreateAsset(def, assetPath);
-            return def;
-=======
             var tagsArr = so.FindProperty("furnitureTags");
             tagsArr.arraySize = spec.FurnitureTags.Length;
             for (int i = 0; i < spec.FurnitureTags.Length; i++)
@@ -176,12 +152,11 @@ namespace FriendSlop.Editor
                 elem.FindPropertyRelative("min").intValue     = Mathf.Max(0, min);
                 elem.FindPropertyRelative("max").intValue     = Mathf.Max(0, max);
             }
->>>>>>> origin/interiors-changes
         }
 
         private static GameObject RepairRoomPrefab(RoomSpec spec)
         {
-            // Always overwrite — geometry rules change as we iterate the interior system,
+            // Always overwrite â€” geometry rules change as we iterate the interior system,
             // and SaveAsPrefabAsset preserves the asset GUID so RoomDefinition refs survive.
             var prefabPath = $"{InteriorRoomFolder}/{spec.Name}.prefab";
 
@@ -193,15 +168,10 @@ namespace FriendSlop.Editor
             return prefab;
         }
 
-<<<<<<< HEAD
-        private static void BuildRoomGeometry(GameObject root, RoomSpec spec)
-        {
-            const float c = 8f;  // metres per grid cell
-=======
         // Public entry point used by the in-game Blueprint Editor (Phase 2) to
         // regenerate a room's prefab after the user edits its RoomDefinition. Builds
         // the geometry from the def's CURRENT field values (gridSize, sockets, kind,
-        // isVerticalConnector) — i.e. the editor's edits show up live without a full
+        // isVerticalConnector) â€” i.e. the editor's edits show up live without a full
         // Repair pass and without overwriting the user's furniture-rule edits.
         public static void RegenerateRoomPrefabFromDefinition(RoomDefinition def)
         {
@@ -229,7 +199,7 @@ namespace FriendSlop.Editor
             Object.DestroyImmediate(root);
 
             // Re-link the def's prefab reference in case path changed (it usually
-            // doesn't — SaveAsPrefabAsset preserves the GUID — but cheap insurance).
+            // doesn't â€” SaveAsPrefabAsset preserves the GUID â€” but cheap insurance).
             if (prefab != null && def.Prefab != prefab)
             {
                 var so = new SerializedObject(def);
@@ -242,8 +212,8 @@ namespace FriendSlop.Editor
 
         // Cell size for room/door/anchor geometry. Must stay in sync with
         // BuildingDefinition.gridCellMeters and InteriorSceneBootstrapper.AnchorIsOnDoorCell.
-        // The grid is double-resolution — a "1×1 small room" occupies one 3.4 m cell, and
-        // every legacy "1×1 room" now uses GridSize(2,2) so its physical size stays 6.8 m.
+        // The grid is double-resolution â€” a "1Ã—1 small room" occupies one 3.4 m cell, and
+        // every legacy "1Ã—1 room" now uses GridSize(2,2) so its physical size stays 6.8 m.
         private const float CellMetres = 3.4f;
         // The staircase room footprint is 2 cells wide in the new grid (= 6.8 m physical),
         // which keeps the ramp/hole at the original physical dimensions.
@@ -252,7 +222,6 @@ namespace FriendSlop.Editor
         private static void BuildRoomGeometry(GameObject root, RoomSpec spec)
         {
             const float c = CellMetres;  // metres per grid cell
->>>>>>> origin/interiors-changes
             float w = spec.GridSize.x * c;
             float d = spec.GridSize.y * c;
             const float h = 4f;
@@ -272,20 +241,8 @@ namespace FriendSlop.Editor
 
             if (hasUp)
                 BuildRamp(root, w, d, h, wall);
-<<<<<<< HEAD
-        }
 
-        // Floor or ceiling slab. If hasHole, leaves an opening that begins at the top
-        // step of the staircase (z ≈ 6.625 with 16 steps over 6 m run) and extends
-        // SOUTH from there, giving the player head-clearance during ascent. The strip
-        // between the top step and the north wall stays solid floor.
-        // 2 m wide (stair width) × 3 m deep.
-        private const float StairHoleW = 2f;
-        private const float StairHoleD = 4f;
-        private const float StairHoleNorthZ = 7f; // top step's north edge for the current ramp config
-=======
-
-            // Generate furniture anchors — wall midpoints, corners, and centre(s).
+            // Generate furniture anchors â€” wall midpoints, corners, and centre(s).
             // Stair rooms skip anchors entirely (the staircase dominates them).
             if (!spec.IsVerticalConnector)
                 BuildFurnitureAnchors(root, spec, w, d);
@@ -297,15 +254,15 @@ namespace FriendSlop.Editor
         // are handled by the bootstrapper at instantiation time.
         private static void BuildFurnitureAnchors(GameObject root, RoomSpec spec, float w, float d)
         {
-            // Wall midpoints — one per perimeter cell along each wall.
+            // Wall midpoints â€” one per perimeter cell along each wall.
             // Each cell gets both a floor-Wall slot (sofa, dresser) and a WallHanging slot
-            // at the same XZ — the painting hangs above whatever floor piece occupies the
+            // at the same XZ â€” the painting hangs above whatever floor piece occupies the
             // wall. WallHanging anchors keep localPosition.y=0 because each hung furniture
-            // def positions its own primitives at the right height (1.5–1.8 m).
+            // def positions its own primitives at the right height (1.5â€“1.8Â m).
             const float wallInset = 0.5f;       // metres from the wall (so the piece's back can touch the wall)
-            // Walls are 0.2 m thick centred on the wall plane → interior face is at 0.1 m.
+            // Walls are 0.2 m thick centred on the wall plane â†’ interior face is at 0.1 m.
             // hangingInset = 0.20 puts the anchor 0.10 m INTO the room from the visible
-            // surface, so wall-hung items (frames at local z ≈ -0.04 to -0.08) end up
+            // surface, so wall-hung items (frames at local z â‰ˆ -0.04 to -0.08) end up
             // proud of the wall instead of buried inside it.
             const float hangingInset = 0.20f;
             for (int cellX = 0; cellX < spec.GridSize.x; cellX++)
@@ -353,8 +310,8 @@ namespace FriendSlop.Editor
                 AnchorPlacement.Corner, SocketDirection.North, new Vector2(0.8f, 0.8f), rotateYDeg: 225f);
 
             // DiningRoom uses a single dedicated anchor biased toward the kitchen-facing
-            // wall (def-South — the placement constraint guarantees def-South is the side
-            // that touches the Kitchen). Footprint is sized for the DiningTable (2.2×1.0)
+            // wall (def-South â€” the placement constraint guarantees def-South is the side
+            // that touches the Kitchen). Footprint is sized for the DiningTable (2.2Ã—1.0)
             // plus chair clearance. Skips the generic Center anchor so nothing else
             // competes for the room-centre position.
             if (spec.Kind == RoomKind.DiningRoom)
@@ -397,13 +354,12 @@ namespace FriendSlop.Editor
 
         // Floor or ceiling slab. If hasHole, leaves an opening sized for one grid cell
         // (CellMetres-1m from the south wall, StairHoleD deep). The hole sits in the
-        // EAST cell of the staircase footprint (x offset = CellMetres) so the doors —
-        // which always land in the SW-most cell of each wall — don't end up on top of
+        // EAST cell of the staircase footprint (x offset = CellMetres) so the doors â€”
+        // which always land in the SW-most cell of each wall â€” don't end up on top of
         // the staircase.
         private const float StairHoleW = 2f;
         private const float StairHoleD = 4f;
         private const float StairHoleXOffset = CellMetres; // shift hole east by one staircase cell
->>>>>>> origin/interiors-changes
 
         private static void BuildFloorOrCeiling(GameObject root, string name, float y,
             float w, float d, float wall, bool hasHole)
@@ -415,54 +371,35 @@ namespace FriendSlop.Editor
             }
 
             float holeW       = Mathf.Min(StairHoleW, w);
-<<<<<<< HEAD
-            float holeNorthZ  = Mathf.Min(StairHoleNorthZ, d);
-            float holeSouthZ  = Mathf.Max(0f, holeNorthZ - StairHoleD);
-
-            // East strip — covers everything to the east of the hole (x=holeW..w, full Z).
-            AddBox(root, $"{name}_E",
-                new Vector3(holeW + (w - holeW) * 0.5f, y, d * 0.5f),
-                new Vector3(w - holeW, wall, d));
-            // South patch — solid floor south of the hole.
-            if (holeSouthZ > 0.001f)
-                AddBox(root, $"{name}_SW",
-                    new Vector3(holeW * 0.5f, y, holeSouthZ * 0.5f),
-                    new Vector3(holeW, wall, holeSouthZ));
-            // North patch — solid floor between the top of the stairs and the wall.
-            if (d - holeNorthZ > 0.001f)
-                AddBox(root, $"{name}_NW",
-                    new Vector3(holeW * 0.5f, y, holeNorthZ + (d - holeNorthZ) * 0.5f),
-=======
             float holeMinX    = Mathf.Min(StairHoleXOffset, w - holeW);    // east of cell 0
             float holeMaxX    = holeMinX + holeW;
             float holeNorthZ  = Mathf.Min(StaircaseCells * CellMetres - 1f, d); // top step's north edge
             float holeSouthZ  = Mathf.Max(0f, holeNorthZ - StairHoleD);
 
-            // West strip — solid floor from the west wall to the hole.
+            // West strip â€” solid floor from the west wall to the hole.
             if (holeMinX > 0.001f)
                 AddBox(root, $"{name}_W",
                     new Vector3(holeMinX * 0.5f, y, d * 0.5f),
                     new Vector3(holeMinX, wall, d));
-            // East strip — solid floor from the hole to the east wall.
+            // East strip â€” solid floor from the hole to the east wall.
             if (w - holeMaxX > 0.001f)
                 AddBox(root, $"{name}_E",
                     new Vector3(holeMaxX + (w - holeMaxX) * 0.5f, y, d * 0.5f),
                     new Vector3(w - holeMaxX, wall, d));
-            // South patch — solid floor south of the hole, inside the hole's x band.
+            // South patch â€” solid floor south of the hole, inside the hole's x band.
             if (holeSouthZ > 0.001f)
                 AddBox(root, $"{name}_S",
                     new Vector3(holeMinX + holeW * 0.5f, y, holeSouthZ * 0.5f),
                     new Vector3(holeW, wall, holeSouthZ));
-            // North patch — solid floor between the top of the stairs and the north wall.
+            // North patch â€” solid floor between the top of the stairs and the north wall.
             if (d - holeNorthZ > 0.001f)
                 AddBox(root, $"{name}_N",
                     new Vector3(holeMinX + holeW * 0.5f, y, holeNorthZ + (d - holeNorthZ) * 0.5f),
->>>>>>> origin/interiors-changes
                     new Vector3(holeW, wall, d - holeNorthZ));
         }
 
         // Stairs from SW floor up to the NW ceiling hole. Each step is small enough that
-        // a CharacterController's stepOffset walks the player up automatically — far more
+        // a CharacterController's stepOffset walks the player up automatically â€” far more
         // reliable than a tilted slab, which physics-based controllers tend to slip off.
         // Wraps the steps in a parent named "Ramp" so the bootstrapper can still find
         // and remove the staircase if the Up socket ends up unconnected.
@@ -470,17 +407,11 @@ namespace FriendSlop.Editor
         {
             const int   stepCount  = 16;
             const float rampWidth  = 2f;
-<<<<<<< HEAD
-            const float rampX      = 1f;        // ramp centred at local x=1
-            const float runStart   = 1f;
-            float       runEnd     = d - 1f;
-=======
             const float rampX      = 1f + StairHoleXOffset; // ramp centred in the east stair cell
             const float runStart   = 1f;
             // Clamp the ramp to the staircase footprint so multi-cell mirror rooms (e.g. the
             // basement) don't get an absurdly long ramp spanning the whole room.
             float       runEnd     = Mathf.Min(d - 1f, StaircaseCells * CellMetres - 1f);
->>>>>>> origin/interiors-changes
             float       run        = runEnd - runStart;
             float       stepDepth  = run / stepCount;
             float       stepHeight = h   / stepCount;
@@ -512,7 +443,7 @@ namespace FriendSlop.Editor
         }
 
         // For each wall direction we either build a solid wall (no socket on this side) or a
-        // wall with a single door opening at the SW-most cell of that wall — the door cell.
+        // wall with a single door opening at the SW-most cell of that wall â€” the door cell.
         // The remaining cells of a multi-cell wall stay solid. This matches DoorTransform's
         // grid-aligned door positions so doors and door frames always line up.
         private static void BuildPerimeterWall(GameObject root, SocketDirection s, HashSet<SocketDirection> sockets,
@@ -535,7 +466,7 @@ namespace FriendSlop.Editor
                 return;
             }
 
-            // Has a socket — solid wall covers everything past the first cell, then a
+            // Has a socket â€” solid wall covers everything past the first cell, then a
             // door frame at the first cell.
             if (ns)
             {
@@ -567,11 +498,7 @@ namespace FriendSlop.Editor
         private static void AddDoorFrameAtCell(GameObject root, SocketDirection s,
             float cellSize, float wallPos, float h, float wall, bool ns)
         {
-<<<<<<< HEAD
-            const float dw = 2f;   // door opening width
-=======
             const float dw = 1.7f; // door opening width
->>>>>>> origin/interiors-changes
             const float dh = 3f;   // door opening height
             float sideW = (cellSize - dw) * 0.5f;
 
@@ -591,15 +518,8 @@ namespace FriendSlop.Editor
             }
         }
 
-        // ── Door prefab ────────────────────────────────────────────────────────
+        // â”€â”€ Door prefab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-<<<<<<< HEAD
-        private static GameObject RepairDoorPrefab()
-        {
-            var prefabPath = $"{InteriorPrefabFolder}/InteriorDoor.prefab";
-            var existing   = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-            if (existing != null) return existing;
-=======
         // Must stay in sync with InteriorLayoutGenerator.DoorWidth and the door-opening
         // width in BuildPerimeterWall / PatchUnconnectedSockets.
         private const float DoorPrefabWidth  = 1.7f;
@@ -608,9 +528,8 @@ namespace FriendSlop.Editor
         private static GameObject RepairDoorPrefab()
         {
             var prefabPath = $"{InteriorPrefabFolder}/InteriorDoor.prefab";
-            // Always overwrite — door geometry changes as we iterate, and SaveAsPrefabAsset
+            // Always overwrite â€” door geometry changes as we iterate, and SaveAsPrefabAsset
             // preserves the asset GUID so NetworkPrefabsList references survive.
->>>>>>> origin/interiors-changes
 
             var root = new GameObject("InteriorDoor");
             root.AddComponent<NetworkObject>();
@@ -619,17 +538,6 @@ namespace FriendSlop.Editor
             var pivot = new GameObject("DoorPivot");
             pivot.transform.SetParent(root.transform);
 
-<<<<<<< HEAD
-            var mesh = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            mesh.name = "DoorMesh";
-            mesh.transform.SetParent(pivot.transform);
-            mesh.transform.localPosition = new Vector3(1f, 1.5f, 0);
-            mesh.transform.localScale    = new Vector3(2f, 3f, 0.1f);
-
-            var col = root.AddComponent<BoxCollider>();
-            col.size   = new Vector3(2f, 3f, 0.1f);
-            col.center = new Vector3(1f, 1.5f, 0);
-=======
             float halfW = DoorPrefabWidth * 0.5f;
             float halfH = DoorPrefabHeight * 0.5f;
 
@@ -642,7 +550,6 @@ namespace FriendSlop.Editor
             var col = root.AddComponent<BoxCollider>();
             col.size   = new Vector3(DoorPrefabWidth, DoorPrefabHeight, 0.1f);
             col.center = new Vector3(halfW, halfH, 0);
->>>>>>> origin/interiors-changes
 
             var so = new SerializedObject(door);
             so.FindProperty("doorCollider").objectReferenceValue = col;
@@ -654,7 +561,7 @@ namespace FriendSlop.Editor
             return prefab;
         }
 
-        // ── Building definitions ───────────────────────────────────────────────
+        // â”€â”€ Building definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static void RepairBuildingDefinitions(RoomDefinition[] roomDefs)
         {
@@ -678,16 +585,6 @@ namespace FriendSlop.Editor
             so.FindProperty("minFloors").intValue           = spec.MinFloors;
             so.FindProperty("maxFloors").intValue           = spec.MaxFloors;
             so.FindProperty("floorHeightMeters").floatValue = 4f;
-<<<<<<< HEAD
-            so.FindProperty("gridCellMeters").floatValue    = 8f;
-            so.FindProperty("minSpecialRooms").intValue     = spec.MinSpecial;
-            so.FindProperty("maxSpecialRooms").intValue     = spec.MaxSpecial;
-
-            var pool = so.FindProperty("roomPool");
-            pool.arraySize = allDefs.Length;
-            for (int i = 0; i < allDefs.Length; i++)
-                pool.GetArrayElementAtIndex(i).objectReferenceValue = allDefs[i];
-=======
             so.FindProperty("gridCellMeters").floatValue    = CellMetres;
             so.FindProperty("minSpecialRooms").intValue     = spec.MinSpecial;
             so.FindProperty("maxSpecialRooms").intValue     = spec.MaxSpecial;
@@ -706,7 +603,7 @@ namespace FriendSlop.Editor
                 elem.FindPropertyRelative("definition").objectReferenceValue = room;
                 elem.FindPropertyRelative("count").intValue                  = Mathf.Max(1, reqSpec.Count);
 
-                // adjacentToAny is an array — only allocate when the recipe asked for it.
+                // adjacentToAny is an array â€” only allocate when the recipe asked for it.
                 var adjProp = elem.FindPropertyRelative("adjacentToAny");
                 var adjNames = reqSpec.AdjacentToAny ?? System.Array.Empty<string>();
                 adjProp.arraySize = adjNames.Length;
@@ -719,7 +616,7 @@ namespace FriendSlop.Editor
                 }
             }
 
-            // Vertical-link specialisation — only meaningful for buildings that author it.
+            // Vertical-link specialisation â€” only meaningful for buildings that author it.
             so.FindProperty("downwardConnectorMirror").objectReferenceValue =
                 string.IsNullOrEmpty(spec.DownwardConnectorMirrorName)
                     ? null
@@ -754,7 +651,6 @@ namespace FriendSlop.Editor
             optionalProp.arraySize = optionalRooms.Count;
             for (int i = 0; i < optionalRooms.Count; i++)
                 optionalProp.GetArrayElementAtIndex(i).objectReferenceValue = optionalRooms[i];
->>>>>>> origin/interiors-changes
 
             so.ApplyModifiedPropertiesWithoutUndo();
             if (isNew) AssetDatabase.CreateAsset(def, assetPath);
@@ -762,14 +658,6 @@ namespace FriendSlop.Editor
             return def;
         }
 
-<<<<<<< HEAD
-        // ── Interior catalog ───────────────────────────────────────────────────
-
-        private static void RepairInteriorCatalog()
-        {
-            var catalogPath = $"{InteriorAssetFolder}/InteriorCatalog.asset";
-            // Always rebuild — adding a new building spec must update the catalog.
-=======
         private static RoomDefinition FindRoomDef(RoomDefinition[] all, string name)
         {
             foreach (var d in all)
@@ -795,21 +683,18 @@ namespace FriendSlop.Editor
             return resolved;
         }
 
-        // ── Interior catalog ───────────────────────────────────────────────────
+        // â”€â”€ Interior catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static void RepairInteriorCatalog(FurnitureDefinition[] furnitureDefs = null)
         {
             var catalogPath = $"{InteriorAssetFolder}/InteriorCatalog.asset";
-            // Always rebuild — adding a new building/furniture spec must update the catalog.
->>>>>>> origin/interiors-changes
+            // Always rebuild â€” adding a new building/furniture spec must update the catalog.
 
             var guids = AssetDatabase.FindAssets("t:BuildingDefinition", new[] { InteriorBuildingFolder });
             var defs  = new List<BuildingDefinition>();
             foreach (var guid in guids)
                 defs.Add(AssetDatabase.LoadAssetAtPath<BuildingDefinition>(AssetDatabase.GUIDToAssetPath(guid)));
 
-<<<<<<< HEAD
-=======
             // Fall back to scanning the project if the caller didn't pass furniture defs.
             if (furnitureDefs == null)
             {
@@ -820,7 +705,6 @@ namespace FriendSlop.Editor
                 furnitureDefs = fList.ToArray();
             }
 
->>>>>>> origin/interiors-changes
             var catalog   = AssetDatabase.LoadAssetAtPath<InteriorCatalog>(catalogPath);
             bool isNewCat = catalog == null;
             if (isNewCat)
@@ -831,21 +715,18 @@ namespace FriendSlop.Editor
             arr.arraySize = defs.Count;
             for (int i = 0; i < defs.Count; i++)
                 arr.GetArrayElementAtIndex(i).objectReferenceValue = defs[i];
-<<<<<<< HEAD
-=======
 
             var furnArr = so.FindProperty("furniture");
             furnArr.arraySize = furnitureDefs.Length;
             for (int i = 0; i < furnitureDefs.Length; i++)
                 furnArr.GetArrayElementAtIndex(i).objectReferenceValue = furnitureDefs[i];
 
->>>>>>> origin/interiors-changes
             so.ApplyModifiedPropertiesWithoutUndo();
             if (isNewCat) AssetDatabase.CreateAsset(catalog, catalogPath);
             EditorUtility.SetDirty(catalog);
         }
 
-        // ── NetworkPrefabsList ─────────────────────────────────────────────────
+        // â”€â”€ NetworkPrefabsList â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static void RepairDoorInNetworkPrefabsList(GameObject doorPrefab)
         {
@@ -876,7 +757,7 @@ namespace FriendSlop.Editor
             EditorUtility.SetDirty(list);
         }
 
-        // ── Loading screen canvas ──────────────────────────────────────────────
+        // â”€â”€ Loading screen canvas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static GameObject BuildLoadingScreenCanvas(Transform parent)
         {
@@ -900,7 +781,7 @@ namespace FriendSlop.Editor
             return canvasGo;
         }
 
-        // ── Folder creation ────────────────────────────────────────────────────
+        // â”€â”€ Folder creation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static void EnsureInteriorFolders()
         {
@@ -919,19 +800,8 @@ namespace FriendSlop.Editor
             }
         }
 
-        // ── Spec data ──────────────────────────────────────────────────────────
+        // â”€â”€ Spec data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-<<<<<<< HEAD
-        private static RoomSpec[] GetRoomSpecs() => new[]
-        {
-            new RoomSpec("Room_Entry_1x1",   new Vector2Int(1,1), RoomCategory.Entry,   new[]{SocketDirection.North,SocketDirection.South,SocketDirection.East,SocketDirection.West}, false, 10),
-            new RoomSpec("Room_Generic_1x1", new Vector2Int(1,1), RoomCategory.Generic, new[]{SocketDirection.North,SocketDirection.South,SocketDirection.East,SocketDirection.West}, false, 20),
-            new RoomSpec("Room_Generic_1x2", new Vector2Int(1,2), RoomCategory.Generic, new[]{SocketDirection.North,SocketDirection.South,SocketDirection.East,SocketDirection.West}, false, 15),
-            new RoomSpec("Room_Generic_2x2", new Vector2Int(2,2), RoomCategory.Generic, new[]{SocketDirection.North,SocketDirection.South,SocketDirection.East,SocketDirection.West}, false, 10),
-            new RoomSpec("Room_Utility_1x1", new Vector2Int(1,1), RoomCategory.Utility, new[]{SocketDirection.South}, false, 10),
-            new RoomSpec("Room_Special_2x2", new Vector2Int(2,2), RoomCategory.Special, new[]{SocketDirection.North,SocketDirection.South,SocketDirection.East,SocketDirection.West}, false, 5),
-            new RoomSpec("Room_Stair_1x1",   new Vector2Int(1,1), RoomCategory.Generic, new[]{SocketDirection.North,SocketDirection.South,SocketDirection.Up,SocketDirection.Down},  true, 10),
-=======
         private static readonly SocketDirection[] AllHorizontalSockets =
             { SocketDirection.North, SocketDirection.South, SocketDirection.East, SocketDirection.West };
 
@@ -970,7 +840,7 @@ namespace FriendSlop.Editor
                 furnitureTags: new[]{ FurnitureTags.Hallway, FurnitureTags.Shared },
                 furnitureCountRange: new Vector2Int(1, 2)),
             // Filler hallway used post-expansion to plug empty cells inside the bbox
-            // that touch 2+ rooms. Not part of the optionalPool — only referenced via
+            // that touch 2+ rooms. Not part of the optionalPool â€” only referenced via
             // BuildingDefinition.fillerRoom and placed by the filler pass.
             new RoomSpec("Room_Residential_Hallway_1x1",     new Vector2Int(1,1), RoomCategory.Generic, AllHorizontalSockets, false, 1,
                 kind: RoomKind.Hallway,
@@ -1004,7 +874,7 @@ namespace FriendSlop.Editor
                 kind: RoomKind.Basement,
                 furnitureTags: new[]{ FurnitureTags.Basement, FurnitureTags.Storage, FurnitureTags.Shared }),
 
-            // Residential — small utility rooms.
+            // Residential â€” small utility rooms.
             new RoomSpec("Room_Residential_Laundry_2x2",     new Vector2Int(2,2), RoomCategory.Utility, AllHorizontalSockets, false, 4,
                 kind: RoomKind.Laundry,
                 furnitureTags: new[]{ FurnitureTags.Laundry, FurnitureTags.Shared },
@@ -1045,7 +915,7 @@ namespace FriendSlop.Editor
                 furnitureCountRange: new Vector2Int(1, 2),
                 maxHorizontalConnections: 1),
 
-            // Residential — specialty living spaces.
+            // Residential â€” specialty living spaces.
             new RoomSpec("Room_Residential_MasterBedroom_4x2", new Vector2Int(4,2), RoomCategory.Generic, AllHorizontalSockets, false, 6,
                 kind: RoomKind.MasterBedroom,
                 furnitureTags: new[]{ FurnitureTags.Bedroom, FurnitureTags.Shared },
@@ -1081,7 +951,7 @@ namespace FriendSlop.Editor
                 furnitureTags: new[]{ FurnitureTags.Office, FurnitureTags.LivingRoom, FurnitureTags.Shared },
                 furnitureRules: new[] { Rule("bookshelf", min: 2, max: 4) }),
 
-            // Residential — garage.
+            // Residential â€” garage.
             new RoomSpec("Room_Residential_Garage_3x3",      new Vector2Int(3,3), RoomCategory.Special, AllHorizontalSockets, false, 5,
                 kind: RoomKind.Garage,
                 maxCount: 1,
@@ -1094,7 +964,7 @@ namespace FriendSlop.Editor
                     Rule("locker",    min: 0, max: 2),
                 }),
 
-            // Residential — basement-only extensions (FloorRestriction keeps them in the basement).
+            // Residential â€” basement-only extensions (FloorRestriction keeps them in the basement).
             new RoomSpec("Room_Residential_GameRoom_2x4",    new Vector2Int(2,4), RoomCategory.Special, AllHorizontalSockets, false, 4,
                 kind: RoomKind.GameRoom,
                 floorRestriction: FloorRestriction.BottomFloorOnly,
@@ -1223,26 +1093,19 @@ namespace FriendSlop.Editor
                     Rule("toilet", min: 1, max: 2),
                     Rule("sink",   min: 1, max: 2),
                 }),
->>>>>>> origin/interiors-changes
         };
 
         private static BuildingSpec[] GetBuildingSpecs() => new[]
         {
-<<<<<<< HEAD
-            new BuildingSpec("Building_Small",      "Small Building",       4,  8,  1, 1, 0, 1),
-            new BuildingSpec("Building_Medium",     "Medium Building",      8, 20,  2, 3, 1, 2),
-            new BuildingSpec("Building_Large",      "Large Building",      20, 40,  3, 5, 2, 4),
-            new BuildingSpec("Building_Multifloor", "Multi-floor Building",10, 18,  3, 3, 1, 2),
-=======
-            // Legacy untyped buildings — no recipe; the full RoomPool is used.
+            // Legacy untyped buildings â€” no recipe; the full RoomPool is used.
             BuildingSpec.Legacy("Building_Small",      "Small Building",       4,  8,  1, 1, 0, 1),
             BuildingSpec.Legacy("Building_Medium",     "Medium Building",      8, 20,  2, 3, 1, 2),
             BuildingSpec.Legacy("Building_Large",      "Large Building",      20, 40,  3, 5, 2, 4),
             BuildingSpec.Legacy("Building_Multifloor", "Multi-floor Building",10, 18,  3, 3, 1, 2),
 
-            // Typed buildings — required + optional recipes.
+            // Typed buildings â€” required + optional recipes.
             new BuildingSpec("Building_Residential", "Residential",
-                // 12..22 rooms across 2–3 floors (basement + ground + optional upper).
+                // 12..22 rooms across 2â€“3 floors (basement + ground + optional upper).
                 // Bedrooms / master suite / office prefer the upper floor, so 3-floor
                 // houses get the classic "ground = social, upper = private" layout.
                 minR: 12, maxR: 22, minF: 2, maxF: 3, minS: 2, maxS: 4,
@@ -1257,8 +1120,8 @@ namespace FriendSlop.Editor
                 {
                     Req("Room_Residential_Entry_2x2",      1),
                     Req("Room_Residential_LivingRoom_3x3", 1),
-                    // Kitchen must sit next to the LivingRoom. Placing it early — before
-                    // bedrooms/bathrooms fill the surrounding cells — makes it much more
+                    // Kitchen must sit next to the LivingRoom. Placing it early â€” before
+                    // bedrooms/bathrooms fill the surrounding cells â€” makes it much more
                     // likely that one of its 2-wide walls ends up facing the void.
                     Req("Room_Residential_Kitchen_2x3",    1, "Room_Residential_LivingRoom_3x3"),
                     Req("Room_Residential_Hallway_4x1",    1),
@@ -1276,7 +1139,7 @@ namespace FriendSlop.Editor
                     "Room_Residential_Bathroom_2x2",
                     "Room_Residential_Hallway_4x1",
                     "Room_Stair_1x1",                       // vertical connector pool entry
-                    // Specialty bedroom suite — placement filter pairs them.
+                    // Specialty bedroom suite â€” placement filter pairs them.
                     "Room_Residential_MasterBedroom_4x2",
                     "Room_Residential_MasterBathroom_2x2",  // adjacency rule: only off MasterBedroom
                     "Room_Residential_WalkinCloset_1x1",    // adjacency rule: only off any bedroom
@@ -1298,7 +1161,7 @@ namespace FriendSlop.Editor
                     "Room_Residential_MechanicalRoom_2x2",
                 },
                 // When the basement floor exists, the stair on the entry floor goes there
-                // — and must be placed adjacent to one of these rooms.
+                // â€” and must be placed adjacent to one of these rooms.
                 downwardConnectorMirrorName: "Room_Residential_Basement_4x4",
                 fillerRoomName: "Room_Residential_Hallway_1x1",
                 downConnectorParentNames: new[]
@@ -1358,7 +1221,7 @@ namespace FriendSlop.Editor
                     // Core production floor + a manager office.
                     Req("Room_Factory_Workshop_2x2",        1),
                     Req("Room_Factory_ManagerOffice_1x1",   1),
-                    // Adjacency-bound rooms — logistics flow & worker facilities.
+                    // Adjacency-bound rooms â€” logistics flow & worker facilities.
                     Req("Room_Factory_Storage_1x2",         1, "Room_Factory_LoadingBay_2x2"),
                     Req("Room_Factory_HazardStorage_1x1",   1, "Room_Factory_LoadingBay_2x2"),
                     Req("Room_Factory_Cafeteria_1x2",       1, "Room_Factory_Catwalk_1x2"),
@@ -1378,7 +1241,6 @@ namespace FriendSlop.Editor
                     "Room_Factory_Bathroom_1x1",
                     "Room_Stair_1x1",
                 }),
->>>>>>> origin/interiors-changes
         };
 
         private readonly struct RoomSpec
@@ -1386,19 +1248,6 @@ namespace FriendSlop.Editor
             public readonly string Name;
             public readonly Vector2Int GridSize;
             public readonly RoomCategory Category;
-<<<<<<< HEAD
-            public readonly SocketDirection[] Sockets;
-            public readonly bool IsVerticalConnector;
-            public readonly int Weight;
-
-            public RoomSpec(string name, Vector2Int size, RoomCategory cat, SocketDirection[] sockets, bool vertical, int weight)
-            {
-                Name = name; GridSize = size; Category = cat; Sockets = sockets;
-                IsVerticalConnector = vertical; Weight = weight;
-            }
-        }
-
-=======
             public readonly RoomKind Kind;
             public readonly SocketDirection[] Sockets;
             public readonly bool IsVerticalConnector;
@@ -1437,18 +1286,13 @@ namespace FriendSlop.Editor
         private static (string kind, int min, int max) Rule(string kind, int min = 0, int max = 0) =>
             (kind, min, max);
 
->>>>>>> origin/interiors-changes
         private readonly struct BuildingSpec
         {
             public readonly string Name, DisplayName;
             public readonly int MinRooms, MaxRooms, MinFloors, MaxFloors, MinSpecial, MaxSpecial;
-<<<<<<< HEAD
-
-            public BuildingSpec(string name, string displayName, int minR, int maxR, int minF, int maxF, int minS, int maxS)
-=======
             public readonly RequiredRoomSpec[] RequiredRooms;
-            // null  → use every RoomDefinition (legacy behaviour).
-            // empty → no optional rooms; only required rooms are placeable.
+            // null  â†’ use every RoomDefinition (legacy behaviour).
+            // empty â†’ no optional rooms; only required rooms are placeable.
             public readonly string[] OptionalRoomNames;
             public readonly Color ThemeColor;
             public readonly string DownwardConnectorMirrorName;
@@ -1477,15 +1321,10 @@ namespace FriendSlop.Editor
                 bool restrictUpperFloorOverhang = false,
                 bool forceRectangularLayout = false,
                 bool restrictFrontFacade = false)
->>>>>>> origin/interiors-changes
             {
                 Name = name; DisplayName = displayName;
                 MinRooms = minR; MaxRooms = maxR; MinFloors = minF; MaxFloors = maxF;
                 MinSpecial = minS; MaxSpecial = maxS;
-<<<<<<< HEAD
-            }
-        }
-=======
                 RequiredRooms = required ?? System.Array.Empty<RequiredRoomSpec>();
                 OptionalRoomNames = optionalRoomNames;
                 ThemeColor = themeColor;
@@ -1525,7 +1364,6 @@ namespace FriendSlop.Editor
         // Sugar helper for readable BuildingSpec recipes.
         private static RequiredRoomSpec Req(string roomName, int count, params string[] adjacentToAny) =>
             new RequiredRoomSpec(roomName, count, adjacentToAny);
->>>>>>> origin/interiors-changes
     }
 }
 #endif

@@ -5,19 +5,14 @@ using Random = System.Random;
 
 namespace FriendSlop.Interiors
 {
-    // Pure static generator — no MonoBehaviour, fully unit-testable.
+    // Pure static generator â€” no MonoBehaviour, fully unit-testable.
     // All clients run this with the same seed to get the same layout.
     public static class InteriorLayoutGenerator
     {
-<<<<<<< HEAD
-        private const int MaxGenerationAttempts = 8;
-        private const int MaxExpansionIterations = 200;
-=======
         private const int MaxGenerationAttempts = 32;
         private const int MaxExpansionIterations = 400;
->>>>>>> origin/interiors-changes
 
-        // ── Public API ─────────────────────────────────────────────────────────
+        // â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         public static InteriorLayout Generate(BuildingDefinition def, int seed,
             SocketDirection? reservedExitSocket = null)
@@ -27,15 +22,12 @@ namespace FriendSlop.Interiors
                 var layout = TryGenerate(def, seed + i, reservedExitSocket);
                 if (layout != null) return layout;
             }
-<<<<<<< HEAD
-=======
             UnityEngine.Debug.LogWarning(
                 $"[Interiors] {def?.name ?? "<null>"} exhausted {MaxGenerationAttempts} seeds (base={seed}); falling back to 1-room layout. Constraints may be too tight.");
->>>>>>> origin/interiors-changes
             return GenerateFallback(def, seed);
         }
 
-        // ── Generation core ────────────────────────────────────────────────────
+        // â”€â”€ Generation core â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static InteriorLayout TryGenerate(BuildingDefinition def, int seed,
             SocketDirection? reservedExitSocket)
@@ -48,16 +40,10 @@ namespace FriendSlop.Interiors
             int targetSpecial = rng.Next(def.MinSpecialRooms, def.MaxSpecialRooms + 1);
             layout.FloorCount = floors;
 
-<<<<<<< HEAD
-            // Entry sits on the middle floor when there are 3+ floors so rooms can grow
-            // both upward (upper floors) and downward (basement). Otherwise floor 0.
-            int startFloor = floors >= 3 ? floors / 2 : 0;
-            layout.EntryFloor = startFloor;
-=======
             // Where the entry lives. Buildings with a downward-connector mirror always
             // reserve floor 0 for the basement, so the entry goes on floor 1; any extra
             // floors stack above as upper floors. Buildings without a basement use the
-            // legacy logic — entry on the middle floor (for 3+) or floor 0 otherwise.
+            // legacy logic â€” entry on the middle floor (for 3+) or floor 0 otherwise.
             int startFloor;
             if (def.DownwardConnectorMirror != null && floors >= 2)
                 startFloor = 1;
@@ -69,13 +55,13 @@ namespace FriendSlop.Interiors
             // Carry over the building-level overhang constraint so TryPlaceAt can reject
             // upper-floor placements that aren't supported by the floor below.
             layout.RestrictUpperFloorOverhang = def.RestrictUpperFloorOverhang;
-            // Compute the target rectangle for forceRectangularLayout. Side ≈ sqrt(N×6)
-            // where N=MaxRooms and 6 is a rough avg cells/room (mix of 1×1, 2×2, 4×4).
+            // Compute the target rectangle for forceRectangularLayout. Side â‰ˆ sqrt(NÃ—6)
+            // where N=MaxRooms and 6 is a rough avg cells/room (mix of 1Ã—1, 2Ã—2, 4Ã—4).
             // Width is centred on the entry's X (entry is at x=0); depth extends north.
             if (def.ForceRectangularLayout)
             {
                 layout.RestrictToRectangle = true;
-                // ×7 (was ×6) gives the facade rule + master-suite cluster room to fit
+                // Ã—7 (was Ã—6) gives the facade rule + master-suite cluster room to fit
                 // without pushing seed-failure rates up.
                 int side = Mathf.CeilToInt(Mathf.Sqrt(def.MaxRooms * 7f));
                 int half = side / 2;
@@ -86,22 +72,17 @@ namespace FriendSlop.Interiors
             // Carry over the building-level southern-edge constraint so TryPlaceAt can
             // reject any room that would land south of the entry.
             layout.RestrictSouthOfEntry = def.EntryAtSouthernEdge;
->>>>>>> origin/interiors-changes
 
             var roomsPerFloor = DistributeRooms(totalRooms, floors, rng);
             var frontier      = new List<OpenSocket>();
 
-<<<<<<< HEAD
-            var entryDef = PickByCategory(def.RoomPool, RoomCategory.Entry, rng);
-=======
             // Build the required-room quota map. The entry (RoomCategory.Entry) is taken
-            // from this list — falling back to legacy RoomPool entry rooms if no entry is
+            // from this list â€” falling back to legacy RoomPool entry rooms if no entry is
             // declared in the recipe (back-compat for older BuildingDefinitions).
             var quotas = BuildRequiredQuotas(def);
 
             var entryDef = PickEntryFromQuotas(quotas, rng)
                         ?? PickByCategory(def.RoomPool, RoomCategory.Entry, rng);
->>>>>>> origin/interiors-changes
             if (entryDef == null) return null;
 
             var entry = TryPlaceAt(layout, entryDef, new Vector3Int(0, startFloor, 0));
@@ -109,16 +90,6 @@ namespace FriendSlop.Interiors
 
             // Reserve a socket on the entry for the exterior exit door.
             if (reservedExitSocket.HasValue && entryDef.HasSocket(reservedExitSocket.Value))
-<<<<<<< HEAD
-                entry.ConnectedSockets.Add(reservedExitSocket.Value);
-
-            AddSockets(frontier, entry);
-
-            // Expand the entry floor first.
-            int placedOnFloor = 1;
-            ExpandFloor(layout, def, frontier, rng, startFloor,
-                roomsPerFloor[startFloor], ref placedOnFloor, targetSpecial);
-=======
             {
                 entry.ConnectedSockets.Add(reservedExitSocket.Value);
                 layout.ExitRoom   = entry;
@@ -141,7 +112,6 @@ namespace FriendSlop.Interiors
             int placedOnFloor = 1;
             ExpandFloor(layout, def, frontier, rng, startFloor,
                 roomsPerFloor[startFloor], ref placedOnFloor, targetSpecial, quotas);
->>>>>>> origin/interiors-changes
 
             // Walk upward from the entry to the top floor.
             for (int floor = startFloor; floor + 1 < floors; floor++)
@@ -149,11 +119,7 @@ namespace FriendSlop.Interiors
                 if (!PlaceVerticalLink(layout, def, frontier, rng, floor, +1)) return null;
                 placedOnFloor = 1;
                 ExpandFloor(layout, def, frontier, rng, floor + 1,
-<<<<<<< HEAD
-                    roomsPerFloor[floor + 1], ref placedOnFloor, targetSpecial);
-=======
                     roomsPerFloor[floor + 1], ref placedOnFloor, targetSpecial, quotas);
->>>>>>> origin/interiors-changes
             }
 
             // Walk downward from the entry to the basement (floor 0).
@@ -161,14 +127,6 @@ namespace FriendSlop.Interiors
             {
                 if (!PlaceVerticalLink(layout, def, frontier, rng, floor, -1)) return null;
                 placedOnFloor = 1;
-<<<<<<< HEAD
-                ExpandFloor(layout, def, frontier, rng, floor - 1,
-                    roomsPerFloor[floor - 1], ref placedOnFloor, targetSpecial);
-            }
-
-            if (layout.CountByCategory(RoomCategory.Special) < def.MinSpecialRooms) return null;
-            return layout.Rooms.Count > 0 ? layout : null;
-=======
                 // Process adjacency hints first so e.g. a Basement_2x2 can grab the stair-
                 // mirror's free sockets before generic expansion eats them.
                 ProcessAdjacencyConstraints(layout, def, frontier, rng, quotas, floor - 1);
@@ -177,17 +135,17 @@ namespace FriendSlop.Interiors
                     roomsPerFloor[floor - 1], ref placedOnFloor, targetSpecial, quotas);
             }
 
-            // Hallways read as plausible only when at least a few rooms door off them —
+            // Hallways read as plausible only when at least a few rooms door off them â€”
             // a one-connection hallway is just a stub. Try to top each one up to the target
             // before we run the viability checks below.
             TopUpHallwayConnections(layout, def, rng, quotas);
 
-            // Filler pass — drop a 1x1 hallway in any empty cell that touches ≥2 rooms,
+            // Filler pass â€” drop a 1x1 hallway in any empty cell that touches â‰¥2 rooms,
             // bridging orphan rooms and densifying corridors. Doesn't run if the building
             // doesn't define a fillerRoom.
             FillEmptyCellsWithHallway(layout, def);
 
-            // Any unfulfilled required rooms means this seed is unviable — fail so the
+            // Any unfulfilled required rooms means this seed is unviable â€” fail so the
             // outer loop retries with a different seed.
             if (HasUnmetQuotas(quotas)) return null;
             if (layout.CountByCategory(RoomCategory.Special) < def.MinSpecialRooms) return null;
@@ -200,12 +158,12 @@ namespace FriendSlop.Interiors
         }
 
         // Walks the door graph to verify two real-house properties:
-        //   1. Every Bedroom is at depth ≥ 2 from the entry — i.e. no bedroom doors
+        //   1. Every Bedroom is at depth â‰¥ 2 from the entry â€” i.e. no bedroom doors
         //      open straight off the entry / living room.
         //   2. On any floor with multiple bedrooms, all bedrooms reach via the same
         //      Hallway (a single shared "bedroom wing" hallway), not through different
         //      branches of the house.
-        // Skipped entirely for buildings where the front-facade rule isn't enforced —
+        // Skipped entirely for buildings where the front-facade rule isn't enforced â€”
         // those buildings (office, factory) don't follow residential layout norms.
         private static bool PassesPublicPrivateLayout(InteriorLayout layout, BuildingDefinition def)
         {
@@ -214,7 +172,7 @@ namespace FriendSlop.Interiors
             var entry = FindEntryRoom(layout);
             if (entry == null) return true;  // no entry => no graph anchor, skip
 
-            // BFS over door connections (skip vertical sockets — stairs are handled separately).
+            // BFS over door connections (skip vertical sockets â€” stairs are handled separately).
             var depth = new Dictionary<PlacedRoom, int> { [entry] = 0 };
             var queue = new Queue<PlacedRoom>();
             queue.Enqueue(entry);
@@ -242,7 +200,7 @@ namespace FriendSlop.Interiors
             }
 
             // Rule 2: per floor, bedrooms must share a hallway COMPONENT. A component is
-            // a maximal connected set of hallway rooms (joined by hallway↔hallway doors).
+            // a maximal connected set of hallway rooms (joined by hallwayâ†”hallway doors).
             // Tiled 1x1 fillers chained to a 4x1 hallway form one component, so a wing
             // made of mixed sizes still satisfies "all bedrooms on the same wing".
             var hallwayComponent = BuildHallwayComponentMap(layout);
@@ -284,7 +242,7 @@ namespace FriendSlop.Interiors
             return true;
         }
 
-        // Assigns every Hallway room an integer component id based on hallway↔hallway
+        // Assigns every Hallway room an integer component id based on hallwayâ†”hallway
         // door connections. Two hallways with a direct door (or an open passage) share
         // an id; otherwise they're in separate components. Used to group tiled hallways
         // into a single logical wing.
@@ -326,7 +284,7 @@ namespace FriendSlop.Interiors
         }
 
         // Some rooms read as "real" only when at least one of their longest walls borders
-        // empty space — the Kitchen wants a sink-under-the-window wall, the Garage wants a
+        // empty space â€” the Kitchen wants a sink-under-the-window wall, the Garage wants a
         // wall for the garage door, the Sun Room wants a glass wall. This check rejects any
         // seed where a room of this type ends up landlocked.
         private static bool RoomsFaceTheVoid(InteriorLayout layout)
@@ -382,7 +340,7 @@ namespace FriendSlop.Interiors
         // For buildings with doorsOnlyForPrivateRooms set, walk the connection list and
         // convert any horizontal connection that doesn't involve a Bedroom/Bathroom/Stair/
         // Basement into an open archway (no door, no wall, no frame). Vertical sockets are
-        // left alone — they're stairs/holes, never had doors anyway.
+        // left alone â€” they're stairs/holes, never had doors anyway.
         //
         // Extra rule for hallways: only the SHORT ENDS of a hallway (the walls perpendicular
         // to its long axis) can become archways. The long sides of a hallway always keep
@@ -405,8 +363,8 @@ namespace FriendSlop.Interiors
         }
 
         // True if `worldSocket` is on the short (1-cell-wide) end of a hallway with the
-        // given ROTATED size. For a 1×N (narrow + deep) hallway, the short ends are N/S;
-        // for an N×1 (wide + shallow) they're E/W. Square hallways have no distinction —
+        // given ROTATED size. For a 1Ã—N (narrow + deep) hallway, the short ends are N/S;
+        // for an NÃ—1 (wide + shallow) they're E/W. Square hallways have no distinction â€”
         // treat every side as short.
         private static bool IsHallwayShortEnd(Vector2Int rotatedSize, SocketDirection worldSocket)
         {
@@ -440,7 +398,7 @@ namespace FriendSlop.Interiors
                 || n.Contains("Garage");
         }
 
-        // ── Recipe quota tracking ─────────────────────────────────────────────
+        // â”€â”€ Recipe quota tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static Dictionary<RoomDefinition, int> BuildRequiredQuotas(BuildingDefinition def)
         {
@@ -467,7 +425,7 @@ namespace FriendSlop.Interiors
             // If the chosen entry is a substitute (non-Entry-category room flagged as
             // entry-eligible, e.g. a LivingRoom acting as the foyer), zero any leftover
             // Entry-category required quotas so the building doesn't ALSO spawn a small
-            // dedicated entry room — the LivingRoom is doing that job.
+            // dedicated entry room â€” the LivingRoom is doing that job.
             if (chosen.Category != RoomCategory.Entry)
             {
                 var keys = new List<RoomDefinition>(quotas.Keys);
@@ -482,7 +440,7 @@ namespace FriendSlop.Interiors
         // After the entry is placed, looks for any OTHER entry-candidate room still in the
         // required quotas. If found, tries to place it on a free socket of the entry and
         // marks that connection as an open passage. Falls back silently if the candidate
-        // can't fit — the room will then be placed normally during expansion (with a door).
+        // can't fit â€” the room will then be placed normally during expansion (with a door).
         private static void TryPlaceAdjacentEntryCandidate(
             InteriorLayout layout, List<OpenSocket> frontier, Random rng,
             PlacedRoom entry, Dictionary<RoomDefinition, int> quotas,
@@ -646,17 +604,12 @@ namespace FriendSlop.Interiors
                 }
             }
             return null;
->>>>>>> origin/interiors-changes
         }
 
         private static void ExpandFloor(InteriorLayout layout, BuildingDefinition def,
             List<OpenSocket> frontier, Random rng, int floor, int target,
-<<<<<<< HEAD
-            ref int placedOnFloor, int targetSpecial)
-=======
             ref int placedOnFloor, int targetSpecial,
             Dictionary<RoomDefinition, int> quotas)
->>>>>>> origin/interiors-changes
         {
             int iters = 0;
             while (placedOnFloor < target && iters < MaxExpansionIterations)
@@ -665,13 +618,6 @@ namespace FriendSlop.Interiors
                 var floorFrontier = FloorHorizontalFrontier(frontier, floor);
                 if (floorFrontier.Count == 0) break;
 
-<<<<<<< HEAD
-                var open = floorFrontier[rng.Next(floorFrontier.Count)];
-                frontier.Remove(open);
-
-                bool wantSpecial = layout.CountByCategory(RoomCategory.Special) < targetSpecial;
-                var placed = TryPlaceNeighbor(layout, def, open, floor, rng, wantSpecial);
-=======
                 var open = def.CompactLayout
                     ? PickCompactSocket(layout, floorFrontier, rng)
                     : floorFrontier[rng.Next(floorFrontier.Count)];
@@ -679,7 +625,6 @@ namespace FriendSlop.Interiors
 
                 bool wantSpecial = layout.CountByCategory(RoomCategory.Special) < targetSpecial;
                 var placed = TryPlaceNeighbor(layout, def, open, floor, rng, wantSpecial, quotas);
->>>>>>> origin/interiors-changes
                 if (placed != null)
                 {
                     AddSockets(frontier, placed);
@@ -688,12 +633,8 @@ namespace FriendSlop.Interiors
             }
         }
 
-<<<<<<< HEAD
-        // dir = +1 places a connector going UP (from `floor` to `floor+1`).
-        // dir = -1 places a connector going DOWN (from `floor` to `floor-1`).
-=======
         // Pick an open socket weighted toward placements adjacent to multiple existing
-        // rooms — produces compact rectangular / L-shaped floor plans instead of sprawling
+        // rooms â€” produces compact rectangular / L-shaped floor plans instead of sprawling
         // ones. 70% pick the highest-scoring socket; 30% spread across the top few for variety.
         private static OpenSocket PickCompactSocket(InteriorLayout layout,
             List<OpenSocket> floorFrontier, Random rng)
@@ -738,29 +679,21 @@ namespace FriendSlop.Interiors
 
         // dir = +1 places a connector going UP (from `floor` to `floor+1`).
         // dir = -1 places a connector going DOWN (from `floor` to `floor-1`). The downward
-        // case supports an asymmetric mirror (e.g. a 2×2 basement room) and a list of
+        // case supports an asymmetric mirror (e.g. a 2Ã—2 basement room) and a list of
         // preferred parent rooms that the connector should sit next to (e.g. Kitchen,
         // LivingRoom, Hallway).
->>>>>>> origin/interiors-changes
         private static bool PlaceVerticalLink(InteriorLayout layout, BuildingDefinition def,
             List<OpenSocket> frontier, Random rng, int floor, int dir)
         {
             var connDef = PickVerticalConnector(def.RoomPool, rng);
             if (connDef == null) return false;
 
-<<<<<<< HEAD
-            var placed = ForceConnector(layout, def, frontier, connDef, floor, rng);
-            if (placed == null) return false;
-
-            var mirrorPos = new Vector3Int(placed.GridPosition.x, floor + dir, placed.GridPosition.z);
-            var mirror    = TryPlaceAt(layout, connDef, mirrorPos);
-=======
             var preferredParents = dir < 0 ? def.DownConnectorParents : null;
             var placed = ForceConnector(layout, def, frontier, connDef, floor, rng, preferredParents);
             if (placed == null) return false;
 
-            // Pick the mirror prefab — defaults to the connector itself, but a building can
-            // override the downward mirror (e.g. a 2×2 basement instead of another stair).
+            // Pick the mirror prefab â€” defaults to the connector itself, but a building can
+            // override the downward mirror (e.g. a 2Ã—2 basement instead of another stair).
             var mirrorDef = (dir < 0 && def.DownwardConnectorMirror != null)
                 ? def.DownwardConnectorMirror
                 : connDef;
@@ -770,16 +703,15 @@ namespace FriendSlop.Interiors
             var requiredMirrorSocket = dir > 0 ? SocketDirection.Down : SocketDirection.Up;
             if (!mirrorDef.HasSocket(requiredMirrorSocket))
             {
-                Debug.LogWarning($"[Interior] Mirror prefab '{mirrorDef.name}' lacks {requiredMirrorSocket} socket — falling back to the connector itself.");
+                Debug.LogWarning($"[Interior] Mirror prefab '{mirrorDef.name}' lacks {requiredMirrorSocket} socket â€” falling back to the connector itself.");
                 mirrorDef = connDef;
             }
 
             var mirrorPos = new Vector3Int(placed.GridPosition.x, floor + dir, placed.GridPosition.z);
             var mirror    = TryPlaceAt(layout, mirrorDef, mirrorPos);
->>>>>>> origin/interiors-changes
             if (mirror == null) return false;
 
-            // Going up: placed.Up ↔ mirror.Down.  Going down: placed.Down ↔ mirror.Up.
+            // Going up: placed.Up â†” mirror.Down.  Going down: placed.Down â†” mirror.Up.
             if (dir > 0)
                 RegisterConnection(layout, placed, SocketDirection.Up,   mirror, SocketDirection.Down);
             else
@@ -789,19 +721,10 @@ namespace FriendSlop.Interiors
             return true;
         }
 
-        // ── Placement helpers ──────────────────────────────────────────────────
+        // â”€â”€ Placement helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static PlacedRoom TryPlaceNeighbor(
             InteriorLayout layout, BuildingDefinition def, OpenSocket open,
-<<<<<<< HEAD
-            int floor, Random rng, bool preferSpecial)
-        {
-            var needed = open.Socket.Opposite();
-
-            var candidates = BuildCandidateList(def.RoomPool, needed, vertical: false, preferSpecial);
-            if (candidates.Count == 0 && preferSpecial)
-                candidates = BuildCandidateList(def.RoomPool, needed, vertical: false, preferSpecial: false);
-=======
             int floor, Random rng, bool preferSpecial,
             Dictionary<RoomDefinition, int> quotas)
         {
@@ -840,7 +763,7 @@ namespace FriendSlop.Interiors
                 }
             }
 
-            // Fall back to the optional pool. Required rooms aren't included automatically —
+            // Fall back to the optional pool. Required rooms aren't included automatically â€”
             // they're handled by the priority path above. If a required room has been zeroed
             // out (e.g. Entry_1x1 when LivingRoom became the entry), this prevents it from
             // showing up via the fallback. Floor info is passed so floor-restricted rooms
@@ -850,21 +773,12 @@ namespace FriendSlop.Interiors
             if (candidates.Count == 0 && preferSpecial)
                 candidates = BuildCandidateList(def.OptionalPool, needed, vertical: false, preferSpecial: false,
                     floor, layout.FloorCount, layout.EntryFloor);
->>>>>>> origin/interiors-changes
             if (candidates.Count == 0) return null;
 
             Shuffle(candidates, rng);
 
             foreach (var candidate in candidates)
             {
-<<<<<<< HEAD
-                var pos = NeighborOrigin(open.Room, open.Socket, candidate.GridSize);
-                if (pos.y != open.Room.GridPosition.y) continue; // stay on current floor
-                var room = TryPlaceAt(layout, candidate, pos);
-                if (room != null)
-                {
-                    RegisterConnection(layout, open.Room, open.Socket, room, needed);
-=======
                 if (!PassesPlacementConstraints(open.Room, open.Socket, candidate,
                     bedroomCount, blockHallway, enforceHallwaySides, layout)) continue;
                 var room = TryPlaceCandidate(layout, open, needed, candidate, rng, enforceHallwaySides);
@@ -879,29 +793,15 @@ namespace FriendSlop.Interiors
                     // If this candidate also satisfies a required quota, decrement it.
                     if (quotas.TryGetValue(candidate, out var remaining) && remaining > 0)
                         quotas[candidate] = remaining - 1;
->>>>>>> origin/interiors-changes
                     return room;
                 }
             }
             return null;
         }
 
-<<<<<<< HEAD
-        private static PlacedRoom ForceConnector(
-            InteriorLayout layout, BuildingDefinition def, List<OpenSocket> frontier,
-            RoomDefinition connDef, int floor, Random rng)
-        {
-            var floorFrontier = FloorHorizontalFrontier(frontier, floor);
-            Shuffle(floorFrontier, rng);
-
-            foreach (var open in floorFrontier)
-            {
-                if (!connDef.HasSocket(open.Socket.Opposite())) continue;
-                var pos  = NeighborOrigin(open.Room, open.Socket, connDef.GridSize);
-=======
         // After placing a MasterBedroom, immediately place its MasterBathroom and
         // WalkinCloset adjacent. Both are required (per user's master-suite-must-cluster
-        // rule) — if either can't fit on a free socket of the master, we report failure
+        // rule) â€” if either can't fit on a free socket of the master, we report failure
         // and the caller undoes the master bedroom placement so the seed can try a
         // different position.
         private static bool PlaceMasterSuiteCompanions(InteriorLayout layout, BuildingDefinition def,
@@ -1023,7 +923,7 @@ namespace FriendSlop.Interiors
                 && CountWhere(layout, r => r == candidate) >= candidate.MaxCount) return false;
             if (!CanAdjacentlyConnect(parent.Definition, candidate, bedroomCount)) return false;
 
-            // Parent-side hallway long-side rule — depends on parent's rotation, which we
+            // Parent-side hallway long-side rule â€” depends on parent's rotation, which we
             // already know.
             if (enforceHallwaySides
                 && IsHallway(parent.Definition)
@@ -1036,9 +936,9 @@ namespace FriendSlop.Interiors
 
         // Adjacency rules that hold regardless of which side is the "parent":
         //   1. A bathroom only opens onto a bedroom, hallway, or living room.
-        //      Master bathrooms are stricter — they only open onto a master bedroom.
-        //   2. Two bedrooms never share a wall — there's always a corridor between them.
-        //   3. With 2+ bedrooms in the layout, bedrooms are private — their other sockets
+        //      Master bathrooms are stricter â€” they only open onto a master bedroom.
+        //   2. Two bedrooms never share a wall â€” there's always a corridor between them.
+        //   3. With 2+ bedrooms in the layout, bedrooms are private â€” their other sockets
         //      only open onto a bathroom.
         //   4. Pantries only open onto a kitchen, mud rooms only off the entry, walk-in
         //      closets only off a bedroom (regular or master).
@@ -1049,7 +949,7 @@ namespace FriendSlop.Interiors
             int bedroomCount)
         {
             // Master bath is more restrictive than a regular bathroom and must be checked
-            // first — IsBathroom would also match "MasterBathroom" and let regular
+            // first â€” IsBathroom would also match "MasterBathroom" and let regular
             // bathroom-neighbours through.
             if (IsMasterBathroom(parent) && !IsMasterBedroom(child)) return false;
             if (IsMasterBathroom(child)  && !IsMasterBedroom(parent)) return false;
@@ -1065,7 +965,7 @@ namespace FriendSlop.Interiors
             if (IsPantry(parent) && !IsKitchen(child)) return false;
             if (IsPantry(child)  && !IsKitchen(parent)) return false;
 
-            // MudRoom is the "drop zone" — typical front-entry coat room OR back-of-house
+            // MudRoom is the "drop zone" â€” typical front-entry coat room OR back-of-house
             // garage-to-kitchen transition. Any of those three parents read as natural.
             if (IsMudRoom(parent) && !IsMudRoomNeighbor(child)) return false;
             if (IsMudRoom(child)  && !IsMudRoomNeighbor(parent)) return false;
@@ -1073,7 +973,7 @@ namespace FriendSlop.Interiors
             if (IsWalkinCloset(parent) && !IsBedroom(child)) return false;
             if (IsWalkinCloset(child)  && !IsBedroom(parent)) return false;
 
-            // Stairs may only open horizontally onto public/transit rooms — keeps
+            // Stairs may only open horizontally onto public/transit rooms â€” keeps
             // bedrooms private (you walk down a hallway to reach the stairs, not
             // straight out of a bedroom).
             if (IsStair(parent) && !IsStairNeighbor(child)) return false;
@@ -1094,7 +994,7 @@ namespace FriendSlop.Interiors
                 def.Kind == RoomKind.Kitchen);
 
         // Rooms that may have cells at z=0 on the entry floor. The southern facade is
-        // the building's "front" — only public-facing rooms read as a real front.
+        // the building's "front" â€” only public-facing rooms read as a real front.
         private static bool CanTouchFrontFacade(RoomDefinition def) =>
             def != null && (
                 def.Kind == RoomKind.Entry      ||
@@ -1120,9 +1020,9 @@ namespace FriendSlop.Interiors
             def != null && def.Kind == RoomKind.Hallway;
 
         // Minimum doors a hallway should have. A single-connection hallway is functionally
-        // just a stub — the post-pass tries to attach more rooms at its other open sockets
+        // just a stub â€” the post-pass tries to attach more rooms at its other open sockets
         // until it hits this count (or runs out of viable placements). 4 = every wall
-        // socket of a 4×1 hallway gets a neighbour when there's room to attach.
+        // socket of a 4Ã—1 hallway gets a neighbour when there's room to attach.
         private const int TargetHallwayConnections = 4;
         private static void TopUpHallwayConnections(InteriorLayout layout, BuildingDefinition def,
             Random rng, Dictionary<RoomDefinition, int> quotas)
@@ -1154,11 +1054,11 @@ namespace FriendSlop.Interiors
                 }
             }
         }
-        // Bedroom/Bathroom predicates intentionally include their Master- counterparts —
+        // Bedroom/Bathroom predicates intentionally include their Master- counterparts â€”
         // adjacency rules like "bathrooms can only touch bedrooms or hallways" historically
         // treated MasterBedroom as a Bedroom (the string Contains check matched both).
         // Walks every empty cell inside the layout's bbox on each floor and places a
-        // 1x1 filler hallway at any cell that touches ≥2 already-placed rooms. Each
+        // 1x1 filler hallway at any cell that touches â‰¥2 already-placed rooms. Each
         // placement also registers connections to every adjacent room so the new tile
         // becomes part of the door graph. Skips when no fillerRoom is configured.
         private static void FillEmptyCellsWithHallway(InteriorLayout layout, BuildingDefinition def)
@@ -1280,7 +1180,7 @@ namespace FriendSlop.Interiors
                 if (candidate.Kind == RoomKind.DiningRoom && defSocket != SocketDirection.South)
                     continue;
 
-                // Candidate-side hallway long-side rule — only valid when we know the
+                // Candidate-side hallway long-side rule â€” only valid when we know the
                 // candidate's rotation (which determines what's "long" vs "short").
                 if (enforceHallwaySides && IsHallway(candidate))
                 {
@@ -1295,7 +1195,7 @@ namespace FriendSlop.Interiors
                 var room = TryPlaceAt(layout, candidate, pos, rot);
                 if (room == null) continue;
                 // DiningRoom may only spawn if its kitchen-facing side is a LONG side
-                // and every cell on that side is inside the Kitchen — i.e. the dining
+                // and every cell on that side is inside the Kitchen â€” i.e. the dining
                 // room's full long wall is shared with the Kitchen, not a corner clip.
                 if (candidate.Kind == RoomKind.DiningRoom
                     && !DiningSatisfiesKitchenLongSideRule(layout, room, needed, open.Room))
@@ -1385,7 +1285,6 @@ namespace FriendSlop.Interiors
                 // legacy 3-arg overload assumes door cells at (0,0) for both rooms,
                 // which is only true for non-rotated rooms.
                 var pos  = NeighborOrigin(open.Room, open.Socket, connDef, nbrRotation: 0);
->>>>>>> origin/interiors-changes
                 var room = TryPlaceAt(layout, connDef, pos);
                 if (room != null)
                 {
@@ -1398,17 +1297,9 @@ namespace FriendSlop.Interiors
             return null;
         }
 
-<<<<<<< HEAD
-        private static PlacedRoom TryPlaceAt(InteriorLayout layout, RoomDefinition def, Vector3Int pos)
-        {
-            var room = new PlacedRoom(def, pos);
-            foreach (var cell in room.OccupiedCells())
-                if (layout.IsCellOccupied(cell)) return null;
-
-=======
         private static PlacedRoom TryPlaceAt(InteriorLayout layout, RoomDefinition def, Vector3Int pos, int rotation = 0)
         {
-            // Front-facade constraint — no room may extend south of the entry (z < 0).
+            // Front-facade constraint â€” no room may extend south of the entry (z < 0).
             // The entry itself is at z=0; everything else must be at z=0 or further north.
             if (layout.RestrictSouthOfEntry && pos.z < 0) return null;
 
@@ -1416,7 +1307,7 @@ namespace FriendSlop.Interiors
             foreach (var cell in room.OccupiedCells())
                 if (layout.IsCellOccupied(cell)) return null;
 
-            // Rectangular-footprint constraint — every cell must lie inside the target box.
+            // Rectangular-footprint constraint â€” every cell must lie inside the target box.
             if (layout.RestrictToRectangle && layout.RectMinXZ.HasValue && layout.RectMaxXZ.HasValue)
             {
                 var rlo = layout.RectMinXZ.Value;
@@ -1428,7 +1319,7 @@ namespace FriendSlop.Interiors
                 }
             }
 
-            // Front-facade rule — only Entry/LivingRoom/Office/PowderRoom may touch z=0
+            // Front-facade rule â€” only Entry/LivingRoom/Office/PowderRoom may touch z=0
             // on the entry floor. Private rooms (bedrooms, bathrooms) and back-of-house
             // (kitchen, garage, dining, pantry, etc.) get pushed deeper into the layout.
             if (layout.RestrictFrontFacade && pos.y == layout.EntryFloor && !CanTouchFrontFacade(def))
@@ -1437,7 +1328,7 @@ namespace FriendSlop.Interiors
                     if (cell.z == 0) return null;
             }
 
-            // Bounding-silhouette constraint — upper-floor rooms must sit inside the
+            // Bounding-silhouette constraint â€” upper-floor rooms must sit inside the
             // entry-floor footprint's NSEW extents (with 1-cell of slack so a bedroom
             // can hang slightly off the front facade). Stops the upper floor from
             // sprawling past the ground-floor silhouette and looking like it's floating.
@@ -1458,23 +1349,12 @@ namespace FriendSlop.Interiors
                 }
             }
 
->>>>>>> origin/interiors-changes
             foreach (var cell in room.OccupiedCells())
                 layout.Grid[cell] = room;
             layout.Rooms.Add(room);
             return room;
         }
 
-<<<<<<< HEAD
-        private static void RegisterConnection(
-            InteriorLayout layout,
-            PlacedRoom a, SocketDirection sa,
-            PlacedRoom b, SocketDirection sb)
-        {
-            a.ConnectedSockets.Add(sa);
-            b.ConnectedSockets.Add(sb);
-            layout.Connections.Add(new InteriorLayout.Connection(a, sa, b, sb));
-=======
         // Reverses TryPlaceAt for a placement we don't want to keep (e.g. a DiningRoom
         // that turned out not to share its long side with a Kitchen). Removes both the
         // grid cells and the room itself; doesn't touch ConnectedSockets because we
@@ -1528,7 +1408,7 @@ namespace FriendSlop.Interiors
 
         // Walks the layout's grid once and caches the NSEW extents of the entry-floor
         // cells, so the upper-floor bbox check doesn't re-scan on every placement.
-        // Safe to call repeatedly — re-scans only when the cache is empty.
+        // Safe to call repeatedly â€” re-scans only when the cache is empty.
         private static void EnsureEntryFloorBounds(InteriorLayout layout)
         {
             if (layout.EntryFloorMin.HasValue && layout.EntryFloorMax.HasValue) return;
@@ -1559,29 +1439,15 @@ namespace FriendSlop.Interiors
             a.ConnectedSockets.Add(sa);
             b.ConnectedSockets.Add(sb);
             layout.Connections.Add(new InteriorLayout.Connection(a, sa, b, sb, isOpenPassage));
->>>>>>> origin/interiors-changes
         }
 
-        // ── Position math ──────────────────────────────────────────────────────
+        // â”€â”€ Position math â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         // Computes the grid origin of a neighbor room placed via the given socket.
         // For South/West the formula depends on the neighbor's size.
         public static Vector3Int NeighborOrigin(PlacedRoom from, SocketDirection socket, Vector2Int nbrSize)
         {
-<<<<<<< HEAD
-            var p = from.GridPosition;
-            var s = from.Definition.GridSize;
-            return socket switch
-            {
-                SocketDirection.North => new Vector3Int(p.x,           p.y,     p.z + s.y),
-                SocketDirection.South => new Vector3Int(p.x,           p.y,     p.z - nbrSize.y),
-                SocketDirection.East  => new Vector3Int(p.x + s.x,     p.y,     p.z),
-                SocketDirection.West  => new Vector3Int(p.x - nbrSize.x, p.y,   p.z),
-                SocketDirection.Up    => new Vector3Int(p.x,           p.y + 1, p.z),
-                SocketDirection.Down  => new Vector3Int(p.x,           p.y - 1, p.z),
-                _                    => throw new ArgumentOutOfRangeException(nameof(socket))
-=======
-            // Compatibility shim — preserves the pre-rotation behaviour for legacy
+            // Compatibility shim â€” preserves the pre-rotation behaviour for legacy
             // callers and tests. Assumes both rooms are non-rotated and the doors sit
             // at the (0,0) door-cell offset that the original math implicitly assumed.
             return NeighborOriginCore(from.GridPosition, from.Rotation,
@@ -1666,7 +1532,6 @@ namespace FriendSlop.Interiors
                 2 => new Vector2Int(sx - 1 - x,   sy - 1 - z),
                 3 => new Vector2Int(sy - 1 - z,   x),
                 _ => new Vector2Int(x, z),
->>>>>>> origin/interiors-changes
             };
         }
 
@@ -1684,11 +1549,7 @@ namespace FriendSlop.Interiors
         // mesh extends +X by doorWidth and +Y by doorHeight. So we return the hinge position
         // (offset back along the door's local +X by half the door width) and the door's
         // outward facing rotation. Y is at floor level so the door sits on the floor.
-<<<<<<< HEAD
-        private const float DoorWidth = 2f;
-=======
         private const float DoorWidth = 1.7f;
->>>>>>> origin/interiors-changes
 
         public static (Vector3 position, Quaternion rotation) DoorTransform(
             InteriorLayout.Connection conn, Vector3 buildingOrigin, BuildingDefinition def)
@@ -1698,31 +1559,6 @@ namespace FriendSlop.Interiors
             var floorH = def.FloorHeightMeters;
             var origin = buildingOrigin;
             var p = a.GridPosition;
-<<<<<<< HEAD
-            var s = a.Definition.GridSize;
-            float floorY = origin.y + p.y * floorH;
-
-            Vector3 openingCentre;
-            Quaternion rot;
-            // Door is on the SW-most cell of each wall (cellX=0 for N/S, cellZ=0 for E/W),
-            // so multi-cell rooms still align with neighbouring 1×1 rooms on the grid.
-            switch (conn.SocketA)
-            {
-                case SocketDirection.North:
-                    openingCentre = new Vector3(origin.x + (p.x + 0.5f) * cell, floorY, origin.z + (p.z + s.y) * cell);
-                    rot = Quaternion.Euler(0, 0, 0);
-                    break;
-                case SocketDirection.South:
-                    openingCentre = new Vector3(origin.x + (p.x + 0.5f) * cell, floorY, origin.z + p.z * cell);
-                    rot = Quaternion.Euler(0, 180, 0);
-                    break;
-                case SocketDirection.East:
-                    openingCentre = new Vector3(origin.x + (p.x + s.x) * cell, floorY, origin.z + (p.z + 0.5f) * cell);
-                    rot = Quaternion.Euler(0, 90, 0);
-                    break;
-                case SocketDirection.West:
-                    openingCentre = new Vector3(origin.x + p.x * cell, floorY, origin.z + (p.z + 0.5f) * cell);
-=======
             var rs = a.RotatedGridSize;
             float floorY = origin.y + p.y * floorH;
 
@@ -1749,16 +1585,11 @@ namespace FriendSlop.Interiors
                     break;
                 case SocketDirection.West:
                     openingCentre = new Vector3(origin.x + p.x * cell, floorY, origin.z + (p.z + doorCell.y + 0.5f) * cell);
->>>>>>> origin/interiors-changes
                     rot = Quaternion.Euler(0, 270, 0);
                     break;
-                default: // Up/Down — centre of vertical connector room
+                default: // Up/Down â€” centre of vertical connector room
                     return (
-<<<<<<< HEAD
-                        new Vector3(origin.x + (p.x + s.x * 0.5f) * cell, floorY + floorH * 0.5f, origin.z + (p.z + s.y * 0.5f) * cell),
-=======
                         new Vector3(origin.x + (p.x + rs.x * 0.5f) * cell, floorY + floorH * 0.5f, origin.z + (p.z + rs.y * 0.5f) * cell),
->>>>>>> origin/interiors-changes
                         Quaternion.identity);
             }
 
@@ -1768,15 +1599,10 @@ namespace FriendSlop.Interiors
             return (hinge, rot);
         }
 
-        // ── Frontier & selection helpers ───────────────────────────────────────
+        // â”€â”€ Frontier & selection helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static void AddSockets(List<OpenSocket> frontier, PlacedRoom room)
         {
-<<<<<<< HEAD
-            foreach (var s in room.Definition.Sockets)
-                if (!room.ConnectedSockets.Contains(s))
-                    frontier.Add(new OpenSocket(room, s));
-=======
             // The frontier carries WORLD sockets (so neighbour-placement math doesn't have
             // to keep converting). For non-vertical sockets, rotate the def-socket into the
             // room's world orientation before comparing against ConnectedSockets (which
@@ -1799,7 +1625,7 @@ namespace FriendSlop.Interiors
             }
         }
 
-        // Count non-vertical entries in a room's ConnectedSockets — i.e. how many doors
+        // Count non-vertical entries in a room's ConnectedSockets â€” i.e. how many doors
         // already exist into this room.
         private static int HorizontalConnectionCount(PlacedRoom room)
         {
@@ -1807,7 +1633,6 @@ namespace FriendSlop.Interiors
             foreach (var s in room.ConnectedSockets)
                 if (!s.IsVertical()) n++;
             return n;
->>>>>>> origin/interiors-changes
         }
 
         private static List<OpenSocket> FloorHorizontalFrontier(List<OpenSocket> frontier, int floor)
@@ -1821,28 +1646,19 @@ namespace FriendSlop.Interiors
 
         private static List<RoomDefinition> BuildCandidateList(
             System.Collections.Generic.IReadOnlyList<RoomDefinition> pool,
-<<<<<<< HEAD
-            SocketDirection needed, bool vertical, bool preferSpecial)
-=======
             SocketDirection needed, bool vertical, bool preferSpecial,
             int floor = -1, int floorCount = -1, int entryFloor = -1)
->>>>>>> origin/interiors-changes
         {
             var list = new List<RoomDefinition>();
             foreach (var rd in pool)
             {
                 if (rd.IsVerticalConnector != vertical) continue;
-<<<<<<< HEAD
-                if (!rd.HasSocket(needed)) continue;
-                if (preferSpecial && rd.Category != RoomCategory.Special) continue;
-=======
                 // Vertical connectors aren't rotated, so they need the literal socket. All
                 // others might rotate to provide it.
                 if (vertical ? !rd.HasSocket(needed) : !CanRotateToProvide(rd, needed)) continue;
                 if (preferSpecial && rd.Category != RoomCategory.Special) continue;
                 // Floor-restricted rooms are filtered out when caller knows the floor.
                 if (floor >= 0 && !rd.AllowedOnFloor(floor, floorCount, entryFloor)) continue;
->>>>>>> origin/interiors-changes
                 for (int w = 0; w < rd.Weight; w++) list.Add(rd);
             }
             return list;
@@ -1867,7 +1683,7 @@ namespace FriendSlop.Interiors
             return matches.Count == 0 ? null : matches[rng.Next(matches.Count)];
         }
 
-        // ── Utility ────────────────────────────────────────────────────────────
+        // â”€â”€ Utility â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
         private static int[] DistributeRooms(int total, int floors, Random rng)
         {

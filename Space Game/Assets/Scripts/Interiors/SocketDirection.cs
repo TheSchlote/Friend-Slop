@@ -19,10 +19,8 @@ namespace FriendSlop.Interiors
 
         public static bool IsVertical(this SocketDirection d) =>
             d == SocketDirection.Up || d == SocketDirection.Down;
-<<<<<<< HEAD
-=======
 
-        // Rotates a socket by `quarterTurns` 90° clockwise turns (looking down the +Y axis).
+        // Rotates a socket by `quarterTurns` 90Â° clockwise turns (looking down the +Y axis).
         // North -> East -> South -> West -> North under repeated CW rotation. Vertical
         // sockets pass through unchanged. Negative quarter-turns rotate counter-clockwise.
         public static SocketDirection Rotate(SocketDirection d, int quarterTurns)
@@ -46,6 +44,5 @@ namespace FriendSlop.Interiors
                 _ => SocketDirection.North,
             };
         }
->>>>>>> origin/interiors-changes
     }
 }

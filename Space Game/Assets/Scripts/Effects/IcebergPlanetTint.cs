@@ -2,21 +2,11 @@ using UnityEngine;
 
 namespace FriendSlop.Effects
 {
-<<<<<<< HEAD
-    // Deterministic two-color vertical gradient for a planet sphere. Authoring twin of
-    // FriendSlop.Core.PlanetColorRandomizer: same texture-bake technique (a 2x256 strip
-    // applied to the renderer's mainTexture so standard sphere-primitive UVs distribute
-    // bottomColor at the south pole and topColor at the north pole), but the two
-    // colors are SerializeFields instead of randomized hues. Used by Ice Planet to read
-    // as an iceberg - light icy crown, deep blue underside - rather than a random
-    // session-roll. No networking required because the colors are fixed.
-=======
     // Deterministic two-color vertical gradient for a planet sphere. Bakes a 2x256
     // strip into the renderer's mainTexture so standard sphere-primitive UVs distribute
     // bottomColor at the south pole and topColor at the north pole - the two colors
     // are SerializeFields. Used by Ice Planet to read as an iceberg: light icy crown,
     // deep blue underside. No networking required because the colors are fixed.
->>>>>>> origin/interiors-changes
     [RequireComponent(typeof(Renderer))]
     public class IcebergPlanetTint : MonoBehaviour
     {
@@ -39,12 +29,7 @@ namespace FriendSlop.Effects
 
             var tex = BuildGradientTexture(bottomColor, topColor, gradientPower);
             // material (not sharedMaterial) so this instance gets its own copy and we
-<<<<<<< HEAD
-            // don't tint every sphere primitive in the scene; matches the pattern in
-            // PlanetColorRandomizer.ApplyGradient.
-=======
             // don't tint every sphere primitive that happens to share the asset.
->>>>>>> origin/interiors-changes
             rend.material.mainTexture = tex;
             rend.material.color = Color.white;
         }

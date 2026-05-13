@@ -1,12 +1,7 @@
-<<<<<<< HEAD
-using System.Collections.Generic;
-using UnityEngine;
-=======
 using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Serialization;
->>>>>>> origin/interiors-changes
 
 namespace FriendSlop.Interiors
 {
@@ -19,12 +14,6 @@ namespace FriendSlop.Interiors
         [SerializeField, Range(1, 10)]  private int minFloors = 1;
         [SerializeField, Range(1, 10)]  private int maxFloors = 2;
         [SerializeField] private float floorHeightMeters = 4f;
-<<<<<<< HEAD
-        [SerializeField] private float gridCellMeters = 8f;
-        [SerializeField] private RoomDefinition[] roomPool = System.Array.Empty<RoomDefinition>();
-        [SerializeField, Range(0, 5)] private int minSpecialRooms;
-        [SerializeField, Range(0, 5)] private int maxSpecialRooms = 1;
-=======
         [SerializeField] private float gridCellMeters = 3.4f;
 
         [Header("Recipe")]
@@ -45,15 +34,15 @@ namespace FriendSlop.Interiors
                  "below a 1x1 stair on the floor above.")]
         [SerializeField] private RoomDefinition downwardConnectorMirror;
         [Tooltip("Room used by the post-expansion filler pass to plug empty cells inside " +
-                 "the bbox that touch ≥2 already-placed rooms. Should be a 1x1 hallway. " +
-                 "Not part of the optional pool — only the filler pass uses it.")]
+                 "the bbox that touch â‰¥2 already-placed rooms. Should be a 1x1 hallway. " +
+                 "Not part of the optional pool â€” only the filler pass uses it.")]
         [SerializeField] private RoomDefinition fillerRoom;
         [Tooltip("When going down, the connector on the upper floor must be placed adjacent " +
                  "to one of these rooms (if any are present in the layout). Falls back to any " +
                  "free socket if none of these are placed yet.")]
         [SerializeField] private RoomDefinition[] downConnectorParents = Array.Empty<RoomDefinition>();
         [Tooltip("If true, the basement floor (lower of the down-link) is left with only the " +
-                 "mirror room — no further expansion. Use when the basement is a single room.")]
+                 "mirror room â€” no further expansion. Use when the basement is a single room.")]
         [SerializeField] private bool skipBasementExpansion;
         [Tooltip("When true (default), the layout generator prefers placing new rooms adjacent to " +
                  "multiple existing rooms, producing compact rectangular / L-shaped footprints like " +
@@ -65,7 +54,7 @@ namespace FriendSlop.Interiors
         [SerializeField] private bool doorsOnlyForPrivateRooms;
         [Tooltip("When true, the layout generator forbids any room from spawning south of the " +
                  "entry room (z < entry.z). The entry's south face becomes the building's front " +
-                 "facade — what a normal house looks like.")]
+                 "facade â€” what a normal house looks like.")]
         [SerializeField] private bool entryAtSouthernEdge;
         [Tooltip("When true, every cell on an upper floor must sit directly above a cell on the " +
                  "floor immediately below. Prevents upper rooms from cantilevering off the ground " +
@@ -89,7 +78,6 @@ namespace FriendSlop.Interiors
         [SerializeField] private ScriptableObject monsterPool;
         [Tooltip("Round objective override for missions inside this building. Wired in a later phase.")]
         [SerializeField] private ScriptableObject objective;
->>>>>>> origin/interiors-changes
 
         public string DisplayName        => displayName;
         public int MinRooms              => minRooms;
@@ -98,11 +86,6 @@ namespace FriendSlop.Interiors
         public int MaxFloors             => maxFloors;
         public float FloorHeightMeters   => floorHeightMeters;
         public float GridCellMeters      => gridCellMeters;
-<<<<<<< HEAD
-        public IReadOnlyList<RoomDefinition> RoomPool => roomPool;
-        public int MinSpecialRooms       => minSpecialRooms;
-        public int MaxSpecialRooms       => maxSpecialRooms;
-=======
         public IReadOnlyList<RequiredRoom> RequiredRooms => requiredRooms;
         public IReadOnlyList<RoomDefinition> OptionalPool => optionalPool;
         public int MinSpecialRooms       => minSpecialRooms;
@@ -122,7 +105,7 @@ namespace FriendSlop.Interiors
         public bool ForceRectangularLayout => forceRectangularLayout;
         public bool RestrictFrontFacade  => restrictFrontFacade;
 
-        // Back-compat shim — older code reads RoomPool as the full pool. Returns required ∪ optional
+        // Back-compat shim â€” older code reads RoomPool as the full pool. Returns required âˆª optional
         // so existing callers (tests, scene builders) keep finding every room the building can produce.
         public IReadOnlyList<RoomDefinition> RoomPool
         {
@@ -158,6 +141,5 @@ namespace FriendSlop.Interiors
                 this.adjacentToAny = adjacentToAny;
             }
         }
->>>>>>> origin/interiors-changes
     }
 }

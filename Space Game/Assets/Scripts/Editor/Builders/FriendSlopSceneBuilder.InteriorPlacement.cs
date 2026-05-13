@@ -40,11 +40,6 @@ namespace FriendSlop.Editor
             }
         }
 
-<<<<<<< HEAD
-        private static bool EnsureBuildingInScene(Scene scene, string buildingName,
-            string buildingDefName, Vector3 surfaceDir)
-        {
-=======
         [MenuItem("Tools/Friend Slop/Interiors/Add Type Test Buildings to Hills and Valleys")]
         public static void AddTypeTestBuildingsToHillsAndValleys()
         {
@@ -84,8 +79,7 @@ namespace FriendSlop.Editor
         private static InteriorEntrance CreateTestBuilding(Scene scene, string buildingName,
             string buildingDefName, Vector3 surfaceDir)
         {
->>>>>>> origin/interiors-changes
-            // Always rebuild — the menu expects a fresh known-good state every time.
+            // Always rebuild â€” the menu expects a fresh known-good state every time.
             foreach (var root in scene.GetRootGameObjects())
             {
                 if (root.name != buildingName) continue;
@@ -99,12 +93,8 @@ namespace FriendSlop.Editor
 
             if (def == null)
             {
-                Debug.LogWarning($"[Friend Slop] Building definition '{buildingDefName}' missing — run 'Repair Interior Assets' first.");
-<<<<<<< HEAD
-                return false;
-=======
+                Debug.LogWarning($"[Friend Slop] Building definition '{buildingDefName}' missing â€” run 'Repair Interior Assets' first.");
                 return null;
->>>>>>> origin/interiors-changes
             }
 
             var go = new GameObject(buildingName);
@@ -114,7 +104,7 @@ namespace FriendSlop.Editor
             const float halfWidth  = shellWidth * 0.5f;
             float shellHeight      = def.MaxFloors * def.FloorHeightMeters;
 
-            // Place on the planet surface, prioritising the entry door — we shift the pivot
+            // Place on the planet surface, prioritising the entry door â€” we shift the pivot
             // so the door's bottom lands on the actual surface in the door's direction.
             var world = Object.FindFirstObjectByType<SphereWorld>(FindObjectsInactive.Include);
             if (world != null)
@@ -144,7 +134,7 @@ namespace FriendSlop.Editor
             shell.transform.localPosition = new Vector3(0f, shellHeight * 0.5f, 0f);
             shell.transform.localScale    = new Vector3(shellWidth, shellHeight, shellWidth);
 
-            // Door visual on the front (+Z) face — same plane as the interactable collider.
+            // Door visual on the front (+Z) face â€” same plane as the interactable collider.
             var doorVisual = GameObject.CreatePrimitive(PrimitiveType.Cube);
             doorVisual.name = "DoorVisual";
             doorVisual.transform.SetParent(go.transform, false);
@@ -154,7 +144,7 @@ namespace FriendSlop.Editor
             var renderer = doorVisual.GetComponent<MeshRenderer>();
             if (renderer != null)
             {
-                // Saddle brown — visible against grey shell and green hills.
+                // Saddle brown â€” visible against grey shell and green hills.
                 var brown = new Color(0.55f, 0.3f, 0.1f);
                 var src = renderer.sharedMaterial != null
                     ? renderer.sharedMaterial
@@ -184,10 +174,6 @@ namespace FriendSlop.Editor
             BuildLoadingScreenCanvas(go.transform);
 
             EditorUtility.SetDirty(go);
-<<<<<<< HEAD
-            return true;
-        }
-=======
             return entrance;
         }
 
@@ -239,7 +225,7 @@ namespace FriendSlop.Editor
             var padDir = (pad.transform.position - world.Center).normalized;
 
             // Pick any tangent vector on the surface plane and offset the building roughly
-            // ~12 m / world.Radius radians along it — far enough to be off the pad, close
+            // ~12 m / world.Radius radians along it â€” far enough to be off the pad, close
             // enough that the player spawned at the pad can see it.
             var tangent = Vector3.Cross(padDir, Vector3.up);
             if (tangent.sqrMagnitude < 0.001f) tangent = Vector3.Cross(padDir, Vector3.right);
@@ -253,7 +239,7 @@ namespace FriendSlop.Editor
         {
             const float halfWidth = 4f;
 
-            // Selector pillar — 0.8 m × 1.5 m × 0.8 m, placed clear of the shell's east face
+            // Selector pillar â€” 0.8 m Ã— 1.5 m Ã— 0.8 m, placed clear of the shell's east face
             // and 1.5 m in front of the building so the player walks past it toward the door.
             var pillar = new GameObject("TypeSelectorPillar");
             pillar.transform.SetParent(buildingRoot, false);
@@ -267,7 +253,7 @@ namespace FriendSlop.Editor
             pillar.AddComponent<NetworkObject>();
             var selector = pillar.AddComponent<InteriorTypeSelector>();
 
-            // Visible pillar mesh (no collider — the one above on the root handles SphereCast).
+            // Visible pillar mesh (no collider â€” the one above on the root handles SphereCast).
             var mesh = GameObject.CreatePrimitive(PrimitiveType.Cube);
             mesh.name = "PillarMesh";
             mesh.transform.SetParent(pillar.transform, false);
@@ -276,7 +262,7 @@ namespace FriendSlop.Editor
             Object.DestroyImmediate(mesh.GetComponent<Collider>());
 
             // Worldspace text above the pillar. Updated at runtime by InteriorTypeSelector.
-            // TextMesh faces local +Z; rotate 180° so the text reads correctly when the
+            // TextMesh faces local +Z; rotate 180Â° so the text reads correctly when the
             // player approaches the pillar from the entrance side of the building.
             var labelGo = new GameObject("Label");
             labelGo.transform.SetParent(pillar.transform, false);
@@ -298,7 +284,6 @@ namespace FriendSlop.Editor
 
             return pillar;
         }
->>>>>>> origin/interiors-changes
     }
 }
 #endif

@@ -13,15 +13,13 @@ namespace FriendSlop.Interiors
         public int Seed       { get; set; }
         public int FloorCount { get; set; }
         public int EntryFloor { get; set; }
-<<<<<<< HEAD
-=======
-        // When true, room placement rejects any grid position with z < 0 — the entry
+        // When true, room placement rejects any grid position with z < 0 â€” the entry
         // sits at z=0 and the southern facade of the building is the entry's south face.
         public bool RestrictSouthOfEntry { get; set; }
         // When true, every cell of a room placed above the entry floor must sit inside
         // the bounding rectangle of the entry-floor footprint (NSEW extents), with one
         // cell of slack on each side. Keeps the upper floor inside the house silhouette
-        // without forcing strict cell-over-cell support — bedrooms can shift around.
+        // without forcing strict cell-over-cell support â€” bedrooms can shift around.
         public bool RestrictUpperFloorOverhang { get; set; }
         // When true, every cell of every room must fall inside the axis-aligned target
         // rectangle (RectMinXZ..RectMaxXZ inclusive). Produces house-style rectangular
@@ -43,7 +41,6 @@ namespace FriendSlop.Interiors
         // exit uses. Null when no exterior door was reserved (legacy/test buildings).
         public PlacedRoom ExitRoom         { get; set; }
         public SocketDirection? ExitSocket { get; set; }
->>>>>>> origin/interiors-changes
 
         public bool IsCellOccupied(Vector3Int cell) => Grid.ContainsKey(cell);
 
@@ -61,15 +58,9 @@ namespace FriendSlop.Interiors
             public readonly SocketDirection SocketA;
             public readonly PlacedRoom RoomB;
             public readonly SocketDirection SocketB;
-<<<<<<< HEAD
-
-            public Connection(PlacedRoom a, SocketDirection sa, PlacedRoom b, SocketDirection sb)
-            {
-                RoomA = a; SocketA = sa; RoomB = b; SocketB = sb;
-=======
-            // True when this connection should render as an open archway — no door, and
+            // True when this connection should render as an open archway â€” no door, and
             // wall panels on both sides of the shared boundary are removed. Used for the
-            // residential entry → living-room transition so it feels like one space.
+            // residential entry â†’ living-room transition so it feels like one space.
             public readonly bool IsOpenPassage;
 
             public Connection(PlacedRoom a, SocketDirection sa, PlacedRoom b, SocketDirection sb,
@@ -77,7 +68,6 @@ namespace FriendSlop.Interiors
             {
                 RoomA = a; SocketA = sa; RoomB = b; SocketB = sb;
                 IsOpenPassage = isOpenPassage;
->>>>>>> origin/interiors-changes
             }
         }
     }

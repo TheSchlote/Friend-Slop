@@ -3,12 +3,10 @@ using UnityEngine;
 
 namespace FriendSlop.Interiors
 {
-<<<<<<< HEAD
-=======
     public enum FloorRestriction
     {
         Any,
-        TopFloorOnly,       // e.g. Office ServerRoom — only on the highest floor
+        TopFloorOnly,       // e.g. Office ServerRoom â€” only on the highest floor
         BottomFloorOnly,    // e.g. Residential Basement contents
         EntryFloorOnly,     // ground/entry floor only, useful for Lobby-adjacent rooms
     }
@@ -35,18 +33,12 @@ namespace FriendSlop.Interiors
         }
     }
 
->>>>>>> origin/interiors-changes
     [CreateAssetMenu(menuName = "Friend Slop/Interiors/Room Definition", fileName = "Room")]
     public class RoomDefinition : ScriptableObject
     {
         [SerializeField] private GameObject prefab;
         [SerializeField] private Vector2Int gridSize = Vector2Int.one;
         [SerializeField] private RoomCategory category;
-<<<<<<< HEAD
-        [SerializeField] private SocketDirection[] sockets = System.Array.Empty<SocketDirection>();
-        [SerializeField] private bool isVerticalConnector;
-        [SerializeField, Range(1, 100)] private int weight = 10;
-=======
         [Tooltip("Functional identity used by the layout generator for adjacency / restriction " +
                  "logic (\"is this a bedroom?\"). Set to Unspecified for rooms that don't " +
                  "participate in those rules.")]
@@ -55,7 +47,7 @@ namespace FriendSlop.Interiors
         [SerializeField] private bool isVerticalConnector;
         [SerializeField, Range(1, 100)] private int weight = 10;
         [Tooltip("Maximum number of horizontal connections this room can have. -1 (default) " +
-                 "means unlimited — each free wall socket can become a door. Set to 1 for rooms " +
+                 "means unlimited â€” each free wall socket can become a door. Set to 1 for rooms " +
                  "like a bathroom or powder room where only one door makes sense.")]
         [SerializeField] private int maxHorizontalConnections = -1;
         [Tooltip("Maximum number of instances of this room per generated building. 0 (default) " +
@@ -77,18 +69,12 @@ namespace FriendSlop.Interiors
         [Tooltip("Random number of furniture pieces spawned in this room (clamped by available anchors).")]
         [SerializeField] private Vector2Int furnitureCountRange = new Vector2Int(2, 4);
         [Tooltip("Per-kind constraints. A rule with min>0 forces that many pieces of the kind " +
-                 "to spawn (Bedroom: bed×1). A rule with max>0 caps spawns (Bedroom: bed max=1).")]
+                 "to spawn (Bedroom: bedÃ—1). A rule with max>0 caps spawns (Bedroom: bed max=1).")]
         [SerializeField] private FurnitureRule[] furnitureRules = System.Array.Empty<FurnitureRule>();
->>>>>>> origin/interiors-changes
 
         public GameObject Prefab         => prefab;
         public Vector2Int GridSize       => gridSize;
         public RoomCategory Category     => category;
-<<<<<<< HEAD
-        public IReadOnlyList<SocketDirection> Sockets => sockets;
-        public bool IsVerticalConnector  => isVerticalConnector;
-        public int Weight                => weight;
-=======
         public RoomKind Kind             => kind;
         public IReadOnlyList<SocketDirection> Sockets => sockets;
         public bool IsVerticalConnector  => isVerticalConnector;
@@ -101,7 +87,6 @@ namespace FriendSlop.Interiors
         public Vector2Int FurnitureCountRange     => furnitureCountRange;
         public IReadOnlyList<FurnitureRule> FurnitureRules =>
             furnitureRules ?? System.Array.Empty<FurnitureRule>();
->>>>>>> origin/interiors-changes
 
         public bool HasSocket(SocketDirection dir)
         {
@@ -109,8 +94,6 @@ namespace FriendSlop.Interiors
                 if (s == dir) return true;
             return false;
         }
-<<<<<<< HEAD
-=======
 
         // True if this room can spawn on the given floor (inclusive), given the layout's
         // floor count and entry floor.
@@ -124,6 +107,5 @@ namespace FriendSlop.Interiors
                 default:                                return true;
             }
         }
->>>>>>> origin/interiors-changes
     }
 }
