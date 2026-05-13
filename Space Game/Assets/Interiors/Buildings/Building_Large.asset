@@ -32,6 +32,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 6270a4585537e1f4e96169ff9039603f, type: 2}
   - {fileID: 11400000, guid: 102454ed8afe07843889633989c021cb, type: 2}
   - {fileID: 11400000, guid: 7c43bb5560b7e1145b45dfdd300c7b71, type: 2}
+  - {fileID: 11400000, guid: 4cca45a525aa1ba408dc0cf27e6d9371, type: 2}
   - {fileID: 11400000, guid: c9b7fca5a2f5e84479feb816d892aee9, type: 2}
   - {fileID: 11400000, guid: 77d6c2219045171488d031dda7cfef61, type: 2}
   - {fileID: 11400000, guid: 752b0ac98902a90409c4cb6e009795f9, type: 2}
@@ -45,8 +46,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 77423aa78fdab3249b5dd5518610cc8b, type: 2}
   - {fileID: 11400000, guid: ad0da52b55dda5044a90f077555ad4a6, type: 2}
   - {fileID: 11400000, guid: 48b2578118cf2bd49b0591f046773a80, type: 2}
-  - {fileID: 11400000, guid: 40d4339c78dc9cf4fabcbe92fa02df08, type: 2}
-  - {fileID: 11400000, guid: c855ac486e068c74cbdd39c8ca982844, type: 2}
   - {fileID: 11400000, guid: 0d9e6aba5e649004ebd3ab56bfdf23d2, type: 2}
   - {fileID: 11400000, guid: 13701aebea41c9e4f8e361ecb6146753, type: 2}
   - {fileID: 11400000, guid: 7fde62c89d6582540b2402e4768cefe5, type: 2}
@@ -82,6 +81,7 @@ MonoBehaviour:
   minSpecialRooms: 2
   maxSpecialRooms: 4
   downwardConnectorMirror: {fileID: 0}
+  fillerRoom: {fileID: 0}
   downConnectorParents: []
   skipBasementExpansion: 0
   compactLayout: 1
@@ -89,6 +89,7 @@ MonoBehaviour:
   entryAtSouthernEdge: 0
   restrictUpperFloorOverhang: 0
   forceRectangularLayout: 0
+  restrictFrontFacade: 0
   themeColor: {r: 1, g: 1, b: 1, a: 1}
   lootTable: {fileID: 0}
   monsterPool: {fileID: 0}

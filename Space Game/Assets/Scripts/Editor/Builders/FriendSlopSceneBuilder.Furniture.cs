@@ -1471,17 +1471,6 @@ namespace FriendSlop.Editor
                         Cyl(new Vector3(0f, 0.2f,  0f), new Vector3(0.04f, 0.35f, 0.04f), darkMetal),
                         Cyl(new Vector3(0f, 0.45f, 0f), new Vector3(0.3f,  0.18f, 0.3f),  lampShade),
                     }),
-                new FurnitureSpec("Furniture_WallClock", "Wall Clock", "wall_clock",
-                    new[] { FurnitureTags.LivingRoom, FurnitureTags.Kitchen, FurnitureTags.Office,
-                            FurnitureTags.Hallway, FurnitureTags.Shared },
-                    AnchorPlacement.WallHanging, new Vector2(0.5f, 0.1f), weight: 2, interactable: false,
-                    new[]
-                    {
-                        Cyl(new Vector3(0f, 1.8f, -0.04f), new Vector3(0.4f, 0.04f, 0.4f), darkWood),
-                        Cyl(new Vector3(0f, 1.8f, -0.025f), new Vector3(0.35f, 0.02f, 0.35f), pillow),
-                        Cube(new Vector3(0f, 1.92f, -0.01f), new Vector3(0.02f, 0.12f, 0.02f), black),
-                        Cube(new Vector3(0.08f, 1.8f, -0.01f), new Vector3(0.16f, 0.02f, 0.02f), black),
-                    }),
                 new FurnitureSpec("Furniture_TrashCan", "Trash Can", "trashcan",
                     new[] { FurnitureTags.Office, FurnitureTags.Kitchen, FurnitureTags.BreakRoom,
                             FurnitureTags.Shared },

@@ -279,6 +279,10 @@ namespace FriendSlop.UI
 
         private bool IsBlockingGameplayInput()
         {
+            // Dev tool: F1 blueprint editor freezes gameplay input + cursor in 2D
+            // edit mode. In 3D walk mode the player needs FPS controls so we let
+            // gameplay input through.
+            if (FriendSlop.Interiors.Blueprints.BlueprintEditorController.IsBlockingInput) return true;
             if (_chatInputFocused) return true;
             if (chatInput != null && chatInput.isFocused) return true;
             if (playerNameInput != null && playerNameInput.isFocused) return true;
@@ -325,14 +329,18 @@ namespace FriendSlop.UI
             if (!gameplayPhase)
                 activeMenuOpen = false;
 
-            var showMenu = !isLoading && (!gameplayPhase || activeMenuOpen);
+            // Blueprint editor 2D mode takes precedence — cursor freed regardless of
+            // round phase or menu state. 3D walk mode lets cursor lock normally.
+            bool blueprintEditorActive = FriendSlop.Interiors.Blueprints.BlueprintEditorController.IsBlockingInput;
+            var showMenu = !isLoading && (!gameplayPhase || activeMenuOpen || blueprintEditorActive);
 
             if (showMenu && (Cursor.lockState != CursorLockMode.None || !Cursor.visible))
             {
                 Cursor.lockState = CursorLockMode.None;
                 Cursor.visible = true;
             }
-            else if (gameplayPhase && !activeMenuOpen && (Cursor.lockState != CursorLockMode.Locked || Cursor.visible))
+            else if (gameplayPhase && !activeMenuOpen && !blueprintEditorActive
+                     && (Cursor.lockState != CursorLockMode.Locked || Cursor.visible))
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;

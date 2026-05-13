@@ -28,6 +28,10 @@ namespace FriendSlop.Interiors
         public bool RestrictToRectangle { get; set; }
         public Vector2Int? RectMinXZ { get; set; }
         public Vector2Int? RectMaxXZ { get; set; }
+        // When true, only Entry / LivingRoom / Office / PowderRoom may have cells at z=0
+        // on the entry floor. Forces private rooms and the kitchen / garage back from
+        // the street so the southern facade reads as the front of the house.
+        public bool RestrictFrontFacade { get; set; }
         // Cached entry-floor bounding box (min/max grid coords on x/z), populated lazily
         // the first time an upper-floor placement is attempted. Entry-floor cells are
         // added before upper-floor placement begins, so the box is stable once computed.

@@ -168,6 +168,48 @@ namespace FriendSlop.Editor
             return prefab;
         }
 
+        // Public entry point used by the in-game Blueprint Editor (Phase 2) to
+        // regenerate a room's prefab after the user edits its RoomDefinition. Builds
+        // the geometry from the def's CURRENT field values (gridSize, sockets, kind,
+        // isVerticalConnector) — i.e. the editor's edits show up live without a full
+        // Repair pass and without overwriting the user's furniture-rule edits.
+        public static void RegenerateRoomPrefabFromDefinition(RoomDefinition def)
+        {
+            if (def == null) return;
+            var prefabPath = def.Prefab != null
+                ? AssetDatabase.GetAssetPath(def.Prefab)
+                : $"{InteriorRoomFolder}/{def.name}.prefab";
+            if (string.IsNullOrEmpty(prefabPath)) return;
+
+            // Synthesise a transient RoomSpec from the def. Only the fields BuildRoomGeometry
+            // reads (Name/GridSize/Sockets/IsVerticalConnector/Kind) need to be populated;
+            // others get defaults.
+            var spec = new RoomSpec(
+                name: def.name,
+                size: def.GridSize,
+                cat: def.Category,
+                sockets: System.Linq.Enumerable.ToArray(def.Sockets),
+                vertical: def.IsVerticalConnector,
+                weight: def.Weight,
+                kind: def.Kind);
+
+            var root = new GameObject(def.name);
+            BuildRoomGeometry(root, spec);
+            var prefab = PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
+            Object.DestroyImmediate(root);
+
+            // Re-link the def's prefab reference in case path changed (it usually
+            // doesn't — SaveAsPrefabAsset preserves the GUID — but cheap insurance).
+            if (prefab != null && def.Prefab != prefab)
+            {
+                var so = new SerializedObject(def);
+                so.FindProperty("prefab").objectReferenceValue = prefab;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+            EditorUtility.SetDirty(def);
+            AssetDatabase.SaveAssets();
+        }
+
         // Cell size for room/door/anchor geometry. Must stay in sync with
         // BuildingDefinition.gridCellMeters and InteriorSceneBootstrapper.AnchorIsOnDoorCell.
         // The grid is double-resolution — a "1×1 small room" occupies one 3.4 m cell, and
@@ -579,6 +621,10 @@ namespace FriendSlop.Editor
                 string.IsNullOrEmpty(spec.DownwardConnectorMirrorName)
                     ? null
                     : FindRoomDef(allDefs, spec.DownwardConnectorMirrorName);
+            so.FindProperty("fillerRoom").objectReferenceValue =
+                string.IsNullOrEmpty(spec.FillerRoomName)
+                    ? null
+                    : FindRoomDef(allDefs, spec.FillerRoomName);
 
             var parentsProp = so.FindProperty("downConnectorParents");
             var parentNames = spec.DownConnectorParentNames ?? System.Array.Empty<string>();
@@ -597,6 +643,7 @@ namespace FriendSlop.Editor
             so.FindProperty("entryAtSouthernEdge").boolValue      = spec.EntryAtSouthernEdge;
             so.FindProperty("restrictUpperFloorOverhang").boolValue = spec.RestrictUpperFloorOverhang;
             so.FindProperty("forceRectangularLayout").boolValue     = spec.ForceRectangularLayout;
+            so.FindProperty("restrictFrontFacade").boolValue        = spec.RestrictFrontFacade;
 
             // Optional pool. If the spec didn't specify, fall back to every room (legacy behaviour).
             var optionalProp = so.FindProperty("optionalPool");
@@ -792,6 +839,13 @@ namespace FriendSlop.Editor
                 kind: RoomKind.Hallway,
                 furnitureTags: new[]{ FurnitureTags.Hallway, FurnitureTags.Shared },
                 furnitureCountRange: new Vector2Int(1, 2)),
+            // Filler hallway used post-expansion to plug empty cells inside the bbox
+            // that touch 2+ rooms. Not part of the optionalPool — only referenced via
+            // BuildingDefinition.fillerRoom and placed by the filler pass.
+            new RoomSpec("Room_Residential_Hallway_1x1",     new Vector2Int(1,1), RoomCategory.Generic, AllHorizontalSockets, false, 1,
+                kind: RoomKind.Hallway,
+                furnitureTags: new[]{ FurnitureTags.Hallway, FurnitureTags.Shared },
+                furnitureCountRange: new Vector2Int(0, 1)),
             new RoomSpec("Room_Residential_Bedroom_2x2",     new Vector2Int(2,2), RoomCategory.Generic, AllHorizontalSockets, false, 15,
                 kind: RoomKind.Bedroom,
                 furnitureTags: new[]{ FurnitureTags.Bedroom, FurnitureTags.Shared },
@@ -892,14 +946,6 @@ namespace FriendSlop.Editor
                     Rule("desk",      min: 1, max: 1),
                     Rule("bookshelf", min: 0, max: 1),
                 }),
-            new RoomSpec("Room_Residential_Den_4x2",         new Vector2Int(4,2), RoomCategory.Special, AllHorizontalSockets, false, 5,
-                kind: RoomKind.Den,
-                furnitureTags: new[]{ FurnitureTags.LivingRoom, FurnitureTags.Shared },
-                furnitureCountRange: new Vector2Int(3, 5)),
-            new RoomSpec("Room_Residential_SunRoom_2x4",     new Vector2Int(2,4), RoomCategory.Special, AllHorizontalSockets, false, 4,
-                kind: RoomKind.SunRoom,
-                furnitureTags: new[]{ FurnitureTags.LivingRoom, FurnitureTags.Shared },
-                furnitureCountRange: new Vector2Int(2, 4)),
             new RoomSpec("Room_Residential_Library_2x2",     new Vector2Int(2,2), RoomCategory.Special, AllHorizontalSockets, false, 4,
                 kind: RoomKind.Library,
                 furnitureTags: new[]{ FurnitureTags.Office, FurnitureTags.LivingRoom, FurnitureTags.Shared },
@@ -1105,8 +1151,6 @@ namespace FriendSlop.Editor
                     "Room_Residential_LinenCloset_1x1",
                     // Specialty living spaces.
                     "Room_Residential_Office_2x2",
-                    "Room_Residential_Den_4x2",
-                    "Room_Residential_SunRoom_2x4",         // post-validates one long wall facing the void
                     "Room_Residential_Library_2x2",
                     // Attached garage.
                     "Room_Residential_Garage_3x3",          // post-validates at least one wall facing the void
@@ -1119,6 +1163,7 @@ namespace FriendSlop.Editor
                 // When the basement floor exists, the stair on the entry floor goes there
                 // — and must be placed adjacent to one of these rooms.
                 downwardConnectorMirrorName: "Room_Residential_Basement_4x4",
+                fillerRoomName: "Room_Residential_Hallway_1x1",
                 downConnectorParentNames: new[]
                 {
                     "Room_Residential_Kitchen_2x3",
@@ -1130,7 +1175,8 @@ namespace FriendSlop.Editor
                 doorsOnlyForPrivateRooms: true,
                 entryAtSouthernEdge: true,
                 restrictUpperFloorOverhang: true,
-                forceRectangularLayout: true),
+                forceRectangularLayout: true,
+                restrictFrontFacade: true),
 
             new BuildingSpec("Building_Office", "Office",
                 // Larger so we can fit per-floor hallways + cubicles + meeting rooms.
@@ -1250,6 +1296,7 @@ namespace FriendSlop.Editor
             public readonly string[] OptionalRoomNames;
             public readonly Color ThemeColor;
             public readonly string DownwardConnectorMirrorName;
+            public readonly string FillerRoomName;
             public readonly string[] DownConnectorParentNames;
             public readonly bool SkipBasementExpansion;
             public readonly bool CompactLayout;
@@ -1257,6 +1304,7 @@ namespace FriendSlop.Editor
             public readonly bool EntryAtSouthernEdge;
             public readonly bool RestrictUpperFloorOverhang;
             public readonly bool ForceRectangularLayout;
+            public readonly bool RestrictFrontFacade;
 
             public BuildingSpec(string name, string displayName,
                 int minR, int maxR, int minF, int maxF, int minS, int maxS,
@@ -1264,13 +1312,15 @@ namespace FriendSlop.Editor
                 RequiredRoomSpec[] required,
                 string[] optionalRoomNames,
                 string downwardConnectorMirrorName = null,
+                string fillerRoomName = null,
                 string[] downConnectorParentNames = null,
                 bool skipBasementExpansion = false,
                 bool compactLayout = true,
                 bool doorsOnlyForPrivateRooms = false,
                 bool entryAtSouthernEdge = false,
                 bool restrictUpperFloorOverhang = false,
-                bool forceRectangularLayout = false)
+                bool forceRectangularLayout = false,
+                bool restrictFrontFacade = false)
             {
                 Name = name; DisplayName = displayName;
                 MinRooms = minR; MaxRooms = maxR; MinFloors = minF; MaxFloors = maxF;
@@ -1279,6 +1329,7 @@ namespace FriendSlop.Editor
                 OptionalRoomNames = optionalRoomNames;
                 ThemeColor = themeColor;
                 DownwardConnectorMirrorName = downwardConnectorMirrorName;
+                FillerRoomName = fillerRoomName;
                 DownConnectorParentNames = downConnectorParentNames;
                 SkipBasementExpansion = skipBasementExpansion;
                 CompactLayout = compactLayout;
@@ -1286,6 +1337,7 @@ namespace FriendSlop.Editor
                 EntryAtSouthernEdge = entryAtSouthernEdge;
                 RestrictUpperFloorOverhang = restrictUpperFloorOverhang;
                 ForceRectangularLayout = forceRectangularLayout;
+                RestrictFrontFacade = restrictFrontFacade;
             }
 
             public static BuildingSpec Legacy(string name, string displayName,

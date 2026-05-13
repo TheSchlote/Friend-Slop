@@ -33,6 +33,10 @@ namespace FriendSlop.Interiors
                  "duplicating the connector. Use to make e.g. a single 2x2 basement room " +
                  "below a 1x1 stair on the floor above.")]
         [SerializeField] private RoomDefinition downwardConnectorMirror;
+        [Tooltip("Room used by the post-expansion filler pass to plug empty cells inside " +
+                 "the bbox that touch ≥2 already-placed rooms. Should be a 1x1 hallway. " +
+                 "Not part of the optional pool — only the filler pass uses it.")]
+        [SerializeField] private RoomDefinition fillerRoom;
         [Tooltip("When going down, the connector on the upper floor must be placed adjacent " +
                  "to one of these rooms (if any are present in the layout). Falls back to any " +
                  "free socket if none of these are placed yet.")]
@@ -60,6 +64,10 @@ namespace FriendSlop.Interiors
                  "rectangle sized from MaxRooms. Produces clean rectangular house footprints; no " +
                  "L-shapes. Sits on top of the southern-edge / overhang restrictions.")]
         [SerializeField] private bool forceRectangularLayout;
+        [Tooltip("When true, only public-facing rooms (Entry, LivingRoom, Office, PowderRoom) " +
+                 "may have cells touching the southern facade (z=0) on the entry floor. Forces " +
+                 "bedrooms/bathrooms/garage/kitchen back from the street.")]
+        [SerializeField] private bool restrictFrontFacade;
 
         [Header("Phase 3+ hooks (optional)")]
         [Tooltip("Tint applied to wall/floor materials at runtime so each type reads as visually distinct.")]
@@ -87,6 +95,7 @@ namespace FriendSlop.Interiors
         public ScriptableObject MonsterPool => monsterPool;
         public ScriptableObject Objective => objective;
         public RoomDefinition DownwardConnectorMirror => downwardConnectorMirror;
+        public RoomDefinition FillerRoom => fillerRoom;
         public IReadOnlyList<RoomDefinition> DownConnectorParents => downConnectorParents ?? Array.Empty<RoomDefinition>();
         public bool SkipBasementExpansion => skipBasementExpansion;
         public bool CompactLayout         => compactLayout;
@@ -94,6 +103,7 @@ namespace FriendSlop.Interiors
         public bool EntryAtSouthernEdge   => entryAtSouthernEdge;
         public bool RestrictUpperFloorOverhang => restrictUpperFloorOverhang;
         public bool ForceRectangularLayout => forceRectangularLayout;
+        public bool RestrictFrontFacade  => restrictFrontFacade;
 
         // Back-compat shim — older code reads RoomPool as the full pool. Returns required ∪ optional
         // so existing callers (tests, scene builders) keep finding every room the building can produce.

@@ -344,6 +344,11 @@ namespace FriendSlop.Player
                 return;
             }
 
+            // Don't rotate the camera while the chat / dev tool / menu has gameplay
+            // input blocked — otherwise moving the mouse to click a UI button also
+            // spins the player.
+            if (FriendSlop.Core.GameplayInputState.IsBlocked) return;
+
             var delta = Mouse.current.delta.ReadValue() * mouseSensitivity;
             transform.Rotate(transform.up, delta.x, Space.World);
 

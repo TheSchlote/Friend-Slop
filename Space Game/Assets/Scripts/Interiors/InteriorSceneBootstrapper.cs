@@ -141,7 +141,21 @@ namespace FriendSlop.Interiors
 
             if (_definition != null)
             {
-                var layout = InteriorLayoutGenerator.Generate(_definition, _seed.Value, SocketDirection.South);
+                // Blueprint mode: bypass the procedural generator and materialise the
+                // designer-authored layout instead. Definition is still used for cell
+                // size, theme, etc. Set by BlueprintEntrance before scene load.
+                InteriorLayout layout;
+                var blueprint = InteriorSessionData.Blueprint;
+                if (blueprint != null)
+                {
+                    layout = FriendSlop.Interiors.Blueprints.BlueprintLayoutBuilder.Build(blueprint, _definition);
+                    Debug.Log($"[Interior] Loading from blueprint '{blueprint.DisplayName}': " +
+                              $"{layout.Rooms.Count} rooms, {layout.Connections.Count} connections.");
+                }
+                else
+                {
+                    layout = InteriorLayoutGenerator.Generate(_definition, _seed.Value, SocketDirection.South);
+                }
                 _entryFloor = layout.EntryFloor;
                 _interiorRoot = BuildRooms(layout, _origin.Value);
                 _minimap = InteriorMinimap.Spawn(layout, _definition, _origin.Value);
@@ -313,7 +327,17 @@ namespace FriendSlop.Interiors
                 // dining room whose long side fully sits against a kitchen), strip the
                 // ENTIRE wall on that side, not just the door cell. Removes the lintel +
                 // Wall_Rest + corner segments so the two rooms read as one open space.
-                if (CountSharedEdgeCells(conn.RoomA, conn.RoomB, conn.SocketA) > 1)
+                bool fullStrip = CountSharedEdgeCells(conn.RoomA, conn.RoomB, conn.SocketA) > 1;
+                // Tiled hallway corridors: strip the lintel between adjacent hallway tiles
+                // so 1x1 fillers chained next to a 4x1 hallway read as one continuous
+                // corridor instead of a rhythmic series of doorless arches.
+                if (!fullStrip
+                    && conn.RoomA.Definition.Kind == RoomKind.Hallway
+                    && conn.RoomB.Definition.Kind == RoomKind.Hallway)
+                {
+                    fullStrip = true;
+                }
+                if (fullStrip)
                 {
                     StripFullWallAtSocket(goA, defSA);
                     StripFullWallAtSocket(goB, defSB);

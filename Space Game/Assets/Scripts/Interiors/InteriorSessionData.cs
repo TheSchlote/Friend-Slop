@@ -17,5 +17,9 @@ namespace FriendSlop.Interiors
         public static Quaternion ReturnRotation;
         public static ulong RequestingClientId;
         public static string ScenePath;
+        // When non-null, the bootstrapper materialises this blueprint instead of
+        // running the procedural generator. Definition is still used for cell size,
+        // theme colour, etc. Set by BlueprintEntrance before scene load.
+        public static FriendSlop.Interiors.Blueprints.BlueprintAsset Blueprint;
     }
 }

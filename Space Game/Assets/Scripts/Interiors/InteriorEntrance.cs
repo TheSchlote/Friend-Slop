@@ -53,6 +53,9 @@ namespace FriendSlop.Interiors
 
             InteriorSessionData.Seed              = _seed.Value;
             InteriorSessionData.Definition        = resolvedDef;
+            // Clear any blueprint left over from a previous BlueprintEntrance
+            // session so this procedural entry doesn't accidentally re-load it.
+            InteriorSessionData.Blueprint         = null;
             // Return position: 1 m above ground, 5 m in front of the building origin
             // (clear of the 8 m shell's +Z face). transform.forward is the building's
             // surface-tangent forward direction.
