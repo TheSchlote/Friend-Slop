@@ -251,3 +251,54 @@ Status 2026-05-08: first cleanup slice done. `FriendSlopUI` state/constants move
 Currently no EditMode coverage for: `NetworkSessionManager` (mock-needed), `FriendSlopUI` partials, `PlayerInteractor`, `NetworkFirstPersonController` health/lifecycle/movement, weapons (`LaserGun`, `BoxingGloves`). The seams that already break are well-covered; gameplay surface that *could* break invisibly is not.
 
 Lowest-hanging fruit: `LaserGun` / `BoxingGloves` — they're small, server-authoritative, and have clear pass/fail predicates.
+
+## 16. Interiors merge follow-ups (queued on `tests/interior-coverage`)
+
+Surfaced during the post-merge architectural review in [PR #24](https://github.com/TheSchlote/Friend-Slop/pull/24). All work is queued on the `tests/interior-coverage` branch.
+
+### 16a. Documentation gaps — friends' agents will get bitten
+
+The whole Interiors system is invisible to `CLAUDE.md` and `docs/architecture.md`, the NGO additive-scene spawn contract isn't codified, and `Tools/Friend Slop/Repair Scene Wiring` isn't listed next to the other editor menus. Updates needed:
+
+- **`Space Game/CLAUDE.md`** — bump Unity to `6000.3.15f1`; add hard rule "NGO + additive scenes: set active scene before `Instantiate` + `NetworkObject.Spawn`, never `MoveGameObjectToScene` after spawn — use `ActiveSceneScope`"; add hard rule "filter `NetworkObject.IsSpawned` when calling `FindObjectsByType`" (NGO parks `NetworkPrefabsList` templates in Bootstrap as inactive instances); add `Tools/Repair Scene Wiring` to the builder list; add Interiors subsection to Architecture (BuildingDefinition, RoomDefinition, FurnitureDefinition, InteriorCatalog, BlueprintAsset, InteriorEntrance → InteriorSessionData → InteriorSceneBootstrapper); add `FriendSlop.Interiors` and `FriendSlop.Interiors.Blueprints` to the namespace map; update §5 asmdef from "being split" to current (Core/Foundation, Runtime, UI, Editor).
+- **`docs/architecture.md`** — update D-005 status (ShipInterior + per-planet additive is live), D-006 (split is current), D-007 (5 baselined files listed below). New decisions:
+  - **D-009: Interior generation as data-driven content** (Building/Room/Furniture/Catalog + deterministic-RNG-per-room contract).
+  - **D-010: Blueprints as authored interior layouts** (`BlueprintAsset` + `BlueprintLayoutBuilder`; `ApplyDoorPolicy` is bypassed for blueprints because edge state is user-authored).
+  - **D-011: NGO scene placement contract** — `ActiveSceneScope` pattern + the `IsSpawned` filter for find queries.
+- **`docs/FeatureIntegrationContracts.md`** — add 4 contracts: "New Building Type," "New Furniture Definition," "New Blueprint," "New Networked Spawn." Update PR checklist with `ActiveSceneScope` + `IsSpawned` lines.
+- **New `docs/InteriorSystem.md`** (~80 lines) — single-page pipeline overview: procedural vs. blueprint path, server picks seed / clients regenerate, doors are `NetworkObject`s, furniture is deterministic-but-local. Point to the FeatureIntegrationContracts entries for "how to add X."
+- **New `docs/NetworkObjectSceneOwnership.md`** (~50 lines) — codifies `ActiveSceneScope`, the `IsSpawned` filter, and the gotchas (`NetworkPrefabsList` templates, `MoveGameObjectToScene`-after-Spawn unreliability).
+
+### 16b. Code issues surfaced during the review
+
+- **`PlanetLootSpawner.IsCurrentActivePlanet()`** ([line 142-148](Space%20Game/Assets/Scripts/Loot/PlanetLootSpawner.cs)) returns `true` when `planetEnvironment == null`. Should default to `false` — current behavior silently runs as the active spawner when env config is missing/broken.
+- **`MeteorShower`** ([line 121](Space%20Game/Assets/Scripts/Hazards/MeteorShower.cs)) still uses the old `Instantiate → MoveGameObjectToScene → Spawn` anti-pattern. Convert to `ActiveSceneScope`.
+- **`AnomalySpawner.Spawn()`** ([line 71](Space%20Game/Assets/Scripts/Hazards/AnomalySpawner.cs)) defaults `destroyWithScene=false`, leaking anomalies into `DontDestroyOnLoad` across planet transitions. Verify intent; likely should be `true`.
+- **Dead test code**: `AssertConnectedMenuLayoutDoesNotOverlap` at [FriendSlopPrototypeSmokeTests.cs:490](Space%20Game/Assets/Tests/PlayMode/FriendSlopPrototypeSmokeTests.cs) is defined but never called.
+
+### 16c. Tests to add (priority order)
+
+1. **`BlueprintLayoutBuilderTests`** (EditMode) — `BlueprintLayoutBuilder.Build` currently has zero coverage and is the entire authored-layout pipeline. Pure static function, easy to test. Cover: empty/null blueprint returns empty layout, room placement, socket adjacency, edge-state overrides (Wall/Open/Door), variant picking, per-slot overrides.
+2. **`BuildingDefinitionRoomPoolTests`** (EditMode) — defensive against future `FormerlySerializedAs` renames. The recent `roomPool` → `optionalPool` rename silently broke `InteriorLayoutGeneratorTests`. A direct unit test on `BuildingDefinition.RoomPool` (combines `optionalPool` + `requiredRooms.Definition`) would catch the next one before it bites.
+3. **`PlanetLootSpawnerSceneOwnershipTests`** (PlayMode) — verifies the `ActiveSceneScope` fix on the Tier 2+ scene-owned spawner path that's not currently exercised. Load a Tier 2 scene, start host, assert all spawned loot ends up in the planet scene.
+4. **`FurnitureSelectionTests`** (EditMode) — `HasTagOverlap`, `IsCappedOut`, `PickFurnitureForAnchor`, `OverlapsExisting` in `InteriorSceneBootstrapper.Furniture.cs`. Pure static helpers; easy to test.
+5. **`InteriorSceneBootstrapper` PlayMode smoke** — spawn an interior, teleport a player in, assert rooms + doors present. Currently no coverage.
+6. **`InteriorCatalogTests`** (EditMode) — catalog enumeration / lookup; ensure no null entries ship.
+
+### 16d. Baselined oversized files (split before adding to)
+
+Listed in `ArchitectureGuardrailTests.ExistingOversizedRuntimeFiles`. Split order recommended:
+
+- `Assets/Scripts/Interiors/Blueprints/BlueprintEditorController.cs` — 545 lines, editor-only, smallest, safest first split.
+- `Assets/Scripts/Interiors/InteriorSceneBootstrapper.cs` — 832 lines; natural extraction: wall-patching / garage-door geometry, then materials, then door spawning.
+- `Assets/Scripts/Interiors/InteriorSceneBootstrapper.Furniture.cs` — 527 lines; extract pickers (`PickFurnitureForAnchor`, `HasTagOverlap`, etc.) into `.Furniture.Picking.cs`.
+- `Assets/Scripts/Interiors/Blueprints/BlueprintEditorUI.cs` — 1005 lines; per-panel split.
+- `Assets/Scripts/Interiors/InteriorLayoutGenerator.cs` — 1727 lines; biggest. Natural seams: required-room quotas, frontier expansion, downward-connector mirroring, fallback generation.
+
+After each split: drop the file's entry from `ExistingOversizedRuntimeFiles` if the main file lands under 400.
+
+### 16e. Editor migrations the agent can't run
+
+These need a human in the editor; queued for the next playtest pass.
+
+- Run `Tools/Friend Slop/Repair Scene Wiring` once to delete the stale ship root from `FriendSlopPrototype.unity` (the wiring repair was updated to handle this on its next run). After running, re-enable `ValidateBootstrapDoesNotOwnShipInterior` in `PlanetSceneValidator.TryValidate`.
