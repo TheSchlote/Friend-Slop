@@ -57,7 +57,23 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          lfs: true
+          lfs: false
+
+      - name: Build LFS object id list
+        shell: bash
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS object cache
+        uses: actions/cache@v5
+        with:
+          path: .git/lfs/objects
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Fetch LFS objects (cache-aware)
+        shell: bash
+        run: git lfs pull
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -110,7 +126,23 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          lfs: true
+          lfs: false
+
+      - name: Build LFS object id list
+        shell: bash
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS object cache
+        uses: actions/cache@v5
+        with:
+          path: .git/lfs/objects
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Fetch LFS objects (cache-aware)
+        shell: bash
+        run: git lfs pull
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -190,7 +222,23 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          lfs: true
+          lfs: false
+
+      - name: Build LFS object id list
+        shell: bash
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS object cache
+        uses: actions/cache@v5
+        with:
+          path: .git/lfs/objects
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Fetch LFS objects (cache-aware)
+        shell: bash
+        run: git lfs pull
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -260,7 +308,23 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          lfs: true
+          lfs: false
+
+      - name: Build LFS object id list
+        shell: bash
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS object cache
+        uses: actions/cache@v5
+        with:
+          path: .git/lfs/objects
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Fetch LFS objects (cache-aware)
+        shell: bash
+        run: git lfs pull
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
