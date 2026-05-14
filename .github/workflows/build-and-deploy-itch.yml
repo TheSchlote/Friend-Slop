@@ -248,12 +248,6 @@ jobs:
           - targetPlatform: StandaloneWindows64
             itchChannel: windows
             label: Windows
-          - targetPlatform: StandaloneLinux64
-            itchChannel: linux
-            label: Linux
-          - targetPlatform: StandaloneOSX
-            itchChannel: mac
-            label: macOS
 
     steps:
       - name: Checkout
@@ -372,12 +366,6 @@ jobs:
           - targetPlatform: StandaloneWindows64
             itchChannel: windows
             label: Windows
-          - targetPlatform: StandaloneLinux64
-            itchChannel: linux
-            label: Linux
-          - targetPlatform: StandaloneOSX
-            itchChannel: mac
-            label: macOS
     environment:
       name: itch-production
       url: https://theschlote.itch.io/friend-slop
