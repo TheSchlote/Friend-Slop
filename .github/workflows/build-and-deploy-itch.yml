@@ -59,6 +59,10 @@ jobs:
           fetch-depth: 0
           lfs: false
 
+      - name: Initialize Git LFS for this checkout
+        shell: bash
+        run: git lfs install --local
+
       - name: Build LFS object id list
         shell: bash
         run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
@@ -73,7 +77,9 @@ jobs:
 
       - name: Fetch LFS objects (cache-aware)
         shell: bash
-        run: git lfs pull
+        run: |
+          set -euo pipefail
+          git lfs pull
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -128,6 +134,10 @@ jobs:
           fetch-depth: 0
           lfs: false
 
+      - name: Initialize Git LFS for this checkout
+        shell: bash
+        run: git lfs install --local
+
       - name: Build LFS object id list
         shell: bash
         run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
@@ -142,7 +152,9 @@ jobs:
 
       - name: Fetch LFS objects (cache-aware)
         shell: bash
-        run: git lfs pull
+        run: |
+          set -euo pipefail
+          git lfs pull
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -224,6 +236,10 @@ jobs:
           fetch-depth: 0
           lfs: false
 
+      - name: Initialize Git LFS for this checkout
+        shell: bash
+        run: git lfs install --local
+
       - name: Build LFS object id list
         shell: bash
         run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
@@ -238,7 +254,9 @@ jobs:
 
       - name: Fetch LFS objects (cache-aware)
         shell: bash
-        run: git lfs pull
+        run: |
+          set -euo pipefail
+          git lfs pull
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -296,12 +314,6 @@ jobs:
           - targetPlatform: StandaloneWindows64
             itchChannel: windows
             label: Windows
-          - targetPlatform: StandaloneLinux64
-            itchChannel: linux
-            label: Linux
-          - targetPlatform: StandaloneOSX
-            itchChannel: mac
-            label: macOS
 
     steps:
       - name: Checkout
@@ -309,6 +321,10 @@ jobs:
         with:
           fetch-depth: 0
           lfs: false
+
+      - name: Initialize Git LFS for this checkout
+        shell: bash
+        run: git lfs install --local
 
       - name: Build LFS object id list
         shell: bash
@@ -324,7 +340,9 @@ jobs:
 
       - name: Fetch LFS objects (cache-aware)
         shell: bash
-        run: git lfs pull
+        run: |
+          set -euo pipefail
+          git lfs pull
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -436,12 +454,6 @@ jobs:
           - targetPlatform: StandaloneWindows64
             itchChannel: windows
             label: Windows
-          - targetPlatform: StandaloneLinux64
-            itchChannel: linux
-            label: Linux
-          - targetPlatform: StandaloneOSX
-            itchChannel: mac
-            label: macOS
     environment:
       name: itch-production
       url: https://theschlote.itch.io/friend-slop
