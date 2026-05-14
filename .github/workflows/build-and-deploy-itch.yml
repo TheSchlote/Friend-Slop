@@ -4,9 +4,19 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'Space Game/**'
+      - '.github/workflows/build-and-deploy-itch.yml'
+      - '.github/actions/**'
+      - 'tools/**'
   pull_request:
     branches:
       - main
+    paths:
+      - 'Space Game/**'
+      - '.github/workflows/build-and-deploy-itch.yml'
+      - '.github/actions/**'
+      - 'tools/**'
   merge_group:
   workflow_dispatch:
 
@@ -53,11 +63,50 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - name: Checkout
+      - name: Checkout (code only, no LFS yet)
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          lfs: true
+          lfs: false
+
+      - name: Initialize Git LFS for this checkout
+        shell: bash
+        run: git lfs install --local
+
+      - name: Build LFS object id list
+        shell: bash
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS object cache
+        uses: actions/cache@v5
+        with:
+          path: .git/lfs/objects
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Fetch LFS objects (cache-aware) with diagnostics
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git lfs env
+          echo "::group::LFS tracked file summary"
+          echo "Tracked LFS files: $(git lfs ls-files --long | wc -l)"
+          git lfs ls-files --long | head -5 || true
+          echo "::endgroup::"
+          echo "::group::Pre-pull cache state"
+          if [ -d .git/lfs/objects ]; then
+            du -sh .git/lfs/objects 2>/dev/null || true
+            echo "Cached objects: $(find .git/lfs/objects -type f 2>/dev/null | wc -l)"
+          else
+            echo "No cache directory (cold cache)"
+          fi
+          echo "::endgroup::"
+          git lfs pull
+          echo "::group::Post-pull cache state"
+          du -sh .git/lfs/objects 2>/dev/null || true
+          echo "Cached objects: $(find .git/lfs/objects -type f 2>/dev/null | wc -l)"
+          echo "::endgroup::"
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -106,11 +155,50 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - name: Checkout
+      - name: Checkout (code only, no LFS yet)
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          lfs: true
+          lfs: false
+
+      - name: Initialize Git LFS for this checkout
+        shell: bash
+        run: git lfs install --local
+
+      - name: Build LFS object id list
+        shell: bash
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS object cache
+        uses: actions/cache@v5
+        with:
+          path: .git/lfs/objects
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Fetch LFS objects (cache-aware) with diagnostics
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git lfs env
+          echo "::group::LFS tracked file summary"
+          echo "Tracked LFS files: $(git lfs ls-files --long | wc -l)"
+          git lfs ls-files --long | head -5 || true
+          echo "::endgroup::"
+          echo "::group::Pre-pull cache state"
+          if [ -d .git/lfs/objects ]; then
+            du -sh .git/lfs/objects 2>/dev/null || true
+            echo "Cached objects: $(find .git/lfs/objects -type f 2>/dev/null | wc -l)"
+          else
+            echo "No cache directory (cold cache)"
+          fi
+          echo "::endgroup::"
+          git lfs pull
+          echo "::group::Post-pull cache state"
+          du -sh .git/lfs/objects 2>/dev/null || true
+          echo "Cached objects: $(find .git/lfs/objects -type f 2>/dev/null | wc -l)"
+          echo "::endgroup::"
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -186,11 +274,50 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - name: Checkout
+      - name: Checkout (code only, no LFS yet)
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          lfs: true
+          lfs: false
+
+      - name: Initialize Git LFS for this checkout
+        shell: bash
+        run: git lfs install --local
+
+      - name: Build LFS object id list
+        shell: bash
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS object cache
+        uses: actions/cache@v5
+        with:
+          path: .git/lfs/objects
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Fetch LFS objects (cache-aware) with diagnostics
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git lfs env
+          echo "::group::LFS tracked file summary"
+          echo "Tracked LFS files: $(git lfs ls-files --long | wc -l)"
+          git lfs ls-files --long | head -5 || true
+          echo "::endgroup::"
+          echo "::group::Pre-pull cache state"
+          if [ -d .git/lfs/objects ]; then
+            du -sh .git/lfs/objects 2>/dev/null || true
+            echo "Cached objects: $(find .git/lfs/objects -type f 2>/dev/null | wc -l)"
+          else
+            echo "No cache directory (cold cache)"
+          fi
+          echo "::endgroup::"
+          git lfs pull
+          echo "::group::Post-pull cache state"
+          du -sh .git/lfs/objects 2>/dev/null || true
+          echo "Cached objects: $(find .git/lfs/objects -type f 2>/dev/null | wc -l)"
+          echo "::endgroup::"
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
@@ -240,6 +367,7 @@ jobs:
       - editmode-tests
       - playmode-tests
       - validate-scenes
+    if: github.event_name != 'pull_request'
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -250,11 +378,50 @@ jobs:
             label: Windows
 
     steps:
-      - name: Checkout
+      - name: Checkout (code only, no LFS yet)
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          lfs: true
+          lfs: false
+
+      - name: Initialize Git LFS for this checkout
+        shell: bash
+        run: git lfs install --local
+
+      - name: Build LFS object id list
+        shell: bash
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS object cache
+        uses: actions/cache@v5
+        with:
+          path: .git/lfs/objects
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Fetch LFS objects (cache-aware) with diagnostics
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git lfs env
+          echo "::group::LFS tracked file summary"
+          echo "Tracked LFS files: $(git lfs ls-files --long | wc -l)"
+          git lfs ls-files --long | head -5 || true
+          echo "::endgroup::"
+          echo "::group::Pre-pull cache state"
+          if [ -d .git/lfs/objects ]; then
+            du -sh .git/lfs/objects 2>/dev/null || true
+            echo "Cached objects: $(find .git/lfs/objects -type f 2>/dev/null | wc -l)"
+          else
+            echo "No cache directory (cold cache)"
+          fi
+          echo "::endgroup::"
+          git lfs pull
+          echo "::group::Post-pull cache state"
+          du -sh .git/lfs/objects 2>/dev/null || true
+          echo "Cached objects: $(find .git/lfs/objects -type f 2>/dev/null | wc -l)"
+          echo "::endgroup::"
 
       - name: Check Unity license secrets
         uses: ./.github/actions/check-unity-license
