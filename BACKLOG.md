@@ -315,6 +315,8 @@ Staged deliberately. **17a–17c change no history and are safe to do unilateral
 - Add the quarantine scaffold so the convention exists: `Assets/ThirdParty/.gitkeep` (+ `.meta`) and a one-line `Assets/ThirdParty/README.md` pointing at D-012. No pack moves yet.
 - Audit `.gitattributes` for binary extensions the current packs use that aren't LFS-tracked (e.g. `.exr`, `.hdr`, `.tif`, `.bmp`); extend coverage if any are committed as raw text. (Do **not** retroactively migrate yet — that's 17d.)
 
+**Status 2026-05-15:** Scaffold landed (`Assets/ThirdParty/` + `README.md` pointing at D-012/D-013, with valid Unity `.meta`s). `.gitattributes` audit done and **clean** — no committed binary extension on `main` *or* the friend branches falls outside the existing LFS list (png/jpg/jpeg/tga/psd/fbx/blend/wav/mp3/ogg/mp4/mov). Confirms the bloat is 100% re-imported text (`.meta`/`.prefab`/`.mat`/`.asset` YAML), so the fix is quarantine + import-once (D-012/D-013), not more LFS. No `.gitattributes` change needed. Remaining 17a item: communicate the new flow to the friend before the next branch is cut.
+
 ### 17b. Inventory & per-pack decision (no history change)
 
 For each pack — `HIVEMIND`, `LowPolyInterior`, `LowPolyInterior2`, `Plugins/Microdetail`, `YughuesFreeRockMaterials`, `_Recovery`, and the friend-branch-only `LowPolyMegaBundle` — classify **keep / relocate / drop** by evidence, not assumption:
