@@ -301,3 +301,57 @@ After each split: drop the file's entry from `ExistingOversizedRuntimeFiles` if 
 These need a human in the editor; queued for the next playtest pass.
 
 - Run `Tools/Friend Slop/Repair Scene Wiring` once to delete the stale ship root from `FriendSlopPrototype.unity` (the wiring repair was updated to handle this on its next run). After running, re-enable `ValidateBootstrapDoesNotOwnShipInterior` in `PlanetSceneValidator.TryValidate`.
+
+## 17. Vendor quarantine + branch reconciliation (architecture D-012/D-013)
+
+**This is the current top priority** (see `docs/architecture.md` roadmap banner). Vendor packs already on `main` total ~12,200 files (`LowPolyInterior2` 9,006, `LowPolyInterior` 1,714, `Plugins/Microdetail` 874, `HIVEMIND` 471, `YughuesFreeRockMaterials` 162) vs ~360 for our own `Prefabs/`. Three friend branches re-import overlapping copies of these, producing 1M+ line diffs, 13–15-file mutual conflicts, a 978 MB `.git`, and the recurring LFS-cost firefight. Goal: make every contribution reviewable and mergeable again without throwing away the friend's real work.
+
+Staged deliberately. **17a–17c change no history and are safe to do unilaterally. 17d rewrites history and is explicitly a coordinated, gated step. 17e depends on 17c.**
+
+### 17a. Stop the bleeding (no history change — do first)
+
+- Land the D-012/D-013 policy (this commit: `architecture.md`, `CLAUDE.md`, this section).
+- Tell the friend the new flow before they cut another branch: short-lived branch off fresh `main`, code + `.asset` only, vendor packs are separate import-once PRs, rebase before review.
+- Add the quarantine scaffold so the convention exists: `Assets/ThirdParty/.gitkeep` (+ `.meta`) and a one-line `Assets/ThirdParty/README.md` pointing at D-012. No pack moves yet.
+- Audit `.gitattributes` for binary extensions the current packs use that aren't LFS-tracked (e.g. `.exr`, `.hdr`, `.tif`, `.bmp`); extend coverage if any are committed as raw text. (Do **not** retroactively migrate yet — that's 17d.)
+
+### 17b. Inventory & per-pack decision (no history change)
+
+For each pack — `HIVEMIND`, `LowPolyInterior`, `LowPolyInterior2`, `Plugins/Microdetail`, `YughuesFreeRockMaterials`, `_Recovery`, and the friend-branch-only `LowPolyMegaBundle` — classify **keep / relocate / drop** by evidence, not assumption:
+
+- Extract the pack's asset GUIDs (`*.meta` `guid:`), then grep `Assets/{Scenes,Prefabs,Resources,Scripts}` and our `.asset` files for those GUIDs. Zero references in shipped content ⇒ drop candidate.
+- Near-certain drops to verify first: `_Recovery/` (2 files, `0.unity` — a Unity crash-recovery scene dump, never referenced) and `LowPolyMegaBundle` (friend-branch-only, superseded by the split LowPoly packs). Confirm with the GUID grep before deleting.
+- Output: a table in this section — pack → file count → decision → referencing scenes/prefabs.
+
+### 17c. Relocate kept packs (working-tree move — history preserved)
+
+For each **keep**/**relocate** pack, one PR per pack (or one tight "relocate vendor" PR):
+
+- `git mv "Space Game/Assets/<Pack>" "Space Game/Assets/ThirdParty/<Pack>"`. Asset GUIDs are unchanged by a move, so scene/prefab references survive — only `.asmdef`/`.asmref` paths, `*.rsp`, and any hard-coded `AssetDatabase` path strings in editor scripts need fix-ups.
+- Add `Assets/ThirdParty/<Pack>/ThirdParty.<Pack>.asmdef`. Delete the pack's demo/example/sample-scene folders in the same PR.
+- `dotnet build` the three csproj + run `tools\Run-UnityTests.ps1 -TestPlatform All`. Repo size is unchanged here (history still holds the blobs) but the tree is policy-compliant and future branches stay clean.
+
+### 17d. Optional coordinated history purge (DESTRUCTIVE — gated, not unilateral)
+
+Only to reclaim `.git`/LFS size, and only for packs classified **drop** in 17b. Hard gate, all must hold before running:
+
+1. The friend has **no open feature branch** (coordinate a window).
+2. A full mirror backup exists (`git clone --mirror` pushed somewhere off-box) and the change is announced.
+3. Every collaborator will re-clone fresh afterward (rebasing existing local work onto the rewritten history is not supported).
+
+Then `git filter-repo --path <droppedpath> --invert-paths` (plus the matching LFS objects) on a mirror, validate, force-push, everyone re-clones. This is the only step that rewrites shared history; never do it as a side effect of another task.
+
+### 17e. Salvage the friend's real code onto fresh branches (depends on 17c)
+
+Per D-013, recover the gameplay code from the divergent branches without the vendor noise. Smallest first to prove the pattern:
+
+1. `procedural-world-generation-tier-4-test` — 36 own-code files / 3.8K lines (planet terrain, ice planet, blood VFX hookup, test worlds).
+2. `interior-variety` — 62 files / 8.7K lines (subset of below).
+3. `interiors-changes` — 73 files / 14.3K lines (superset; full Interiors + Blueprints).
+
+For each: branch off fresh `main`, bring over only `Space Game/Assets/Scripts/**` and genuine `.asset` content (not vendor dirs — those are now satisfied by the relocated `Assets/ThirdParty/` packs), resolve against current `main` (Interiors already partly landed via PR #24, so expect overlap), rebase, PR. `merge/all-branches-to-main` (0 conflicts vs `main`, 29 ahead) is the reference for what is already integrated — diff against it to avoid re-doing landed work.
+
+Key files / branches:
+- `origin/merge/all-branches-to-main` — clean integration reference.
+- `origin/procedural-world-generation-tier-4-test`, `origin/interior-variety`, `origin/interiors-changes` — salvage sources.
+- Stale post-merge branches to verify-then-delete: `origin/Interiors` (was PR #23), `origin/test-plane-world-2` (was PR #22).

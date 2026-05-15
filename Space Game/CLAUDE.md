@@ -114,6 +114,16 @@ Friend Slop runs with `NetworkConfig.EnableSceneManagement = true` and loads `Sh
 
 Full rationale and additional pitfalls: [docs/NetworkObjectSceneOwnership.md](../docs/NetworkObjectSceneOwnership.md).
 
+### 10. Third-party assets & branch hygiene
+
+The repo's scalability bottleneck is vendor-pack churn, not the game code. Hold the line:
+
+- **New Asset Store / third-party pack → `Assets/ThirdParty/<Pack>/`** (or an embedded `Packages/` package), with its own `ThirdParty.<Pack>` asmdef, in a **dedicated import-only PR**. Never `Assets/<Pack>/`. Never bundle a pack import with feature code. Never re-import or re-export an existing pack on a feature branch. Strip demo/example/sample-scene folders on import; add LFS coverage to `.gitattributes` for any new binary extension in that same PR.
+- **Feature branches are short-lived and rebased on `main`; one feature per branch.** If a feature needs a new pack, the pack PR lands first; the feature branch then only references it.
+- Packs currently mislocated on `main` (`HIVEMIND`, `LowPolyInterior`, `LowPolyInterior2`, `Plugins/Microdetail`, `YughuesFreeRockMaterials`, `_Recovery`) are being relocated per **BACKLOG §17** — do not add to them or re-import them meanwhile.
+
+Full rationale: [docs/architecture.md](../docs/architecture.md) D-012 / D-013.
+
 ## Architecture (current)
 
 ### Round lifecycle

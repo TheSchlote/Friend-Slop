@@ -161,6 +161,26 @@ Each entry stays in the baseline until the main file lands under 400; drop the e
 
 **Status (2026-05-13).** Codified. Known stale sites: `MeteorShower.SpawnMeteor` (still uses post-Spawn move; queued in BACKLOG 16b) and `AnomalySpawner.Spawn` (still defaults `destroyWithScene = false`; queued in BACKLOG 16b).
 
+### D-012: Third-party assets are quarantined and import-once
+
+**Decision.** Asset Store / third-party packs do **not** live in `Assets/<PackName>/` on the feature path. Each pack goes in one quarantine root — `Assets/ThirdParty/<PackName>/`, or an embedded UPM package under `Packages/` when the pack is package-shaped — wrapped in its own `.asmdef` (`ThirdParty.<PackName>`, `autoReferenced` only when our runtime must call into it). A pack is imported **exactly once**, in a dedicated PR that does nothing else (`vendor: add <Pack> vX`). Demo / example / sample-scene folders inside the pack are deleted on import. If the pack adds a new binary extension, `.gitattributes` LFS coverage is extended in that same PR. Feature branches never import, re-import, or re-export a pack — they only reference one that already landed.
+
+**Why.** Quantified on `main` (2026-05-15): ~12,200 of the repo's files are vendor packs — `LowPolyInterior2` alone is 9,006 files, `LowPolyInterior` 1,714, `Plugins/Microdetail` 874, `HIVEMIND` 471 — versus ~360 for our own `Prefabs/`. When a pack sits on the feature path and gets re-imported per branch, every feature branch diffs by 1M+ lines, branches collide on vendor `.meta`/YAML, review becomes impossible, `.git` bloats (978 MB), and LFS bandwidth spikes (the direct cause of the [#25](https://github.com/TheSchlote/Friend-Slop/pull/25)/[#26](https://github.com/TheSchlote/Friend-Slop/pull/26) cost firefight). Quarantine + import-once keeps a feature PR reviewable as a feature PR, and an own-asmdef stops our code from coupling to a pack's churn.
+
+**Cost.** A one-time relocation of the packs already on `main` (staged in BACKLOG §17) and the discipline of the dedicated import PR. asmdef-wrapping a pack occasionally needs a few reference / `.asmref` fix-ups. One-time pain, permanent payoff.
+
+**Status (2026-05-15).** Policy set this commit. Mislocated on `main`: `HIVEMIND`, `LowPolyInterior`, `LowPolyInterior2`, `Plugins/Microdetail`, `YughuesFreeRockMaterials`, the junk `_Recovery/` crash dump, plus the friend-branch-only `LowPolyMegaBundle`. Relocation/purge is staged in BACKLOG §17. Until it lands: do not add new packs under `Assets/<root>` and do not re-import existing ones on a feature branch.
+
+### D-013: Short-lived branches, rebased, vendor imports isolated
+
+**Decision.** Feature branches are short-lived (target: merged within a few days), rebased on `main` before review rather than left to diverge, and scoped to one feature. A branch never carries a vendor-pack import alongside feature code — the import is its own prior PR (D-012). The lead may keep a single integration branch *only* for reconciling already-merged history; it is not a place to accumulate features. Contributor flow: branch off fresh `main` → add the feature as C# + `.asset` files (D-001/D-004/D-008) → rebase → PR. If the feature needs a new art pack, the D-012 pack PR lands first and the feature branch just references it.
+
+**Why.** The three friend branches (`interiors-changes`, `interior-variety`, `procedural-world-generation-tier-4-test`) are overlapping long-lived re-cuts of the same work, each re-importing the same packs; all are ~6 commits behind `main`, mutually conflicting (13–15 files), and effectively unmergeable. The cause is divergence over time plus vendor churn, **not** the feature code itself — there is only ~3.8K–14K lines of real gameplay across them, which is salvageable. Short-lived rebased branches with vendor factored out keep every contribution mergeable, which is the whole point of "let the friend keep adding features."
+
+**Cost.** The contributor rebases and keeps branches narrow instead of living in one long-running branch. The time saved not resolving million-line conflicts dwarfs it.
+
+**Status (2026-05-15).** Policy set. Existing divergent branches are reconciled per BACKLOG §17e (salvage real code onto fresh branches off `main`, drop the vendor noise). `merge/all-branches-to-main` is the only friend-work line that currently merges cleanly (0 conflicts vs `main`) and is the reference for "already integrated."
+
 ## Anti-patterns to refuse
 
 The following are explicitly out of scope for this project. If you find yourself reaching for one, stop and propose an alternative.
@@ -176,6 +196,9 @@ The following are explicitly out of scope for this project. If you find yourself
 - **Unfiltered `Object.FindObjectsByType<T>` over NGO types.** `NetworkPrefabsList` templates show up as inactive `IsSpawned=false` instances; filter on `NetworkObject.IsSpawned` (D-011).
 - **Procedural Canvas growth in `FriendSlopUI`.** Once the per-screen split lands, new screens get their own builder + class.
 - **Adding to a file already over 400 lines.** Split first.
+- **Importing an Asset Store pack into `Assets/<PackName>/`.** Quarantine under `Assets/ThirdParty/` (or an embedded `Packages/` package), own asmdef, dedicated import-once PR (D-012).
+- **Bundling a vendor-pack import with feature code, or re-importing a pack on a feature branch.** The pack lands once in its own PR; feature branches only reference it (D-012/D-013).
+- **Long-lived feature branches that diverge from `main`.** Short-lived, rebased, one feature per branch (D-013).
 
 ## Open questions
 
@@ -197,6 +220,8 @@ The following are explicitly out of scope for this project. If you find yourself
 - [`Space Game/CLAUDE.md`](../Space%20Game/CLAUDE.md) — agent-facing rules derived from this document.
 
 ## Roadmap (current)
+
+> **Top priority (2026-05-15): vendor quarantine + branch workflow (D-012/D-013), executed via BACKLOG §17.** The numbered roadmap below is paused behind it — divergent, vendor-laden branches are actively blocking the friend's contributions, which is the highest-leverage thing to fix for scalability.
 
 1. Guardrail docs and CLAUDE.md update. **(Done — this commit.)**
 2. Asmdef split (D-006).
