@@ -8,7 +8,7 @@ If a task seems to require the editor (visual layout, dragging references, bakin
 
 ## Project Overview
 
-**Friend Slop Retrieval** is a cooperative multiplayer prototype built on Unity 6 (`6000.3.15f1`). Players board a ship, fly to a small spherical planet, scavenge salvage and three rocket parts, dodge roaming monsters, and escape together via the launchpad. Multi-planet progression is in flight.
+**Friend Slop Retrieval** is a cooperative multiplayer prototype built on Unity 6 (`6000.3.15f1`). Players board a ship, fly to a small spherical planet, scavenge salvage and three rocket parts, dodge roaming monsters and meteor showers, then travel through tier-2+ destinations and extract via teleporters. Authored progression currently reaches tier 4 (Hills and Valleys); a host-only Test Mode lets the host launch directly into any catalog planet.
 
 Stack: Netcode for GameObjects, Unity Transport, Unity Relay/Lobbies/Auth, Universal Render Pipeline, Input System, UGUI.
 
@@ -25,7 +25,7 @@ Stack: Netcode for GameObjects, Unity Transport, Unity Relay/Lobbies/Auth, Unive
   ```powershell
   .\tools\Run-UnityTests.ps1 -TestPlatform All
   ```
-- **Playtest**: a human opens `Assets/Scenes/FriendSlopPrototype.unity` and presses Play. You don't.
+- **Playtest**: a human opens `Assets/Scenes/FriendSlopPrototype.unity` and presses Play. You don't. The bootstrap scene additively loads `ShipInterior.unity` and the active `Planet_*.unity` at runtime.
 
 ## Hard rules
 
@@ -86,7 +86,7 @@ If you need a reference that crosses an arrow the wrong direction, the design is
 ### 6. Size and complexity ceilings
 
 - **Files over ~400 lines must be split before adding to them.** No "I'll just append one more method." If the file is already over the limit, the next change is a refactor that brings it back under.
-- **No new singletons.** The only approved project-owned globals are `RoundManager.Instance` and `NetworkFirstPersonController.LocalPlayer`, both transitional. Inject dependencies via `SerializeField`, pass them at spawn time, or use a narrow provider/event. See `docs/SingletonAudit.md`.
+- **No new singletons.** No project-owned `Instance` / `LocalPlayer` globals remain in the runtime. Inject dependencies via `SerializeField`, pass them at spawn time, or use a narrow registry (`RoundManagerRegistry`, `LocalPlayerRegistry`, `DayNightCycleRegistry`) or event. See [docs/architecture.md](../docs/architecture.md) §D-014.
 - **No `FindObjectsByType` in per-frame `Update`/`FixedUpdate`.** Cache or use a static registry.
 
 ### 7. Tests are the safety net
@@ -137,23 +137,30 @@ Win/lose evaluation lives in **`RoundObjective`** ScriptableObject subclasses (`
 ### Networking
 
 - `NetworkSessionManager` — Relay/Lobby/Auth flow with cancel + timeout. Falls back to LAN.
-- `PrototypeNetworkBootstrapper` — server-side spawning of RoundManager, loot, monsters.
-- `NetworkSceneTransitionService` — server-driven scene loads via NGO. (Foundation present; multi-scene transitions are a planned milestone.)
+- `PrototypeNetworkBootstrapper` — server-side spawning of RoundManager, loot, monsters; carved into a `.Spawning.cs` partial.
+- `NetworkSceneTransitionService` — server-driven additive scene loads via NGO. Spawn-time wired into `RoundManager`, which delegates planet loads to `PlanetSceneOrchestrator`.
 
 ### Player
 
-- `NetworkFirstPersonController` — sphere-aligned movement, look, crouch, stamina, health, death/spectate, player carrying. Currently oversized; pending split.
-- `PlayerInteractor` — SphereCast-based focus and pickup/drop/throw input.
+- `NetworkFirstPersonController` — sphere-aligned movement, look, crouch, stamina, health, death/spectate, player carrying. Carved into per-responsibility partials.
+- `PlayerInteractor` — SphereCast-based focus and pickup/drop/throw input. Carved into per-responsibility partials.
 
 ### Loot
 
-- `NetworkLootItem` — physics-on-server, kinematic-on-clients. State via `NetworkVariable<bool>` for carried/deposited.
+- `NetworkLootItem` — physics-on-server, kinematic-on-clients. State via `NetworkVariable<bool>` for carried/deposited. Server-side settle (`.Settle.cs`) freezes rested loot kinematic so curved-surface tangential gravity cannot drift items off planets.
 - `DepositZone` — generic loot.
 - `LaunchpadZone` — ship parts and player boarding detection.
 
+### Hazards
+
+- `RoamingMonster` — vision/proximity detection, chasing, attacks. Split into `.Perception.cs` / `.Movement.cs` partials. Distance-scaled visibility sampling.
+- `MeteorShower` / `MeteorHazard` — server-driven scene-local hazard director that rains meteors during the active phase, with optional player-targeted bias.
+- `AnomalyOrb` / `AnomalySpawner` — anomaly hazard prototype.
+
 ### UI
 
-- `FriendSlopUI` — single procedural canvas covering menus and HUD. Currently oversized; pending split per screen/widget.
+- `FriendSlopUI` — procedural canvas covering menus and HUD, carved into partials by area (`.Hud.cs`, `.Menu.cs`, `.BuildUi.cs`, `.State.cs`, `.Chat.cs`, `.TestMode.cs`). Menu/layout refreshes are dirty/timed and driven by round `NetworkVariable` changes.
+- `FriendSlopUI.TestMode.cs` — host-only lobby planet picker that bypasses tier progression for any catalog planet, including the Flat Test World prefab/asset showcase.
 
 ### Sphere world
 
@@ -215,11 +222,10 @@ Read these before making non-trivial changes:
 
 - [docs/architecture.md](../docs/architecture.md) — architectural decisions and rationale. The "why" behind every rule above.
 - [docs/FeatureIntegrationContracts.md](../docs/FeatureIntegrationContracts.md) — extension points and PR contracts for agents adding features.
-- [docs/SingletonAudit.md](../docs/SingletonAudit.md) — current singleton audit and migration plan.
 - [docs/SpaceshipSceneManagement.md](../docs/SpaceshipSceneManagement.md) — current scene state, target additive multi-scene layout, scene-ownership rules.
 - [docs/NetworkObjectSceneOwnership.md](../docs/NetworkObjectSceneOwnership.md) — NGO + additive-scene spawn contract. Read before spawning a `NetworkObject` into any scene other than the caller's.
 - [docs/InteriorSystem.md](../docs/InteriorSystem.md) — interior generation pipeline (data → entrance → bootstrapper → procedural/blueprint).
-- [docs/RemainingFeatures.md](../docs/RemainingFeatures.md) — feature backlog. Check before claiming a feature is "missing"; it may already be tracked.
+- [BACKLOG.md](../BACKLOG.md) — feature/engineering backlog. Check before claiming a feature is "missing"; it may already be tracked.
 - [docs/builder-audit.md](../docs/builder-audit.md) — GUID-determinism analysis of the editor builders. Read this before editing anything in `Assets/Scripts/Editor/`.
 - [docs/MultiplayerQA.md](../docs/MultiplayerQA.md) — manual QA checklist for human playtests.
 - [docs/itch-cicd.md](../docs/itch-cicd.md) — CI/CD pipeline notes.

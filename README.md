@@ -6,7 +6,9 @@ Unity prototype for a small co-op sphere-world salvage run. Players host or join
 
 - Unity project folder: `Space Game`
 - Unity version: `6000.3.4f1`
-- Main scene: `Space Game/Assets/Scenes/FriendSlopPrototype.unity`
+- Bootstrap scene: `Space Game/Assets/Scenes/FriendSlopPrototype.unity`
+- Ship interior scene: `Space Game/Assets/Scenes/ShipInterior.unity`
+- Per-planet scenes: `Space Game/Assets/Scenes/Planet_*.unity` (each tier-2+ planet now owns its own additively-loaded scene)
 - Render pipeline: Universal Render Pipeline
 - Multiplayer stack: Netcode for GameObjects, Unity Transport, Unity Relay/Lobby, Unity Authentication
 - Input/UI stack: Unity Input System and UGUI
@@ -28,7 +30,7 @@ Required ship parts:
 - `Bent Rocket Wings`
 - `Coughing Engine`
 
-Current authored content reaches prototype tier 3. Tier 2 contains several mission variants, with some variants intentionally sharing the same Rusty Moon scene while their final planet identities are still being groomed.
+Current authored content reaches prototype tier 4 (Hills and Valleys). Tier 3 has two destinations (Violet Giant and Ice Planet), and tier 2 contains four destinations (Rusty Moon, Cobalt Trench, Volt Foundry, Wraith Halo) whose final identities and unique environments are still being groomed. A separate Flat Test World (catalog tier 10) is included for asset/prefab showcasing and is reachable via the host's Test Mode.
 
 ## Current Features
 
@@ -41,23 +43,28 @@ Current authored content reaches prototype tier 3. Tier 2 contains several missi
 - Host/client leave handling that returns players to an interactive menu.
 - Lobby queue display and player name entry.
 - Restartable rounds without duplicating runtime managers, loot, or monsters.
-- Walkable ship lobby with placeholder stations and ship spawn points.
-- Additive planet scene loading/unloading for split planet content.
-- Tiered planet catalog, host planet-choice rolling, and travel between planets.
+- Walkable ship lobby (its own additive scene) with placeholder stations and ship spawn points.
+- Per-planet additive scene loading/unloading; cleanup is scoped to the active planet so stale loot, hazards, and decals do not leak between planets.
+- Tiered planet catalog (currently tiers 1–4 plus a Flat Test World), host planet-choice rolling, and travel between planets.
+- Final-tier expedition completion that returns the session to the tier-1 ship lobby.
+- Host-only **Test Mode** lobby panel that bypasses tier progression and lets the host launch directly into any catalog planet, including the Flat Test World prefab/asset showcase.
 - Ship-to-planet and planet-to-ship teleporter pads.
 - Launchpad compass indicator and objective progress HUD.
-- Spherical gravity, planet-relative movement, jumping, sprinting, and surface alignment.
+- Spherical gravity, planet-relative movement, jumping, sprinting, and surface alignment (with a flat-gravity fallback for the test world).
 - Networked loot pickup, carrying, dropping, charged throwing, and depositing.
+- Server-side loot settle: rested loot is frozen kinematic so curved-surface tangential gravity cannot drift items off planets; collisions wake them again.
 - Networked player carrying, including dead-player/body carrying.
 - Health, death, revive-on-round-start, spectating, and all-dead wipeout state.
-- Roaming monsters with vision/proximity detection, chasing, investigating, attacks, knockback, and damage.
-- Anomaly orbs, boxing gloves, and laser-gun prototype items.
-- Rocket assembly display, launchpad submission, boarded-player tracking, and non-rocket objective support.
+- Roaming monsters with vision/proximity detection, chasing, investigating, attacks, knockback, damage, and distance-scaled visibility sampling.
+- Hazards: anomaly orbs and meteor showers (server-driven, with optional player-targeted bias and direct-hit chance).
+- Prototype tools/weapons: boxing gloves and laser gun.
+- Rocket assembly display, launchpad submission, boarded-player tracking, and non-rocket objective support (quota, survival, hold-the-pad, smash-and-grab variants).
 - In-game chat.
-- Runtime day/night sun visuals, skybox color changes, sun glare, planet color randomization, and runtime tree spawning.
+- Runtime day/night sun visuals, skybox color changes, sun glare, planet color randomization, and runtime tree spawning. Day/night state survives planet swaps via a scene-aware registry.
+- Server-authority hardening: pickup/deposit range checks, weapon cooldowns, validated impulse magnitudes, and clamped throw vectors.
 - HUD for team money, ship-part status, health, stamina, carry prompts, death/spectate state, and round result.
-- EditMode tests for join-code handling, round-state helpers, carry-sync throttling, build-settings scene wiring, and planet scene launchpad/teleporter readiness.
-- PlayMode smoke test for scene startup, additive starter planet load, host shutdown/restart, canceling a pending join, cursor state, and duplicate runtime object protection.
+- EditMode tests for join-code handling, round-state helpers, carry-sync throttling, build-settings scene wiring, planet scene launchpad/teleporter readiness, and architecture-guardrail file size baselines.
+- PlayMode smoke tests for scene startup, additive starter planet load, host shutdown/restart, canceling a pending join, cursor state, duplicate runtime object protection, and the host-side ship-lobby → active-planet → return-to-ship transition.
 
 ## Controls
 
@@ -73,6 +80,7 @@ Current authored content reaches prototype tier 3. Tier 2 contains several missi
 - Hold right mouse, then release: charged throw for carried loot/player
 - `Tab` or `Esc`: toggle gameplay menu during active play
 - `E` / `Q` while dead and spectating: cycle spectate target
+- Host lobby: `Test Mode` button opens a planet picker that bypasses tier progression
 - `F9`: start/stop local physics diagnostics
 - `F10`: write one local physics diagnostic sample
 
@@ -176,8 +184,9 @@ Run that checklist before publishing a playtest build or starting major new mult
 
 ## Known Prototype Limits
 
-- Current planet progression is prototype-depth only; authored content reaches tier 3, while the catalog supports more tiers.
-- Some tier 2 destinations are mission variants that share Rusty Moon's scene/environment.
+- Current planet progression is prototype-depth only; authored content reaches tier 4, while the catalog supports more tiers.
+- Some tier 2 destinations are still mission variants whose unique scene/environment identity is being groomed.
+- The Flat Test World is an asset-showcase sandbox, not a real planet; it skips spherical gravity and is intended for prefab inspection via Test Mode.
 - Ship stations are placeholders; pilot, board, customization, and utility station flows need grooming before they become real gameplay.
 - Runtime-generated UI is functional but still needs layout hardening and eventual prefab/UI-document treatment for larger screens.
 - No public matchmaking UI beyond Relay join codes.

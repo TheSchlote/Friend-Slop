@@ -8,7 +8,7 @@ Workflow file: `.github/workflows/build-and-deploy-itch.yml`
 
 - Builds the Unity project in `Space Game` with Unity `6000.3.4f1`.
 - Runs EditMode tests and a PlayMode scene smoke test before building.
-- Targets `StandaloneWindows64`.
+- Targets `StandaloneWindows64` (Linux/macOS targets were dropped in PR #25 to cut LFS + CI cost).
 - Stamps each CI build as `0.1.<GitHub run number>`, which appears in-game and on itch.io.
 - Writes `PLAYTEST_NOTES.txt` and `RELEASE_NOTES.md` into each build with the version, commit, workflow run, curated release notes, and recent commits.
 - Uploads the build as a GitHub Actions artifact.
@@ -96,7 +96,7 @@ If the project later needs fully automated public release posts, add a separate 
 
 ## Current Scope
 
-This pipeline only builds Windows. Add more jobs later for Linux, macOS, or WebGL after the prototype stabilizes.
+This pipeline builds Windows only. Linux, macOS, and WebGL are not in scope; PR #25 dropped the multi-platform matrix to reduce LFS bandwidth and CI cost.
 
 ## Known CI Warning Policy
 
@@ -105,10 +105,10 @@ This pipeline only builds Windows. Add more jobs later for Linux, macOS, or WebG
 
 ## Coverage Gaps To Add
 
-- PlayMode coverage for traveling from starter planet to tier 2 and back through both teleporters.
-- Server-authority tests around loot deposit holds, weapon cooldowns, and pickup range checks.
+- Multi-client PlayMode coverage for the ship → planet → ship transition (host-side smoke is in place).
+- Server-authority tests around weapon cooldowns and the meteor-shower spawn director.
 - UI layout tests for the connected menu, loading screen, HUD objective copy, and small viewports.
-- Multiplayer manual QA with at least two clients through lobby, starter planet, tier 2 travel, extraction, host shutdown, and reconnect.
+- Multiplayer manual QA with at least two clients through lobby, starter planet, tier 2/3/4 travel, extraction, host shutdown, and reconnect.
 
 ## References
 
