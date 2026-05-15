@@ -8,13 +8,13 @@ If a task seems to require the editor (visual layout, dragging references, bakin
 
 ## Project Overview
 
-**Friend Slop Retrieval** is a cooperative multiplayer prototype built on Unity 6 (`6000.3.4f1`). Players board a ship, fly to a small spherical planet, scavenge salvage and three rocket parts, dodge roaming monsters, and escape together via the launchpad. Multi-planet progression is in flight.
+**Friend Slop Retrieval** is a cooperative multiplayer prototype built on Unity 6 (`6000.3.15f1`). Players board a ship, fly to a small spherical planet, scavenge salvage and three rocket parts, dodge roaming monsters, and escape together via the launchpad. Multi-planet progression is in flight.
 
 Stack: Netcode for GameObjects, Unity Transport, Unity Relay/Lobbies/Auth, Universal Render Pipeline, Input System, UGUI.
 
 ## Build & Run
 
-- **Engine**: Unity 6000.3.4f1 (the workflow `validate-unity-version` job enforces this).
+- **Engine**: Unity 6000.3.15f1 (the workflow `validate-unity-version` job enforces this).
 - **Local C# compile checks** (no editor required):
   ```powershell
   dotnet build 'Space Game\FriendSlop.Runtime.csproj'        /p:GenerateMSBuildEditorConfigFile=false
@@ -44,9 +44,10 @@ When adding gameplay content, the order of preference is: new ScriptableObject `
 
 ### 2. Builders: Repair before Rebuild
 
-There are two editor menu paths:
+There are three editor menu paths:
 
 - **`Tools/Friend Slop/Repair Prototype Scene`** — idempotent. Loads existing prefabs/materials/assets and only creates what's missing. **This is the safe default.** Use it whenever you need to ensure scene/prefab consistency.
+- **`Tools/Friend Slop/Repair Scene Wiring`** — idempotent fix-ups for the additive-scene split: keeps `MainGameSceneCatalog`, `PlanetDefinition.planetScene`, Build Settings, and the bootstrap-vs-`ShipInterior` ownership in agreement. Run when scene assets, planet assets, or the catalog drift. Implementation: [`Editor/FriendSlopSceneWiringRepair.cs`](Assets/Scripts/Editor/FriendSlopSceneWiringRepair.cs).
 - **`Tools/Friend Slop/Rebuild Prototype Scene`** — destructive. Recreates every prefab and the scene from scratch. Top-level asset GUIDs are preserved (so `NetworkPrefabsList` survives), but every sub-object FileID inside prefabs/scenes regenerates, producing a giant YAML diff and silently breaking any sub-object reference. **Do not run this without explicit human request.**
 
 When asked to add a new prefab type, extend the *Repair* path so it's load-or-create, not always-create.
@@ -69,18 +70,18 @@ All gameplay state lives on the server.
 
 ### 5. Module boundaries (asmdefs)
 
-The project is being split into asmdefs to enforce dependency direction. Once the split lands, the rule is:
+Current runtime assemblies, in dependency order:
 
 ```
-Core  <-  Gameplay  <-  UI  <-  Bootstrap (editor builders, scene/prefab generation)
-                  ^
-                  |
-              Networking
+FriendSlop.Core  <-  FriendSlop.Runtime  <-  FriendSlop.UI  <-  FriendSlop.Editor (editor-only)
 ```
 
-`Core` contains pure data + utilities and has no Unity dependency where possible. `UI` may read from `Gameplay` but never the reverse. `Editor`-only code never compiles into runtime assemblies.
+- `FriendSlop.Core` (`Scripts/Core/Foundation/`) — pure data + utilities, no Netcode dependency. The D-006 foundation slice.
+- `FriendSlop.Runtime` (`Scripts/`) — everything else runtime: networking, gameplay, scene management, hazards, interiors. The remaining D-006 split (carving Networking and Gameplay out of Runtime) is queued.
+- `FriendSlop.UI` (`Scripts/UI/`) — may read from `Runtime` but never the reverse.
+- `FriendSlop.Editor` (`Scripts/Editor/`) — editor-only builders, validators, repair tools. Never referenced by a runtime assembly.
 
-If you need a reference that crosses an arrow the wrong direction, the design is wrong; raise it instead of forcing it.
+If you need a reference that crosses an arrow the wrong direction, the design is wrong; raise it instead of forcing it. `ArchitectureGuardrailTests` enforces no wrong-way UI/Editor references at CI.
 
 ### 6. Size and complexity ceilings
 
@@ -103,6 +104,15 @@ When in doubt, content is data, not code. Adding a new planet, new loot variant,
 1. New `.asset` file (a ScriptableObject instance).
 2. Wired into the appropriate catalog (`PlanetCatalog`, future `LootCatalog`, etc.).
 3. **Not** a new branch in a builder method.
+
+### 9. NGO + additive scenes: set active scene *before* `Spawn`
+
+Friend Slop runs with `NetworkConfig.EnableSceneManagement = true` and loads `ShipInterior` + `Planet_*` scenes additively. Two gotchas are load-bearing and have already cost real debugging time:
+
+- **Spawn placement.** `NetworkObject.Spawn(destroyWithScene: true)` latches `SceneOriginHandle` to the GameObject's scene at the moment of spawn. **Set the active scene before `Instantiate` + `Spawn`** so the clone lands in the target scene from the start. Do **not** rely on `SceneManager.MoveGameObjectToScene` after `Spawn` — NGO scene management fights post-Spawn moves and they silently fail to stick. The canonical pattern is an active-scene swap around the whole spawn batch; see [`PrototypeNetworkBootstrapper.Spawning.cs`](Assets/Scripts/Networking/PrototypeNetworkBootstrapper.Spawning.cs) (`ActiveSceneScope`) and [`PlanetLootSpawner.TrySpawnNow`](Assets/Scripts/Loot/PlanetLootSpawner.cs) for reference implementations. Always pass `destroyWithScene: true` unless the object genuinely should outlive its scene (the default `false` sends it to `DontDestroyOnLoad`, which is almost never what you want).
+- **`FindObjectsByType` filter.** With NGO scene management on, the `NetworkPrefabsList` parks prefab *templates* in the Bootstrap scene as inactive `NetworkObject` instances. `Object.FindObjectsByType<T>(FindObjectsInactive.Include, ...)` returns them alongside live runtime clones. Filter on `NetworkObject.IsSpawned` (or `GetComponent<NetworkObject>()?.IsSpawned == true`) when the test or runtime code cares about live game state. Reference: `CountSpawned<T>` in [`FriendSlopPrototypeSmokeTests.cs`](Assets/Tests/PlayMode/FriendSlopPrototypeSmokeTests.cs).
+
+Full rationale and additional pitfalls: [docs/NetworkObjectSceneOwnership.md](../docs/NetworkObjectSceneOwnership.md).
 
 ## Architecture (current)
 
@@ -141,11 +151,31 @@ Win/lose evaluation lives in **`RoundObjective`** ScriptableObject subclasses (`
 - `PlanetEnvironment` — owns the launchpad, spawn points, and asset snap on `OnEnable`.
 - `PlanetSurfaceAnchor` — opt-in marker for "snap me to the surface."
 
+### Interiors
+
+Buildings on planets open into their own additively loaded interior scene. The content is data-driven and the layout is deterministic per seed.
+
+- **Data definitions** (ScriptableObjects):
+  - `BuildingDefinition` — room counts, floor counts, required-room list, optional room pool, special-room targets.
+  - `RoomDefinition` — cell footprint, floor restrictions, furniture rules, room kind/category.
+  - `FurnitureDefinition` — anchor placement, tags, footprint, prefab, weight, interactable flag.
+  - `BlueprintAsset` — authored layout: explicit room placements + per-edge wall/open/door overrides. Bypasses the procedural generator.
+  - `InteriorCatalog` — registry that ships all `BuildingDefinition`s and `FurnitureDefinition`s.
+- **Entry / handoff:**
+  - `InteriorEntrance` (exterior door, `NetworkBehaviour`) writes `InteriorSessionData` (seed, definition, return pose, requesting client, scene path, optional blueprint) and asks the server to load the interior scene.
+  - `InteriorSceneBootstrapper` runs in the loaded interior scene, reads `InteriorSessionData`, and replicates seed/origin to clients.
+- **Two generation paths** (both produce an `InteriorLayout`):
+  - Procedural — `InteriorLayoutGenerator.Generate(definition, seed)`: pure, deterministic, all clients regenerate locally.
+  - Authored — `BlueprintLayoutBuilder.Build(blueprint, definition)`: skips the procedural door-policy pass because edge state is user-authored.
+- **What is networked vs. local:** doors (`InteriorDoor`, `InteriorExitDoor`) are spawned as `NetworkObject`s so open/close state syncs across clients. Furniture is deterministic-but-local — every client picks the same pieces from the seed, no `NetworkObject` per chair.
+
+When adding interior content, prefer a new `.asset` (Building/Room/Furniture/Blueprint) over a code branch. See [docs/InteriorSystem.md](../docs/InteriorSystem.md) for the full pipeline and [docs/FeatureIntegrationContracts.md](../docs/FeatureIntegrationContracts.md) for the "New Building Type / New Furniture / New Blueprint" contracts.
+
 ## Namespace map
 
 | Namespace | Location |
 |---|---|
-| `FriendSlop.Core` | `Scripts/Core/` |
+| `FriendSlop.Core` | `Scripts/Core/Foundation/` (its own asmdef) |
 | `FriendSlop.Networking` | `Scripts/Networking/` |
 | `FriendSlop.SceneManagement` | `Scripts/SceneManagement/` |
 | `FriendSlop.Player` | `Scripts/Player/` |
@@ -154,6 +184,8 @@ Win/lose evaluation lives in **`RoundObjective`** ScriptableObject subclasses (`
 | `FriendSlop.Hazards` | `Scripts/Hazards/` |
 | `FriendSlop.Effects` | `Scripts/Effects/` |
 | `FriendSlop.Ship` | `Scripts/Ship/` |
+| `FriendSlop.Interiors` | `Scripts/Interiors/` |
+| `FriendSlop.Interiors.Blueprints` | `Scripts/Interiors/Blueprints/` |
 | `FriendSlop.UI` | `Scripts/UI/` |
 | `FriendSlop.Interaction` | `Scripts/Interaction/` |
 | `FriendSlop.Editor` | `Scripts/Editor/` (editor-only) |
@@ -175,6 +207,8 @@ Read these before making non-trivial changes:
 - [docs/FeatureIntegrationContracts.md](../docs/FeatureIntegrationContracts.md) — extension points and PR contracts for agents adding features.
 - [docs/SingletonAudit.md](../docs/SingletonAudit.md) — current singleton audit and migration plan.
 - [docs/SpaceshipSceneManagement.md](../docs/SpaceshipSceneManagement.md) — current scene state, target additive multi-scene layout, scene-ownership rules.
+- [docs/NetworkObjectSceneOwnership.md](../docs/NetworkObjectSceneOwnership.md) — NGO + additive-scene spawn contract. Read before spawning a `NetworkObject` into any scene other than the caller's.
+- [docs/InteriorSystem.md](../docs/InteriorSystem.md) — interior generation pipeline (data → entrance → bootstrapper → procedural/blueprint).
 - [docs/RemainingFeatures.md](../docs/RemainingFeatures.md) — feature backlog. Check before claiming a feature is "missing"; it may already be tracked.
 - [docs/builder-audit.md](../docs/builder-audit.md) — GUID-determinism analysis of the editor builders. Read this before editing anything in `Assets/Scripts/Editor/`.
 - [docs/MultiplayerQA.md](../docs/MultiplayerQA.md) — manual QA checklist for human playtests.

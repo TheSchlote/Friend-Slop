@@ -258,16 +258,15 @@ Surfaced during the post-merge architectural review in [PR #24](https://github.c
 
 ### 16a. Documentation gaps — friends' agents will get bitten
 
-The whole Interiors system is invisible to `CLAUDE.md` and `docs/architecture.md`, the NGO additive-scene spawn contract isn't codified, and `Tools/Friend Slop/Repair Scene Wiring` isn't listed next to the other editor menus. Updates needed:
+The whole Interiors system was invisible to `CLAUDE.md` and `docs/architecture.md`, the NGO additive-scene spawn contract wasn't codified, and `Tools/Friend Slop/Repair Scene Wiring` wasn't listed next to the other editor menus.
 
-- **`Space Game/CLAUDE.md`** — bump Unity to `6000.3.15f1`; add hard rule "NGO + additive scenes: set active scene before `Instantiate` + `NetworkObject.Spawn`, never `MoveGameObjectToScene` after spawn — use `ActiveSceneScope`"; add hard rule "filter `NetworkObject.IsSpawned` when calling `FindObjectsByType`" (NGO parks `NetworkPrefabsList` templates in Bootstrap as inactive instances); add `Tools/Repair Scene Wiring` to the builder list; add Interiors subsection to Architecture (BuildingDefinition, RoomDefinition, FurnitureDefinition, InteriorCatalog, BlueprintAsset, InteriorEntrance → InteriorSessionData → InteriorSceneBootstrapper); add `FriendSlop.Interiors` and `FriendSlop.Interiors.Blueprints` to the namespace map; update §5 asmdef from "being split" to current (Core/Foundation, Runtime, UI, Editor).
-- **`docs/architecture.md`** — update D-005 status (ShipInterior + per-planet additive is live), D-006 (split is current), D-007 (5 baselined files listed below). New decisions:
-  - **D-009: Interior generation as data-driven content** (Building/Room/Furniture/Catalog + deterministic-RNG-per-room contract).
-  - **D-010: Blueprints as authored interior layouts** (`BlueprintAsset` + `BlueprintLayoutBuilder`; `ApplyDoorPolicy` is bypassed for blueprints because edge state is user-authored).
-  - **D-011: NGO scene placement contract** — `ActiveSceneScope` pattern + the `IsSpawned` filter for find queries.
-- **`docs/FeatureIntegrationContracts.md`** — add 4 contracts: "New Building Type," "New Furniture Definition," "New Blueprint," "New Networked Spawn." Update PR checklist with `ActiveSceneScope` + `IsSpawned` lines.
-- **New `docs/InteriorSystem.md`** (~80 lines) — single-page pipeline overview: procedural vs. blueprint path, server picks seed / clients regenerate, doors are `NetworkObject`s, furniture is deterministic-but-local. Point to the FeatureIntegrationContracts entries for "how to add X."
-- **New `docs/NetworkObjectSceneOwnership.md`** (~50 lines) — codifies `ActiveSceneScope`, the `IsSpawned` filter, and the gotchas (`NetworkPrefabsList` templates, `MoveGameObjectToScene`-after-Spawn unreliability).
+**Status 2026-05-13: landed.** All 16a items shipped as a single doc PR on this branch.
+
+- **`Space Game/CLAUDE.md`** — Unity bumped to `6000.3.15f1`; new hard rule 9 covers the NGO active-scene-before-Spawn contract and the `IsSpawned` filter; `Tools/Repair Scene Wiring` added under rule 2; Interiors subsection added to Architecture; `FriendSlop.Interiors` + `FriendSlop.Interiors.Blueprints` added to the namespace map; rule 5 asmdef wording updated to current state (Core/Foundation, Runtime, UI, Editor).
+- **`docs/architecture.md`** — D-005 / D-006 / D-007 status updates and added decisions: **D-009** (interior generation as data-driven content), **D-010** (blueprints as authored interior layouts), **D-011** (NGO scene placement contract). Anti-patterns section gained `MoveGameObjectToScene`-after-Spawn, `destroyWithScene:false` defaulting, and unfiltered `FindObjectsByType` over NGO types.
+- **`docs/FeatureIntegrationContracts.md`** — 4 new contracts: "New Networked Spawn," "New Building Type," "New Furniture Definition," "New Blueprint." PR checklist gained `ActiveSceneScope` + `IsSpawned` lines.
+- **New `docs/InteriorSystem.md`** — full pipeline overview, procedural vs. blueprint path, networked-vs-local table, known oversized files.
+- **New `docs/NetworkObjectSceneOwnership.md`** — codifies the active-scene-before-Spawn pattern, the `IsSpawned` filter, despawn-before-unload, and the known stale sites (`MeteorShower`, `AnomalySpawner`) queued in 16b.
 
 ### 16b. Code issues surfaced during the review
 
