@@ -1,5 +1,12 @@
 name: Build Windows and Deploy to itch.io
 
+# Cost control: the EditMode/PlayMode/scene-validate jobs each run `git lfs pull`,
+# and Git LFS bandwidth is the only thing on this repo that costs real money
+# (Actions runners are free on public repos). Every push to a branch with an
+# open PR used to trigger 3 LFS-pulling jobs. So the LFS-pulling pipeline now
+# runs ONLY on merges to `main` and manual dispatch — not on PRs / feature
+# branches. Pre-merge validation is the local `dotnet build` + Run-UnityTests
+# (see Space Game/CLAUDE.md); use `workflow_dispatch` for an on-demand cloud run.
 on:
   push:
     branches:
@@ -9,15 +16,6 @@ on:
       - '.github/workflows/build-and-deploy-itch.yml'
       - '.github/actions/**'
       - 'tools/**'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'Space Game/**'
-      - '.github/workflows/build-and-deploy-itch.yml'
-      - '.github/actions/**'
-      - 'tools/**'
-  merge_group:
   workflow_dispatch:
 
 permissions:
