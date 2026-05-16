@@ -17,6 +17,11 @@ agent summary: [`Space Game/CLAUDE.md`](../../CLAUDE.md) hard rule 10):
 4. **Binaries via LFS.** If the pack adds a new binary extension, extend
    `.gitattributes` LFS coverage in the same import PR.
 
-Migration of the packs currently mislocated on `main` (`HIVEMIND`,
-`LowPolyInterior`, `LowPolyInterior2`, `Plugins/Microdetail`,
-`YughuesFreeRockMaterials`, `_Recovery`) is staged in **BACKLOG §17**.
+Migration of the packs that were mislocated on `main` is staged in **BACKLOG §17**.
+Per the §17b inventory (GUID-reference analysis):
+
+- **Dropped** (zero references anywhere in shipped content): `LowPolyInterior`,
+  `LowPolyInterior2`, `_Recovery`.
+- **Relocate here** (genuinely referenced, keep + quarantine): `HIVEMIND`
+  (blood VFX), `Plugins/Microdetail` (tier-4 terrain), `YughuesFreeRockMaterials`
+  (rock material).
