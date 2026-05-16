@@ -2,6 +2,8 @@
 
 This is the current gameplay and implementation backlog, ordered by the work that most affects future feature development. Prefer grooming the top items before adding more planet or objective content.
 
+Each open-design section lists the concrete options on the table and a recommended choice. When a decision lands, replace the recommendation with the chosen approach + rationale, and update [docs/architecture.md](docs/architecture.md) if the decision changes architecture. See the **Decision dependencies** appendix at the bottom for which decisions unblock the most downstream work.
+
 ## 1. Planet lifecycle and scene ownership
 
 Authored planets have moved into additively loaded planet scenes, but lifecycle ownership still needs hardening around bootstrap/ship responsibilities, travel cleanup, and future planet variants. Keep the transition moving so each playable planet owns its scene, environment, launchpad, teleporters, spawns, loot budget, hazards, and cleanup rules.
@@ -9,6 +11,8 @@ Authored planets have moved into additively loaded planet scenes, but lifecycle 
 Status 2026-05-03: Starter Junk, Rusty Moon, and Violet Giant are now scene-owned. Rusty Moon exposes loot and monster anchors through `PlanetEnvironment`, Violet Giant has moved out of `FriendSlopPrototype.unity`, and validation now rejects scene-owned `PlanetEnvironment`s left nested in the bootstrap scene. `ShipInterior.unity` now owns the ship lobby root, ship stations, ship teleporter, and ship spawn points through `ShipEnvironment`; `FriendSlopPrototype.unity` stays focused on bootstrap/runtime systems. Planet travel cleanup is scoped to the active planet scene when a `PlanetEnvironment` is registered, with the legacy global cleanup path retained for fallback planets. Current-round and local-player lookup now flow through explicit registries instead of production code calling `RoundManager.Instance` or `NetworkFirstPersonController.LocalPlayer`. Keep the bootstrapper legacy planet fallback fields until they get a dedicated removal pass.
 
 Status 2026-05-08: PlayMode smoke now covers the host-side ship lobby -> active planet -> success return-to-ship flow. The true multi-client version of this transition test is still pending.
+
+Status 2026-05-14: dedicated planet scenes now exist for `Planet_IcePlanet`, `Planet_HillsAndValleys`, `Planet_DeepHaul`, `Planet_GhostShift`, and `Planet_QuickStrike`, alongside `Planet_StarterJunk`, `Planet_RustyMoon`, and `Planet_VioletGiant`. A `TestWorld_Showcase` scene and a `Building_Interior` procedural-interior scene have also been added; `RoundManagerRegistry.Current` and `LocalPlayerRegistry.Current` are now the only runtime entry points for those references.
 
 Key files:
 - `Space Game/Assets/Scripts/Round/RoundManager.cs`
@@ -21,25 +25,41 @@ Key files:
 Grooming questions:
 - Which remaining bootstrap scene objects should move into dedicated runtime/persistent scenes?
 - Should any planets remain nested in `FriendSlopPrototype.unity`?
-- What should happen to carried/deposited loot when traveling?
+
+Options for carried/deposited loot across travel:
+- **A.** Deposited persists; carried is lost. Strong incentive to deposit before flying. Punishing for last-second extraction.
+- **B.** Both persist. Easiest to implement; risks oversized inventories crossing planets.
+- **C.** Deposited persists; carried converts to cash on travel. Removes hoarding without punishing time-out players.
+- **D.** Both persist, but the ship has a finite cargo bay. Hard cap that leans into "salvage" framing.
+
+Recommendation: **C** for the first iteration (simple, fair, supports the deposit zone's purpose). **D** as a stretch goal if ship customization adds a cargo-bay upgrade.
 
 ## 2. Tier 2 planet identity
 
-Several tier 2 planets are presented as different destinations but currently share Rusty Moon's scene/runtime environment. Give each tier 2 planet either a real unique scene or make the UI explicit that they are mission variants on the same planet.
+Several tier 2 planets are presented as different destinations but currently share Rusty Moon's scene/runtime environment. As of 2026-05-14 each variant has its own dedicated scene (`Planet_DeepHaul`, `Planet_QuickStrike`, `Planet_GhostShift`), but those scenes are still placeholder copies of Rusty Moon. Decide whether to invest unique authoring per variant or roll the placeholder scenes back and frame them as mission variants on Rusty Moon.
 
 Key files:
 - `Space Game/Assets/Planets/Tier2_*.asset`
-- `Space Game/Assets/Scenes/Planet_RustyMoon.unity`
+- `Space Game/Assets/Scenes/Planet_DeepHaul.unity`, `Planet_QuickStrike.unity`, `Planet_GhostShift.unity`, `Planet_RustyMoon.unity`
 
 Grooming questions:
 - Are Cobalt Trench, Volt Foundry, Wraith Halo, and Rusty Moon unique places or mission variants?
 - Should each variant have unique lighting, loot, hazards, and objective copy?
 
+Options:
+- **A. Mission variants on the same scene.** Roll the placeholder scenes back; each tier 2 keeps a distinct `PlanetDefinition` + `RoundObjective` but shares Rusty Moon's environment. Cheap, ships fast. Risk: visually monotone.
+- **B. Unique planets, unique scenes.** Each tier 2 gets unique geometry, lighting, hazards. Aligns with the "one planet per scene" target. Cost: ~5 scenes' worth of authoring + roughly one PR per planet.
+- **C. Hybrid.** Two or three "marquee" tier 2 planets get unique scenes (Cobalt Trench = water/cave, Volt Foundry = industrial), the rest stay as "Rusty Moon: [variant name]" return contracts.
+
+Recommendation: **C**. Pick two visually distinct marquee planets, frame the rest as named return contracts. Visual variety where it counts; manageable authoring cost.
+
 ## 3. Progression ending and loop rules
 
-`PlanetCatalog.MaxTier` supports up to tier 10, but authored content currently reaches tier 3. Define the win state, run loop, replay behavior, and whether final-tier success ends the expedition or keeps cycling.
+`PlanetCatalog.MaxTier` supports up to tier 10, but authored content currently reaches tier 4. Define the win state, run loop, replay behavior, and whether final-tier success ends the expedition or keeps cycling.
 
-Status 2026-05-08: runtime final-tier detection now uses the highest authored tier in the active `PlanetCatalog`, not the placeholder `PlanetCatalog.MaxTier`. Current catalog content therefore ends at tier 3. Final-tier success records a completed expedition, shows expedition-complete UI copy, and the host action returns the session to the tier-1 ship lobby instead of replaying the final planet.
+Status 2026-05-08: runtime final-tier detection now uses the highest authored tier in the active `PlanetCatalog`, not the placeholder `PlanetCatalog.MaxTier`. Final-tier success records a completed expedition, shows expedition-complete UI copy, and the host action returns the session to the tier-1 ship lobby instead of replaying the final planet.
+
+Status 2026-05-14: catalog now reaches tier 4 with `Tier4_HillsAndValleys`. A new tier 3 destination (`Tier3_IcePlanet`) has been added alongside Violet Giant, and a `Flat Test World` (catalog tier 10) is reachable via the host's lobby Test Mode for prefab/asset showcasing.
 
 Key files:
 - `Space Game/Assets/Scripts/Round/PlanetCatalog.cs`
@@ -50,6 +70,14 @@ Grooming questions:
 - What is the actual end of a run?
 - Should final-tier success show credits, return to lobby, or start a harder loop?
 - How should failed/all-dead states affect planet progression?
+
+Options:
+- **A. Run-based (rogue-like).** Final-tier success → credits → return to lobby with a session score. Each session starts from tier 1. Optional persistent unlocks (cosmetics, ship modules) carry between runs.
+- **B. Endless cycle.** Final-tier success loops back to tier 1 with a difficulty multiplier. The "ending" is whenever the crew dies out. Score-attack framing.
+- **C. Authored campaign with epilogue.** Tier 10 has unique narrative content; success ends the expedition; failure → game over. Fixed-length experience.
+- **D. Open-ended sandbox.** Pick which planet to fly to from a star map; no forced tier progression; "win" by hitting a money goal.
+
+Recommendation: **A (run-based)**. Fits a co-op salvage game's repeat-play loop best, lets you ship with tier 4 content while the loop still feels complete, and the "return to lobby" beat is already what `RoundManager` does. **B** is a strong follow-up once the loop is fun. Failure handling: lose the run on All-Dead; keep tier on partial-fail (Quota miss with surviving players).
 
 ## 4. Ship stations
 
@@ -64,6 +92,14 @@ Grooming questions:
 - Which station previews planet choices?
 - What does customization change, and is it cosmetic or gameplay-affecting?
 
+Options per station:
+- **Pilot station.** Required-occupant model (recommended): travel only starts when one player presses "Engage" while occupying it. Alternatives: travel as a vote, or travel triggered from anywhere by the host.
+- **Holographic board.** Roll-of-three with one re-roll (recommended; already half-built). Alternatives: star map with travel cost; random with no re-roll.
+- **Customization bench.** Cosmetic only at first (recommended). Gameplay upgrades (bigger inventory, faster travel) open a balancing rabbit hole; defer until the core loop is fun.
+- **Vending / restock.** Single money-driven kiosk (recommended). Sell back unwanted loot through the same money stat as the deposit flow; do not duplicate.
+
+Recommendation: treat the ship as a hub, not a UI replacement. Each station should require physical occupancy to gate co-op coordination (one player drives, another previews, another restocks).
+
 ## 5. Objective UX
 
 Objectives work mechanically, but player-facing feedback is thin and success copy still assumes rocket assembly. Make objective titles, instructions, progress, success, and failure text objective-specific.
@@ -77,6 +113,8 @@ Grooming questions:
 - What should the HUD say at round start, mid-objective, extraction-ready, success, and failure?
 - Should objective state have dedicated UI instead of one compact HUD line?
 
+Recommendation: per-objective `BuildHudStatus()` already exists on `RoundObjective` — that's the right seam. Add one persistent HUD widget for the primary objective (top-left, replacing current `timerText` content); add a toast/banner for extraction-ready ("Launchpad active! Board to extract"); move success/failure copy into the `RoundObjective` asset itself as `successText`/`failureText` fields.
+
 ## 6. Teleporter flow
 
 Teleporters are automatic trigger pads. This works, but can feel surprising during launchpad/extraction gameplay. Decide whether teleport should be automatic, interact-to-use, station-controlled, or phase-gated.
@@ -89,6 +127,14 @@ Grooming questions:
 - Should players press a key to teleport?
 - Should carrying loot, carrying bodies, or being in extraction state alter teleport rules?
 - Should the ship-side teleporter be active during every objective?
+
+Options:
+- **A. Keep it automatic.** Trigger pad teleports on contact. Simple; works today.
+- **B. Press-to-teleport.** Stand on the pad, hold E, get teleported. Removes accidents.
+- **C. Station-controlled.** Only the ship-side pad activates when a crewmate at the right station hits a button. Forces coordination.
+- **D. Phase-gated automatic.** Auto-teleport, but only during specific phases (Active and Success on planet → ship; Lobby and Transitioning blocked).
+
+Recommendation: **B (press-to-teleport)** for the planet-side pad with a 1-second hold to confirm; auto for the ship-side pad once the round resolves. Allow teleport with carried loot (the whole point); allow carried bodies but emit a chat log so the rest of the crew sees who came back with whom.
 
 ## 7. Loot economy and spawn budgets
 
@@ -104,6 +150,8 @@ Grooming questions:
 - Should rare items be optional upside or required for success?
 - Should loot values scale by tier, crew size, or objective type?
 
+Recommendation: a **per-mission budget model** with a 120% guaranteed minimum and 200% potential ceiling. Each `PlanetDefinition` declares `quotaTarget` (already exists) plus a new `lootValueBudget`; the spawner rolls until total spawned value is in `[1.2 × quotaTarget, 2.0 × quotaTarget]`. Within budget, items come from a `LootPool.asset` rolled by rarity weights. Do not scale by crew size for v1 — too easy to game by ghost-joining.
+
 ## 8. Combat and item rules
 
 Laser gun and boxing gloves are implemented, but their role in co-op play needs rules. Friendly fire, stun duration, ammo refill, rarity, and grief potential should be decided before adding more weapons.
@@ -117,6 +165,10 @@ Grooming questions:
 - Is friendly fire intentional?
 - Should weapons be loot, shop items, mission tools, or rare chaos items?
 - How should ammo/cooldowns reset across rounds and planets?
+
+Options for friendly fire: **A.** On (full PvP). **B.** Off (no damage between crewmates). **C.** Partial (knockback yes, damage no).
+
+Recommendation: **partial FF (C)**. Allows funny moments and tactical pushes without "friend just killed me at the launchpad." Weapons distributed as **loot-only with rarity tiers**; ammo persists with the weapon and refills at a ship vending kiosk (see §4) for cash.
 
 ## 9. Enemy and hazard design
 
@@ -132,6 +184,8 @@ Grooming questions:
 - Should hazards ramp over time?
 - What should players learn visually/audio-wise before danger hits?
 
+Recommendation: introduce a **`PlanetHazardSet.asset`** ScriptableObject referenced from `PlanetDefinition` declaring spawn rates, eligible hazards, and a ramp curve. Keeps hazard tuning data-driven (matches the SO-first rule). Per-planet flavor unlocks naturally — e.g. "Wraith Halo has anomaly orbs but no monsters; Cobalt Trench has slow monsters but flooding."
+
 ## 10. Dead-player loop
 
 Dead-player carrying is implemented for body recovery, but the surrounding loop is not defined. Decide whether recovered bodies enable revive, count for extraction, provide score, or only avoid leaving players stranded.
@@ -145,6 +199,14 @@ Grooming questions:
 - Does carrying a body to ship/launchpad matter?
 - What does a dead player do while waiting?
 
+Options:
+- **A. Permadeath per round.** Bodies are cosmetic; dead players spectate until the next round.
+- **B. Revive at the ship.** Carry the body to a medbay station; costs money/consumable to respawn.
+- **C. Revive on extraction.** All carried bodies revive automatically when the crew extracts successfully. Bodies left on the planet stay dead.
+- **D. Revive via launchpad.** Bodies dropped on the launchpad before takeoff get the player back.
+
+Recommendation: **C (revive on extraction)** plus **partial spectator interaction** (can ping locations, can voice chat with the living). Makes the carry mechanic load-bearing without adding a new station, rewards crews that retrieve fallen friends, and gives the dead player a meaningful goal (help the living finish so I revive).
+
 ## 11. Runtime UI polish
 
 The UI is generated in code. That is workable for now, but layout regressions are easy and richer screens will be clunky. Consider moving larger menus/panels to prefabs or a UI document workflow.
@@ -156,6 +218,14 @@ Grooming questions:
 - Which UI should remain runtime-generated?
 - Should planet selection, station screens, and inventory get dedicated prefabs?
 - What minimum viewport sizes should be supported?
+
+Options:
+- **A. Stay procedural.** Lowest churn; each new screen adds a partial.
+- **B. Move large screens to prefabs.** Menu, planet selection, station dialogs become prefabs assigned via `SerializeField`. HUD stays procedural.
+- **C. UI Toolkit (UXML/USS).** Modern Unity UI; designer-friendly with hot reload; steeper authoring learning curve; mostly orthogonal to existing UGUI code.
+- **D. Hybrid: prefabs + drive from `OnValueChanged` events.** Replace per-frame `RefreshUi` polling with subscriptions; move composite screens to prefabs.
+
+Recommendation: **D**. The polling cost is the real pain point. Move large composite screens to prefabs as you add them; subscribe to `NetworkVariable.OnValueChanged` for per-widget updates; keep simple HUD widgets procedural for now. (First polling slice already shipped 2026-05-08.)
 
 ## 12. Lobby and matchmaking UX
 
@@ -170,6 +240,8 @@ Grooming questions:
 - Should the host configure seed, crew size, difficulty, and privacy?
 - Should players ready up before round start?
 
+Recommendation: stay code-based until the game is fun enough to invite strangers. When that day comes, **public lobby browser** > friend list (no platform dependency). Host config at lobby creation: privacy, max crew size. Skip ready-up; host starts the round. Mid-join allowed in `Lobby` and `Transitioning` phases only.
+
 ## 13. Chat
 
 Chat is functional but minimal. It needs rate limiting, scrollback, mute/block options, system messages, and clearer lifecycle behavior before relying on it for public play.
@@ -182,6 +254,8 @@ Grooming questions:
 - Should chat persist through rounds?
 - Should system events use the same chat feed?
 - How should abuse/spam be handled?
+
+Recommendation: defer chat polish until lobby/matchmaking decisions land — those will dictate whether chat needs heavy moderation tooling. For friend-only play (current state), keep chat simple: persist within session, add system messages for big events (deposits, deaths, extraction), skip moderation entirely. Voice chat: defer (Steam/Discord covers it for friend play).
 
 ## 14. Scene validation tooling
 
@@ -201,29 +275,7 @@ Grooming questions:
 
 Tracked engineering work surfaced in the 2026-05-03 audit. Each is its own focused PR — they intentionally were not bundled into [#18](https://github.com/TheSchlote/Friend-Slop/pull/18) so that scope and review stay tight.
 
-### 15a. Pre-emptive splits of files at exact baseline
-
-These runtime files sit at the `ArchitectureGuardrailTests` baseline ceiling, meaning the next added line fails CI. Each split is mechanical (carve into partials by responsibility) and unblocks future feature work in those areas.
-
-- `Assets/Scripts/Loot/NetworkLootItem.cs` (703/703) — split candidates: pickup/drop network flow, deposit/surface logic, slot/inventory state.
-- `Assets/Scripts/Player/PlayerInteractor.cs` (529/529) — split candidates: focus/raycast, pickup/drop input, weapon use.
-- `Assets/Scripts/UI/FriendSlopUI.BuildUi.cs` (517/517) — split per built section (HUD/menu/chat/etc).
-- `Assets/Scripts/Player/NetworkFirstPersonController.cs` (728/739) — only 11 lines from baseline; movement/look/crouch logic is the next obvious extraction.
-
-Status 2026-05-08: `NetworkLootItem.cs`, `PlayerInteractor.cs`, `FriendSlopUI.BuildUi.cs`, `NetworkFirstPersonController.cs`, and `NetworkSessionManager.cs` have been carved below the default line limit and removed from the oversized baseline.
-
-After each split: drop the file's entry from `ExistingOversizedRuntimeFiles` in `ArchitectureGuardrailTests.cs` if the main file lands under 400.
-
-### 15b. Further `RoundManager` carving
-
-Currently 800/1000 baseline after codex's PlanetSceneOrchestrator + `.PlanetEnvironment` + `.PlanetTravelCleanup` partials. Natural next splits:
-
-- `RoundManager.PlayerPlacement.cs` — `RespawnPlayersAtPlanet`, `ServerMovePlayersToShip`, `ServerTeleportPlayer*` family.
-- `RoundManager.Boarding.cs` — launchpad submit + boarding tracking.
-
-Goal: bring main `RoundManager.cs` under 400 so its baseline can be removed.
-
-Status 2026-05-08: `RoundManager.cs` is below the default line limit after carving progression/travel, boarding, and player-placement responsibilities into partials. Its oversized baseline entry has been removed.
+Done and removed from this list: file-size splits (`NetworkLootItem`, `PlayerInteractor`, `FriendSlopUI.BuildUi`, `NetworkFirstPersonController`, `NetworkSessionManager`, `RoundManager`) all under 400 lines as of 2026-05-08; `RoundManager.Instance` and `NetworkFirstPersonController.LocalPlayer` migration to registries (see [architecture.md](docs/architecture.md) §D-014).
 
 ### 15c. Asmdef split — D-006
 
@@ -231,20 +283,9 @@ Per [docs/architecture.md](docs/architecture.md) decision D-006: split `FriendSl
 
 Status 2026-05-06: the first `FriendSlop.Core` foundation assembly exists and owns the D-006 utility types. Remaining work: split the rest of `FriendSlop.Runtime` into Networking and Gameplay assemblies, then tighten assembly references around the final dependency graph.
 
-### 15d. `RoundManager.Instance` migration
+### 15e. `FriendSlopUI` polling rewrite (remaining widgets)
 
-Per [docs/SingletonAudit.md](docs/SingletonAudit.md): "should not be removed in one large sweep." Per-feature carve-off when each zone is touched:
-
-- `LaunchpadZone`, `DepositZone`, `TeleporterPad`, `ShipStation` → spawn-time wiring of a small round-context provider.
-- UI subscribes to round lifecycle events and stops polling `RoundManager.Instance` directly.
-
-Track removal progress by counting `RoundManager.Instance` references in the codebase; goal is 0 in non-test runtime code.
-
-### 15e. `FriendSlopUI` polling rewrite
-
-`RefreshUi()` runs a full layout diff every Update. Pair with the prefab move tracked in section 11: drive each widget from `NetworkVariable.OnValueChanged` instead of polling, so the health bar only updates when health changes (not 60×/sec).
-
-Status 2026-05-08: first cleanup slice done. `FriendSlopUI` state/constants moved into `FriendSlopUI.State.cs`, bringing the root coordinator under the default file-size limit and removing its oversized baseline exception. The first polling rewrite slice is also in place: full menu/layout refreshes are dirty/timed and driven by round `NetworkVariable` changes, while loading progress and live HUD widgets stay on a lightweight per-frame path. Remaining work: convert individual HUD widgets such as health/stamina to direct player-state events instead of per-frame reads.
+First slice shipped 2026-05-08: full menu/layout refreshes are dirty/timed and driven by round `NetworkVariable` changes; loading progress and live HUD widgets stay on a lightweight per-frame path. Remaining work: convert individual HUD widgets (health/stamina) to direct player-state events instead of per-frame reads. Pairs with the prefab move tracked in §11.
 
 ### 15f. Test-coverage backfill
 
@@ -356,4 +397,21 @@ For each: branch off fresh `main`, bring over only `Space Game/Assets/Scripts/**
 Key files / branches:
 - `origin/merge/all-branches-to-main` — clean integration reference.
 - `origin/procedural-world-generation-tier-4-test`, `origin/interior-variety`, `origin/interiors-changes` — salvage sources.
-- Stale post-merge branches to verify-then-delete: `origin/Interiors` (was PR #23), `origin/test-plane-world-2` (was PR #22).
+- Stale post-merge branches to verify-then-delete: `origin/Interiors` (was PR #23).
+
+## Decision dependencies
+
+Some open-design decisions block or enable others. Suggested order to unblock the most downstream work: **§3 → §6 → §1 (loot question) → §11 → §9 → §2**, then the rest.
+
+```
+[§3 Progression endpoint] ─┬─> [§4 Ship stations: pilot]
+                            └─> [§11 UI: planet selection screen]
+
+[§6 Teleporter flow] ───────> [§1 Carried loot across travel]
+
+[§7 Loot economy] ──────────> [§8 Combat: ammo refills via vending]
+
+[§9 Hazard pacing] ─────────> [§2 Tier 2 identity]  (hazard set per planet)
+
+[§12 Lobby UX] ─────────────> [§13 Chat moderation needs]
+```

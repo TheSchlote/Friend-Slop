@@ -68,7 +68,7 @@ The server triggers loads via `NetworkManager.SceneManager.LoadScene(path, LoadS
 
 **Status (2026-05-13).** Largely landed for current tier 1–3 content.
 
-- `Bootstrap` (`FriendSlopPrototype.unity`), `ShipInterior.unity`, and the authored planet scenes `Planet_StarterJunk`, `Planet_RustyMoon`, `Planet_VioletGiant` (plus `Planet_IcePlanet` for tier 3 testing) exist as separate assets and are registered in Build Settings via `MainGameSceneCatalog`.
+- `Bootstrap` (`FriendSlopPrototype.unity`), `ShipInterior.unity`, and the authored planet scenes exist as separate assets and are registered in Build Settings via `MainGameSceneCatalog`.
 - `NetworkSceneTransitionService` is consumed by `RoundManager`/`PlanetSceneOrchestrator` through spawn-time dependency wiring. `GameSceneCatalog` is the runtime scene-lookup surface.
 - Interior scenes are loaded additively on demand by `InteriorEntrance` / `InteriorSceneBootstrapper` (see D-009).
 - Host-side ship lobby → active planet → success → ship return is covered by PlayMode smoke. **Still missing:** a true multi-client transition test, and late-join coverage for each phase (lobby, ship-only, ship+planet active).
@@ -76,9 +76,9 @@ The server triggers loads via `NetworkManager.SceneManager.LoadScene(path, LoadS
 
 Original gating criteria for "complete":
 
-1. `Bootstrap`, `ShipInterior`, and at least one `Planet_*` scene exist as separate assets and are in Build Settings. — **Done.**
+1. `Bootstrap`, `ShipInterior`, and several `Planet_*` scenes exist as separate assets and are in Build Settings. — **Done** (`ShipInterior.unity`, `Planet_StarterJunk.unity`, `Planet_RustyMoon.unity`, `Planet_VioletGiant.unity`, `Planet_IcePlanet.unity`, `Planet_HillsAndValleys.unity`, `Planet_DeepHaul.unity`, `Planet_GhostShift.unity`, `Planet_QuickStrike.unity`, plus `TestWorld_Showcase.unity` and `Building_Interior.unity`).
 2. `GameSceneCatalog` is the only place runtime code looks up scenes (no string literals). — **Done.**
-3. A multi-client PlayMode test exercises ship → planet → ship transitions and asserts player/round state at each step. — **Pending.**
+3. A multi-client PlayMode test exercises ship → planet → ship transitions and asserts player/round state at each step. — **Pending** (host-side smoke shipped 2026-05-08; multi-client variant still pending).
 4. Late-join is tested for each phase (lobby, ship-only, ship+planet active). — **Pending.**
 
 ### D-006: Asmdef boundaries (planned)
@@ -105,7 +105,7 @@ FriendSlop.Core         <-  FriendSlop.Networking  <-  FriendSlop.Gameplay  <-  
 
 ### D-007: File-size and singleton limits
 
-**Decision.** Files stop at ~400 lines. New project-owned singleton-style globals are refused by default. The current allowed legacy globals are `RoundManager.Instance` and `NetworkFirstPersonController.LocalPlayer`; see [SingletonAudit.md](SingletonAudit.md).
+**Decision.** Files stop at ~400 lines. New project-owned singleton-style globals are refused by default. See D-014 for the singleton policy and migration history.
 
 **Why.** Both are leading indicators that the code is growing in the wrong shape. AI agents naturally append to existing files and reach for global state. A hard cap forces the right reaction (split, inject) at the moment when the cost is still small.
 
@@ -180,6 +180,31 @@ Each entry stays in the baseline until the main file lands under 400; drop the e
 **Cost.** The contributor rebases and keeps branches narrow instead of living in one long-running branch. The time saved not resolving million-line conflicts dwarfs it.
 
 **Status (2026-05-15).** Policy set. Existing divergent branches are reconciled per BACKLOG §17e (salvage real code onto fresh branches off `main`, drop the vendor noise). `merge/all-branches-to-main` is the only friend-work line that currently merges cleanly (0 conflicts vs `main`) and is the reference for "already integrated."
+### D-014: No project-owned singletons
+
+**Decision.** No project-owned `Instance` / `LocalPlayer` static globals. Cross-cutting state is reached through narrow registries (`RoundManagerRegistry`, `LocalPlayerRegistry`, `DayNightCycleRegistry`), spawn-time wiring (`SerializeField`, parameters at `Spawn()` time), or events. `ArchitectureGuardrailTests.NoNewSingletonStyleGlobals` enforces this — there are zero approved project-owned globals.
+
+**Why.** "Trust the static" produces invisible coupling: callers depend on `RoundManager.Instance` instead of declaring a real dependency, and tests can't substitute a stub. Registries make the dependency explicit (the caller asks "is there a current round?") without forcing every consumer to be wired at spawn time.
+
+**Cost.** A handful of registry classes plus a small lifecycle discipline (each owner self-registers in `OnNetworkSpawn`/`OnEnable` and unregisters in `OnNetworkDespawn`/`OnDisable`).
+
+**Status.** Migration complete. History:
+
+| Original global | Replacement | Reason |
+|---|---|---|
+| `FriendSlopUI.Instance` | Removed | UI was using itself as a lookup shortcut. Gameplay input blocking now goes through `GameplayInputState`; UI session calls use a cached `NetworkSessionManager` reference. |
+| `NetworkSessionManager.Instance` | Removed | The manager is a scene-owned component on the `NetworkManager` object. UI and tests can hold or discover that component directly. |
+| `NetworkSceneTransitionService.Instance` | Removed | Scene-owned infrastructure. `PrototypeNetworkBootstrapper` passes it into the spawned `RoundManager`, which passes it to `PlanetSceneOrchestrator`. |
+| `RoundManager.Instance` | `RoundManagerRegistry.Current` | Networked `RoundManager` self-registers in `OnNetworkSpawn` / `OnNetworkDespawn`. Callers depend on the registry instead of a static facade. |
+| `NetworkFirstPersonController.LocalPlayer` | `LocalPlayerRegistry.Current` + `LocalPlayerChanged` event | The local player self-registers when ownership becomes local; UI subscribes to the change event instead of polling. |
+
+**Best-practice guidance for new code.**
+
+- Prefer `[SerializeField]` references for same-scene dependencies.
+- Prefer spawn-time configuration for runtime-spawned objects.
+- Prefer events or small registry/provider components when many systems need the same state.
+- Do not use a singleton to avoid wiring a reference.
+- If a dependency is optional, resolve it once and cache it; do not search every frame.
 
 ## Anti-patterns to refuse
 
@@ -194,7 +219,7 @@ The following are explicitly out of scope for this project. If you find yourself
 - **`SceneManager.MoveGameObjectToScene` after `NetworkObject.Spawn`.** Set the active scene before Instantiate + Spawn instead (D-011).
 - **Defaulting `destroyWithScene: false` on `NetworkObject.Spawn`.** Sends the object to `DontDestroyOnLoad`, which leaks it across planet transitions.
 - **Unfiltered `Object.FindObjectsByType<T>` over NGO types.** `NetworkPrefabsList` templates show up as inactive `IsSpawned=false` instances; filter on `NetworkObject.IsSpawned` (D-011).
-- **Procedural Canvas growth in `FriendSlopUI`.** Once the per-screen split lands, new screens get their own builder + class.
+- **Procedural Canvas growth in `FriendSlopUI`.** New large screens get their own component/partial under `Scripts/UI/` (see `FriendSlopUI.TestMode.cs`); do not append another section to the existing partials.
 - **Adding to a file already over 400 lines.** Split first.
 - **Importing an Asset Store pack into `Assets/<PackName>/`.** Quarantine under `Assets/ThirdParty/` (or an embedded `Packages/` package), own asmdef, dedicated import-once PR (D-012).
 - **Bundling a vendor-pack import with feature code, or re-importing a pack on a feature branch.** The pack lands once in its own PR; feature branches only reference it (D-012/D-013).
@@ -212,8 +237,7 @@ The following are explicitly out of scope for this project. If you find yourself
 - [NetworkObjectSceneOwnership.md](NetworkObjectSceneOwnership.md) — D-011 in full: `ActiveSceneScope` pattern, `IsSpawned` filter, NGO scene-management gotchas.
 - [InteriorSystem.md](InteriorSystem.md) — D-009/D-010 in full: building/room/furniture data, procedural vs. blueprint paths, what's networked vs. local.
 - [FeatureIntegrationContracts.md](FeatureIntegrationContracts.md) — feature extension points and PR contracts for AI agents.
-- [SingletonAudit.md](SingletonAudit.md) — singleton audit, removals, and migration plan for remaining globals.
-- [RemainingFeatures.md](RemainingFeatures.md) — feature backlog organized by system.
+- [BACKLOG.md](../BACKLOG.md) — current ordered feature/engineering backlog with grooming questions and decision options.
 - [MultiplayerQA.md](MultiplayerQA.md) — manual playtest checklist.
 - [builder-audit.md](builder-audit.md) — GUID-determinism analysis of the editor builders.
 - [itch-cicd.md](itch-cicd.md) — CI/CD setup for itch.io deploys.
@@ -223,13 +247,15 @@ The following are explicitly out of scope for this project. If you find yourself
 
 > **Top priority (2026-05-15): vendor quarantine + branch workflow (D-012/D-013), executed via BACKLOG §17.** The numbered roadmap below is paused behind it — divergent, vendor-laden branches are actively blocking the friend's contributions, which is the highest-leverage thing to fix for scalability.
 
-1. Guardrail docs and CLAUDE.md update. **(Done — this commit.)**
-2. Asmdef split (D-006).
-3. Make every `BuildXPrefab` load-or-create (see [builder-audit.md](builder-audit.md) recommendations 1–2). Then carve `FriendSlopSceneBuilder` into per-system builders; same outputs, smaller files.
-4. `NetworkFirstPersonController` and `FriendSlopUI` split by responsibility.
-5. Bug fixes from the initial review (`OnDestroy` override in `NetworkFirstPersonController`, server-side impulse clamps on pickup/drop/throw RPCs, `LaunchpadZone` boarded-set staleness across phase changes, duplicate Start/Restart RPC, `RoundManager.Awake` setting `Instance` before spawn, narrow the `HostOnline` exception filter).
-6. Multi-scene split (D-005) — actually create `Bootstrap`, `ShipInterior`, `Planet_StarterJunk` scenes, register in `GameSceneCatalog`, route host startup through `NetworkSceneTransitionService`, ship the multi-client transition test.
-7. "Fly to next planet" actually flies (consumes #6).
-8. Backfill objective and phase-transition tests.
+1. Guardrail docs and CLAUDE.md update. **Done.**
+2. Asmdef split (D-006). **In progress** — `FriendSlop.Core` foundation exists; remaining `Networking`/`Gameplay`/`UI` split pending.
+3. Make every `BuildXPrefab` load-or-create (see [builder-audit.md](builder-audit.md) recommendations 1–2). **Done.** Then carve `FriendSlopSceneBuilder` into per-system builders; same outputs, smaller files. *In progress.*
+4. `NetworkFirstPersonController` and `FriendSlopUI` split by responsibility. **Done** — both now under the 400-line cap.
+5. Bug fixes from the initial review (`OnDestroy` override in `NetworkFirstPersonController`, server-side impulse clamps on pickup/drop/throw RPCs, `LaunchpadZone` boarded-set staleness across phase changes, duplicate Start/Restart RPC, `RoundManager.Awake` setting `Instance` before spawn, narrow the `HostOnline` exception filter). **Done.**
+6. Multi-scene split (D-005) — `Bootstrap`, `ShipInterior`, and per-planet scenes exist, are registered in `MainGameSceneCatalog`, and host startup routes through `NetworkSceneTransitionService`. **Mostly done** — host-side smoke ships; multi-client transition test still pending.
+7. "Fly to next planet" actually flies (consumes #6). **Done.**
+8. Backfill objective and phase-transition tests. *Open.*
+9. Final-tier ending and run-loop rules per [BACKLOG.md](../BACKLOG.md) §3 — pick A/B/C/D and wire the final scene flow.
+10. Tier 2 planet identity per [BACKLOG.md](../BACKLOG.md) §2 — graduate variants from the shared Rusty Moon owner one at a time as their dedicated scenes get unique content.
 
 Each step is independently shippable.

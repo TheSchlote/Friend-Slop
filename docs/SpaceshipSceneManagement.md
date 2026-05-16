@@ -1,9 +1,9 @@
 # Spaceship and Scene Management
 
-## Current Audit (2026-05-03)
+## Current Audit (2026-05-14)
 
-- Build Settings currently enable five scenes: `Assets/Scenes/FriendSlopPrototype.unity`, `Assets/Scenes/ShipInterior.unity`, `Assets/Scenes/Planet_StarterJunk.unity`, `Assets/Scenes/Planet_RustyMoon.unity`, and `Assets/Scenes/Planet_VioletGiant.unity`.
-- `Assets/SceneDefinitions/MainGameSceneCatalog.asset` registers the dedicated ship scene (`ShipInterior_Scene.asset`) plus the three dedicated planet scenes: `Planet_StarterJunk_Scene.asset`, `Planet_RustyMoon_Scene.asset`, and `Planet_VioletGiant_Scene.asset`.
+- The `Assets/Scenes/` folder contains: `FriendSlopPrototype.unity` (bootstrap), `ShipInterior.unity`, `Planet_StarterJunk.unity`, `Planet_RustyMoon.unity`, `Planet_VioletGiant.unity`, `Planet_IcePlanet.unity`, `Planet_HillsAndValleys.unity`, `Planet_DeepHaul.unity`, `Planet_GhostShift.unity`, `Planet_QuickStrike.unity`, `Building_Interior.unity`, and `TestWorld_Showcase.unity`.
+- `Assets/SceneDefinitions/MainGameSceneCatalog.asset` registers the dedicated ship scene plus the per-planet scene definitions; runtime scene lookups go through the catalog (no string literals in gameplay code).
 - `Planet_StarterJunk.unity` contains a `PlanetEnvironment` for `Tier1_StarterJunk.asset` with 4 player spawn points, 14 loot spawn points, 1 monster spawn point, a launchpad reference, a content root, and a `SphereWorld` reference. `Tier1_StarterJunk.asset` has `planetScene` assigned to `Planet_StarterJunk_Scene.asset`.
 - `Planet_RustyMoon.unity` contains a `PlanetEnvironment` for `Tier2_RustyMoon.asset` with 4 player spawn points, 8 loot spawn anchors exposed on both `PlanetEnvironment` and `PlanetLootSpawner`, 2 monster spawn anchors, a launchpad reference, a return teleporter, and a `SphereWorld` reference. `Tier2_RustyMoon.asset` has `planetScene` assigned to `Planet_RustyMoon_Scene.asset`.
 - `Planet_VioletGiant.unity` now owns the former nested Tier 3 content: a `PlanetEnvironment` for `Tier3_VioletGiant.asset` with 4 player spawn points, 2 monster spawn anchors, a launchpad reference, a return teleporter, and a `SphereWorld` reference. `Tier3_VioletGiant.asset` has `planetScene` assigned to `Planet_VioletGiant_Scene.asset`.
@@ -11,16 +11,17 @@
 - `FriendSlopPrototype.unity` no longer contains a `PlanetEnvironment` or ship interior root; it owns bootstrap/runtime systems such as `NetworkManager`, `NetworkSessionManager`, `FriendSlopUI`, `NetworkSceneTransitionService`, and `PrototypeNetworkBootstrapper`.
 - `PrototypeNetworkBootstrapper` in the bootstrap scene still carries the legacy loot-prefab list, but its player, ship, loot, and monster spawn arrays are serialized as empty/null scene references. Runtime ship placement discovers `ShipEnvironment` after `ShipInterior` loads, planet spawning prefers active `PlanetEnvironment` anchors for split scenes, and scene-owned `PlanetLootSpawner` instances own their own loot pools.
 - Planet travel cleanup now despawns loot and monsters only from the active planet scene when the active `PlanetEnvironment` is known. If no environment is registered, the old global cleanup behavior remains as the legacy fallback.
-- Runtime code resolves the active round through `RoundManagerRegistry.Current` and the local player through `LocalPlayerRegistry.Current`; the old `RoundManager.Instance` and `NetworkFirstPersonController.LocalPlayer` facades have been removed from runtime code.
-- `PlanetDefinition` scene assignment status: populated for `Tier1_StarterJunk.asset`, `Tier2_RustyMoon.asset`, and `Tier3_VioletGiant.asset`; null for `Tier2_DeepHaul.asset` (`Cobalt Trench`), `Tier2_QuickStrike.asset` (`Volt Foundry`), and `Tier2_GhostShift.asset` (`Wraith Halo`) because those remain Tier 2 mission variants that resolve through the shared Rusty Moon scene owner.
-- Immediate migration implication: all currently authored tier-owner planets and the current ship lobby are scene-owned. Remaining scene-split work is to keep hardening validation/orchestration, keep Tier 2 variant UX explicit, and decide when any variant needs unique scene content.
+- Runtime code resolves the active round through `RoundManagerRegistry.Current` and the local player through `LocalPlayerRegistry.Current`; the old `RoundManager.Instance` and `NetworkFirstPersonController.LocalPlayer` facades have been removed from runtime code. A `DayNightCycleRegistry` plays the same role for HUD lookups across planet scene unloads.
+- `PlanetDefinition` scene assignment status: populated for `Tier1_StarterJunk.asset`, `Tier2_RustyMoon.asset`, `Tier3_VioletGiant.asset`, `Tier3_IcePlanet.asset` (Ice Planet), and `Tier4_HillsAndValleys.asset`. Tier 2 variants `Tier2_DeepHaul.asset` (Cobalt Trench), `Tier2_QuickStrike.asset` (Volt Foundry), and `Tier2_GhostShift.asset` (Wraith Halo) now point to dedicated `Planet_DeepHaul.unity`, `Planet_QuickStrike.unity`, and `Planet_GhostShift.unity` scenes; those scenes still need their own authored content before the variants stop reading as Rusty Moon look-alikes.
+- A `Flat Test World` planet definition (catalog tier 10) builds its environment procedurally via `FlatTestWorldEnvironment` and is not bound to a planet scene asset; it is reachable through the host's lobby Test Mode and is intended for prefab/asset showcasing.
+- Immediate migration implication: all currently authored tier-owner planets and the current ship lobby are scene-owned. Remaining scene-split work is to keep hardening validation/orchestration, give the Tier 2 variant scenes their own visual identity, and decide the final-tier ending behavior.
 
-## Tier 2 Scene Decision (2026-05-02)
+## Tier 2 Scene Decision (2026-05-02, refreshed 2026-05-14)
 
-- `Tier2_DeepHaul.asset` (`Cobalt Trench`), `Tier2_QuickStrike.asset` (`Volt Foundry`), and `Tier2_GhostShift.asset` (`Wraith Halo`) are treated as mission variants on the shared `Planet_RustyMoon.unity` scene.
-- Each variant must keep an explicit `RoundObjective` assigned because its gameplay identity comes from objective/timer/quota data, not unique scene content.
-- `Tier2_RustyMoon.asset` remains the Tier 2 scene owner with `planetScene` assigned to `Planet_RustyMoon_Scene.asset`.
-- If a future playtest needs unique Tier 2 visuals, convert one variant at a time by adding a new `Planet_*` scene and assigning that variant's `planetScene`. Until then, do not create placeholder duplicate Tier 2 scenes.
+- `Tier2_DeepHaul.asset` (`Cobalt Trench`), `Tier2_QuickStrike.asset` (`Volt Foundry`), and `Tier2_GhostShift.asset` (`Wraith Halo`) now point to dedicated `Planet_DeepHaul.unity`, `Planet_QuickStrike.unity`, and `Planet_GhostShift.unity` scenes. Each variant still needs unique authored content (geometry, lighting, hazards) before it stops reading as a Rusty Moon look-alike.
+- Each variant must keep an explicit `RoundObjective` assigned because its gameplay identity still comes primarily from objective/timer/quota data until visual identity catches up.
+- `Tier2_RustyMoon.asset` remains the canonical "Rusty Moon" scene owner with `planetScene` assigned to `Planet_RustyMoon_Scene.asset`.
+- The next graduation step is per-variant: pick one (recommend Cobalt Trench or Volt Foundry per [BACKLOG.md](../BACKLOG.md) §2) and replace the placeholder content in its scene with a unique build pass.
 
 ## Current Vertical Slice
 
@@ -54,5 +55,6 @@
 
 - Keep tightening bootstrap responsibilities now that `ShipInterior` is additive: session/UI/orchestration stay in bootstrap, authored ship content stays in `ShipInterior`.
 - Keep planet-scene validation green as more scene-owned content is added.
-- Decide when a Tier 2 variant should graduate from shared `Planet_RustyMoon` ownership into a unique scene.
+- Give the dedicated Tier 2 variant scenes (`Planet_DeepHaul`, `Planet_QuickStrike`, `Planet_GhostShift`) their own visual identity instead of copies of Rusty Moon.
+- Ship the multi-client PlayMode transition test (host-side smoke is in place).
 - Continue preserving bootstrapper legacy planet fallbacks until they have a dedicated removal pass.
