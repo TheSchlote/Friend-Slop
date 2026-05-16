@@ -366,6 +366,19 @@ For each pack — `HIVEMIND`, `LowPolyInterior`, `LowPolyInterior2`, `Plugins/Mi
 - Near-certain drops to verify first: `_Recovery/` (2 files, `0.unity` — a Unity crash-recovery scene dump, never referenced) and `LowPolyMegaBundle` (friend-branch-only, superseded by the split LowPoly packs). Confirm with the GUID grep before deleting.
 - Output: a table in this section — pack → file count → decision → referencing scenes/prefabs.
 
+**Status 2026-05-15 — inventory done (GUID-reference analysis, all file types incl. ProjectSettings/EditorBuildSettings):**
+
+| Pack | Files | GUIDs ref'd by shipped content | Decision | Referenced by |
+|---|---|---|---|---|
+| `LowPolyInterior2` | 9,006 | **0** | **DROP** | — (never wired) |
+| `LowPolyInterior` | 1,714 | **0** | **DROP** | — (never wired) |
+| `_Recovery` | 2 | **0** | **DROP** | — (Unity crash dump) |
+| `HIVEMIND` | 471 | 9 | RELOCATE | `Resources/Effects/BloodVfxLibrary.asset` (+ `Scripts/Effects/BloodSplatter.cs` code dep on `RealisticBlood`) |
+| `Plugins/Microdetail` | 874 | 2 | RELOCATE | `Scenes/Planet_HillsAndValleys.unity` |
+| `YughuesFreeRockMaterials` | 162 | 2 | RELOCATE | `Materials/RockTriplanar.mat` |
+
+`LowPolyMegaBundle` was friend-branch-only; those branches are deleted, so it never reached `main` — nothing to do.
+
 ### 17c. Relocate kept packs (working-tree move — history preserved)
 
 For each **keep**/**relocate** pack, one PR per pack (or one tight "relocate vendor" PR):
@@ -373,6 +386,8 @@ For each **keep**/**relocate** pack, one PR per pack (or one tight "relocate ven
 - `git mv "Space Game/Assets/<Pack>" "Space Game/Assets/ThirdParty/<Pack>"`. Asset GUIDs are unchanged by a move, so scene/prefab references survive — only `.asmdef`/`.asmref` paths, `*.rsp`, and any hard-coded `AssetDatabase` path strings in editor scripts need fix-ups.
 - Add `Assets/ThirdParty/<Pack>/ThirdParty.<Pack>.asmdef`. Delete the pack's demo/example/sample-scene folders in the same PR.
 - `dotnet build` the three csproj + run `tools\Run-UnityTests.ps1 -TestPlatform All`. Repo size is unchanged here (history still holds the blobs) but the tree is policy-compliant and future branches stay clean.
+
+**Status 2026-05-15:** The three **DROP** packs (`LowPolyInterior`, `LowPolyInterior2`, `_Recovery` — 10,722 files, provably zero references) were removed in a dedicated working-tree-delete PR (`chore/drop-unreferenced-vendor`), separate from relocate because deleting unreferenced art carries no compile risk while the relocate does. **Remaining 17c work (own PR):** relocate `HIVEMIND`, `Plugins/Microdetail`, `YughuesFreeRockMaterials` into `Assets/ThirdParty/`. Delicacy: `HIVEMIND` is a *code* dependency (`Scripts/Effects/BloodSplatter.cs` → `RealisticBlood`), `Microdetail` has 67 scripts in the special `Assets/Plugins/` folder — both need correct `ThirdParty.<Pack>.asmdef` setup + `FriendSlop.Runtime` asmdef reference, with a `dotnet build` compile gate. `Microdetail` has `Materials/Demo` + `Textures/Demo` to strip; none have demo *scenes*.
 
 ### 17d. Optional coordinated history purge (DESTRUCTIVE — gated, not unilateral)
 
