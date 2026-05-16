@@ -66,12 +66,20 @@ The server triggers loads via `NetworkManager.SceneManager.LoadScene(path, LoadS
 
 **Cost.** Higher discipline required around scene ownership. Gameplay code must never `FindObjectOfType` across the additive set without filtering by scene. The `RoundManager` needs to know which planet scene is active, not "the scene."
 
-**Status.** `NetworkSceneTransitionService` is consumed by the round scene orchestration path through spawn-time dependency wiring. Gating criteria for marking the full multi-scene split complete:
+**Status (2026-05-13).** Largely landed for current tier 1–3 content.
 
-1. `Bootstrap`, `ShipInterior`, and at least one `Planet_*` scene exist as separate assets and are in Build Settings.
-2. `GameSceneCatalog` is the only place runtime code looks up scenes (no string literals).
-3. A multi-client PlayMode test exercises ship → planet → ship transitions and asserts player/round state at each step.
-4. Late-join is tested for each phase (lobby, ship-only, ship+planet active).
+- `Bootstrap` (`FriendSlopPrototype.unity`), `ShipInterior.unity`, and the authored planet scenes `Planet_StarterJunk`, `Planet_RustyMoon`, `Planet_VioletGiant` (plus `Planet_IcePlanet` for tier 3 testing) exist as separate assets and are registered in Build Settings via `MainGameSceneCatalog`.
+- `NetworkSceneTransitionService` is consumed by `RoundManager`/`PlanetSceneOrchestrator` through spawn-time dependency wiring. `GameSceneCatalog` is the runtime scene-lookup surface.
+- Interior scenes are loaded additively on demand by `InteriorEntrance` / `InteriorSceneBootstrapper` (see D-009).
+- Host-side ship lobby → active planet → success → ship return is covered by PlayMode smoke. **Still missing:** a true multi-client transition test, and late-join coverage for each phase (lobby, ship-only, ship+planet active).
+- Tier 2 mission variants (`Cobalt Trench`, `Volt Foundry`, `Wraith Halo`) intentionally share `Planet_RustyMoon.unity` as scene owner until a playtest needs unique visuals; see [SpaceshipSceneManagement.md](SpaceshipSceneManagement.md).
+
+Original gating criteria for "complete":
+
+1. `Bootstrap`, `ShipInterior`, and at least one `Planet_*` scene exist as separate assets and are in Build Settings. — **Done.**
+2. `GameSceneCatalog` is the only place runtime code looks up scenes (no string literals). — **Done.**
+3. A multi-client PlayMode test exercises ship → planet → ship transitions and asserts player/round state at each step. — **Pending.**
+4. Late-join is tested for each phase (lobby, ship-only, ship+planet active). — **Pending.**
 
 ### D-006: Asmdef boundaries (planned)
 
@@ -93,7 +101,7 @@ FriendSlop.Core         <-  FriendSlop.Networking  <-  FriendSlop.Gameplay  <-  
 
 **Cost.** A handful of `.asmdef` files and some namespace cleanup. One-time pain, permanent payoff.
 
-**Status.** Started. The first `FriendSlop.Core` foundation slice now owns the D-006 utility types; the remaining Runtime/Networking/Gameplay split is still pending.
+**Status (2026-05-13).** First slice landed: `FriendSlop.Core` (under `Scripts/Core/Foundation/`) owns the D-006 utility types and has no Netcode dependency. The full runtime is still in a single `FriendSlop.Runtime` assembly; carving Networking and Gameplay out of it is the next D-006 step. `FriendSlop.UI` and `FriendSlop.Editor` are already separate.
 
 ### D-007: File-size and singleton limits
 
@@ -103,7 +111,17 @@ FriendSlop.Core         <-  FriendSlop.Networking  <-  FriendSlop.Gameplay  <-  
 
 **Cost.** Some refactor churn. Worth it.
 
-**Status.** Several runtime files still exceed the cap and are frozen by `ArchitectureGuardrailTests` baselines. `FriendSlopUI`, `NetworkFirstPersonController`, `NetworkLootItem`, `PlayerInteractor`, `RoamingMonster`, and `RoundManager` are flagged for staged splits before significant additions.
+**Status (2026-05-13).** Earlier oversized files (`FriendSlopUI`, `NetworkFirstPersonController`, `NetworkLootItem`, `PlayerInteractor`, `RoundManager`, `NetworkSessionManager`) have all been carved below the default cap and removed from the baseline. Current `ArchitectureGuardrailTests.ExistingOversizedRuntimeFiles` baseline (all Interiors, carried over from the interiors merge):
+
+| File | Line count | Split notes |
+|---|---|---|
+| `Assets/Scripts/Interiors/InteriorLayoutGenerator.cs` | 1727 | Natural seams: required-room quotas, frontier expansion, downward-connector mirroring, fallback generation. |
+| `Assets/Scripts/Interiors/Blueprints/BlueprintEditorUI.cs` | 1005 | Editor-only; per-panel split. |
+| `Assets/Scripts/Interiors/InteriorSceneBootstrapper.cs` | 832 | Natural extraction: wall-patching / garage-door geometry, then materials, then door spawning. |
+| `Assets/Scripts/Interiors/Blueprints/BlueprintEditorController.cs` | 545 | Editor-only; smallest, safest first split. |
+| `Assets/Scripts/Interiors/InteriorSceneBootstrapper.Furniture.cs` | 527 | Extract pickers (`PickFurnitureForAnchor`, `HasTagOverlap`, etc.) into `.Furniture.Picking.cs`. |
+
+Each entry stays in the baseline until the main file lands under 400; drop the entry in the same PR that does the split.
 
 ### D-008: Tests at architectural seams
 
@@ -112,6 +130,56 @@ FriendSlop.Core         <-  FriendSlop.Networking  <-  FriendSlop.Gameplay  <-  
 **Why.** With no editor-driven verification, tests are the only thing standing between a vibe-coded change and a silently broken playtest. The seams (objective evaluation, phase transitions, scene transitions, RPC validation) are where logic goes wrong invisibly.
 
 **Cost.** Slower per-feature delivery. Bug-discovery time drops dramatically.
+
+### D-009: Interior generation is data-driven content
+
+**Decision.** Interior layouts are produced by feeding ScriptableObject definitions (`BuildingDefinition` + `RoomDefinition` + `FurnitureDefinition`, registered in `InteriorCatalog`) into a deterministic generator (`InteriorLayoutGenerator.Generate(definition, seed)`). The server picks the seed and writes it into `InteriorSessionData`; every client regenerates the same layout locally from that seed. Doors are `NetworkObject`s (open/close state syncs); furniture is deterministic-but-local (no `NetworkObject` per chair, every client picks identical pieces from the seed).
+
+**Why.** Procedural interiors without a hard determinism contract would either need every chair to be a `NetworkObject` (bandwidth/spawn-count blowup) or accept that clients see different rooms (correctness disaster). Pinning the contract to "server picks seed, all clients regenerate locally" gets us identical state without the network cost, *as long as* layout/furniture selection is a pure function of the seed. ScriptableObject-first content keeps the door open for blueprint authoring (D-010) and per-room variant pooling.
+
+**Cost.** Every line of generation code is on the path of the determinism contract. Any `Random` source, time stamp, or `FindObjectsByType` order dependence in generation is a correctness bug, not a style nit. Tests have to cover the pipeline both for output shape (rooms placed, constraints satisfied) and for stability under future renames — see the `FormerlySerializedAs` hazards in section 16c of the backlog.
+
+**Status (2026-05-13).** Pipeline is live: `InteriorEntrance` → `InteriorSessionData` → `InteriorSceneBootstrapper` → `InteriorLayoutGenerator` → spawned doors + local furniture. `InteriorLayoutGeneratorTests` covers a subset of the generator; `BlueprintLayoutBuilderTests`, `FurnitureSelectionTests`, `BuildingDefinitionRoomPoolTests`, and an `InteriorSceneBootstrapper` PlayMode smoke are queued in BACKLOG section 16c.
+
+### D-010: Blueprints as authored interior layouts
+
+**Decision.** When a building's interior should be hand-authored rather than rolled, the entry point is a `BlueprintAsset` that pins room placements and edge state (`Wall` / `Open` / `Door`) explicitly. `InteriorSessionData.Blueprint` overrides the procedural path: `BlueprintLayoutBuilder.Build(blueprint, definition)` produces the `InteriorLayout` directly, skipping the procedural door-policy pass because edge state is user-authored. Per-slot room variants (`Room_Residential_Bathroom_2x2.A` / `.B` etc., resolved via `RoomVariants.FindVariants` on family name + grid size) are still rolled per-spawn for variety without re-generating the layout.
+
+**Why.** Procedural is great for "generic dungeon"; it's wrong for places the design wants to be recognisable (the residential building, the friend's homebase). Going through the same `InteriorLayout` shape means the bootstrapper, door spawner, and furniture pipeline don't have to fork.
+
+**Cost.** A second code path with its own builder, editor (`BlueprintEditorController` / `BlueprintEditorUI`), and runtime entrance variant (`BlueprintEntrance`). `BlueprintLayoutBuilder` had zero coverage at the time this decision was recorded — see BACKLOG 16c for the queued `BlueprintLayoutBuilderTests`.
+
+**Status (2026-05-13).** Live. Used by the residential test building. Editor flow is in `Scripts/Interiors/Blueprints/` and is editor-only; the runtime builder is small (~80 lines) and pure.
+
+### D-011: NGO scene placement contract
+
+**Decision.** When spawning a `NetworkObject` into a scene other than the caller's, set the active scene to the target *before* `Instantiate` + `NetworkObject.Spawn(destroyWithScene: true)`. The canonical pattern is an active-scene swap around the whole spawn batch — see `ActiveSceneScope` in [`PrototypeNetworkBootstrapper.Spawning.cs`](../Space%20Game/Assets/Scripts/Networking/PrototypeNetworkBootstrapper.Spawning.cs) and the inlined equivalent in [`PlanetLootSpawner.TrySpawnNow`](../Space%20Game/Assets/Scripts/Loot/PlanetLootSpawner.cs). Do **not** rely on `SceneManager.MoveGameObjectToScene` after `Spawn`. When calling `Object.FindObjectsByType<T>(FindObjectsInactive.Include, …)` against an NGO type, filter by `NetworkObject.IsSpawned` if you care about live runtime state.
+
+**Why.** `NetworkObject.Spawn(destroyWithScene: true)` latches `SceneOriginHandle` to the GameObject's scene at the moment of spawn. With `EnableSceneManagement = true`, post-Spawn `MoveGameObjectToScene` calls fight NGO scene management and silently fail to stick (cost ~2 hours of debug time during PR #24). Separately, NGO parks `NetworkPrefabsList` templates as inactive instances in the Bootstrap scene; unfiltered `FindObjectsByType` returns them alongside real spawns, so unfiltered counts are non-zero before any real spawn fires.
+
+**Cost.** Every new spawn site has to use the pattern; tests that assert spawn counts have to filter. Codified as hard rule 9 in [`Space Game/CLAUDE.md`](../Space%20Game/CLAUDE.md) and detailed in [NetworkObjectSceneOwnership.md](NetworkObjectSceneOwnership.md).
+
+**Status (2026-05-13).** Codified. Known stale sites: `MeteorShower.SpawnMeteor` (still uses post-Spawn move; queued in BACKLOG 16b) and `AnomalySpawner.Spawn` (still defaults `destroyWithScene = false`; queued in BACKLOG 16b).
+
+### D-012: Third-party assets are quarantined and import-once
+
+**Decision.** Asset Store / third-party packs do **not** live in `Assets/<PackName>/` on the feature path. Each pack goes in one quarantine root — `Assets/ThirdParty/<PackName>/`, or an embedded UPM package under `Packages/` when the pack is package-shaped — wrapped in its own `.asmdef` (`ThirdParty.<PackName>`, `autoReferenced` only when our runtime must call into it). A pack is imported **exactly once**, in a dedicated PR that does nothing else (`vendor: add <Pack> vX`). Demo / example / sample-scene folders inside the pack are deleted on import. If the pack adds a new binary extension, `.gitattributes` LFS coverage is extended in that same PR. Feature branches never import, re-import, or re-export a pack — they only reference one that already landed.
+
+**Why.** Quantified on `main` (2026-05-15): ~12,200 of the repo's files are vendor packs — `LowPolyInterior2` alone is 9,006 files, `LowPolyInterior` 1,714, `Plugins/Microdetail` 874, `HIVEMIND` 471 — versus ~360 for our own `Prefabs/`. When a pack sits on the feature path and gets re-imported per branch, every feature branch diffs by 1M+ lines, branches collide on vendor `.meta`/YAML, review becomes impossible, `.git` bloats (978 MB), and LFS bandwidth spikes (the direct cause of the [#25](https://github.com/TheSchlote/Friend-Slop/pull/25)/[#26](https://github.com/TheSchlote/Friend-Slop/pull/26) cost firefight). Quarantine + import-once keeps a feature PR reviewable as a feature PR, and an own-asmdef stops our code from coupling to a pack's churn.
+
+**Cost.** A one-time relocation of the packs already on `main` (staged in BACKLOG §17) and the discipline of the dedicated import PR. asmdef-wrapping a pack occasionally needs a few reference / `.asmref` fix-ups. One-time pain, permanent payoff.
+
+**Status (2026-05-15).** Policy set this commit. Mislocated on `main`: `HIVEMIND`, `LowPolyInterior`, `LowPolyInterior2`, `Plugins/Microdetail`, `YughuesFreeRockMaterials`, the junk `_Recovery/` crash dump, plus the friend-branch-only `LowPolyMegaBundle`. Relocation/purge is staged in BACKLOG §17. Until it lands: do not add new packs under `Assets/<root>` and do not re-import existing ones on a feature branch.
+
+### D-013: Short-lived branches, rebased, vendor imports isolated
+
+**Decision.** Feature branches are short-lived (target: merged within a few days), rebased on `main` before review rather than left to diverge, and scoped to one feature. A branch never carries a vendor-pack import alongside feature code — the import is its own prior PR (D-012). The lead may keep a single integration branch *only* for reconciling already-merged history; it is not a place to accumulate features. Contributor flow: branch off fresh `main` → add the feature as C# + `.asset` files (D-001/D-004/D-008) → rebase → PR. If the feature needs a new art pack, the D-012 pack PR lands first and the feature branch just references it.
+
+**Why.** The three friend branches (`interiors-changes`, `interior-variety`, `procedural-world-generation-tier-4-test`) are overlapping long-lived re-cuts of the same work, each re-importing the same packs; all are ~6 commits behind `main`, mutually conflicting (13–15 files), and effectively unmergeable. The cause is divergence over time plus vendor churn, **not** the feature code itself — there is only ~3.8K–14K lines of real gameplay across them, which is salvageable. Short-lived rebased branches with vendor factored out keep every contribution mergeable, which is the whole point of "let the friend keep adding features."
+
+**Cost.** The contributor rebases and keeps branches narrow instead of living in one long-running branch. The time saved not resolving million-line conflicts dwarfs it.
+
+**Status (2026-05-15).** Policy set. Existing divergent branches are reconciled per BACKLOG §17e (salvage real code onto fresh branches off `main`, drop the vendor noise). `merge/all-branches-to-main` is the only friend-work line that currently merges cleanly (0 conflicts vs `main`) and is the reference for "already integrated."
 
 ## Anti-patterns to refuse
 
@@ -123,8 +191,14 @@ The following are explicitly out of scope for this project. If you find yourself
 - **`Vector3.up` in physics or movement code.** Use `SphereWorld.GetGravityUp(position)`.
 - **Trusting client-supplied vectors in `ServerRpc`.** Validate range and clamp magnitude.
 - **`Instantiate`/`Destroy` for `NetworkObject`s.** Use `Spawn`/`Despawn` on the server.
+- **`SceneManager.MoveGameObjectToScene` after `NetworkObject.Spawn`.** Set the active scene before Instantiate + Spawn instead (D-011).
+- **Defaulting `destroyWithScene: false` on `NetworkObject.Spawn`.** Sends the object to `DontDestroyOnLoad`, which leaks it across planet transitions.
+- **Unfiltered `Object.FindObjectsByType<T>` over NGO types.** `NetworkPrefabsList` templates show up as inactive `IsSpawned=false` instances; filter on `NetworkObject.IsSpawned` (D-011).
 - **Procedural Canvas growth in `FriendSlopUI`.** Once the per-screen split lands, new screens get their own builder + class.
 - **Adding to a file already over 400 lines.** Split first.
+- **Importing an Asset Store pack into `Assets/<PackName>/`.** Quarantine under `Assets/ThirdParty/` (or an embedded `Packages/` package), own asmdef, dedicated import-once PR (D-012).
+- **Bundling a vendor-pack import with feature code, or re-importing a pack on a feature branch.** The pack lands once in its own PR; feature branches only reference it (D-012/D-013).
+- **Long-lived feature branches that diverge from `main`.** Short-lived, rebased, one feature per branch (D-013).
 
 ## Open questions
 
@@ -135,6 +209,8 @@ The following are explicitly out of scope for this project. If you find yourself
 ## Related documents
 
 - [SpaceshipSceneManagement.md](SpaceshipSceneManagement.md) — current vertical slice, target scene layout, and scene-ownership rules.
+- [NetworkObjectSceneOwnership.md](NetworkObjectSceneOwnership.md) — D-011 in full: `ActiveSceneScope` pattern, `IsSpawned` filter, NGO scene-management gotchas.
+- [InteriorSystem.md](InteriorSystem.md) — D-009/D-010 in full: building/room/furniture data, procedural vs. blueprint paths, what's networked vs. local.
 - [FeatureIntegrationContracts.md](FeatureIntegrationContracts.md) — feature extension points and PR contracts for AI agents.
 - [SingletonAudit.md](SingletonAudit.md) — singleton audit, removals, and migration plan for remaining globals.
 - [RemainingFeatures.md](RemainingFeatures.md) — feature backlog organized by system.
@@ -144,6 +220,8 @@ The following are explicitly out of scope for this project. If you find yourself
 - [`Space Game/CLAUDE.md`](../Space%20Game/CLAUDE.md) — agent-facing rules derived from this document.
 
 ## Roadmap (current)
+
+> **Top priority (2026-05-15): vendor quarantine + branch workflow (D-012/D-013), executed via BACKLOG §17.** The numbered roadmap below is paused behind it — divergent, vendor-laden branches are actively blocking the friend's contributions, which is the highest-leverage thing to fix for scalability.
 
 1. Guardrail docs and CLAUDE.md update. **(Done — this commit.)**
 2. Asmdef split (D-006).

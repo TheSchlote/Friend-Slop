@@ -251,3 +251,109 @@ Status 2026-05-08: first cleanup slice done. `FriendSlopUI` state/constants move
 Currently no EditMode coverage for: `NetworkSessionManager` (mock-needed), `FriendSlopUI` partials, `PlayerInteractor`, `NetworkFirstPersonController` health/lifecycle/movement, weapons (`LaserGun`, `BoxingGloves`). The seams that already break are well-covered; gameplay surface that *could* break invisibly is not.
 
 Lowest-hanging fruit: `LaserGun` / `BoxingGloves` — they're small, server-authoritative, and have clear pass/fail predicates.
+
+## 16. Interiors merge follow-ups (queued on `tests/interior-coverage`)
+
+Surfaced during the post-merge architectural review in [PR #24](https://github.com/TheSchlote/Friend-Slop/pull/24). All work is queued on the `tests/interior-coverage` branch.
+
+### 16a. Documentation gaps — friends' agents will get bitten
+
+The whole Interiors system was invisible to `CLAUDE.md` and `docs/architecture.md`, the NGO additive-scene spawn contract wasn't codified, and `Tools/Friend Slop/Repair Scene Wiring` wasn't listed next to the other editor menus.
+
+**Status 2026-05-13: landed.** All 16a items shipped as a single doc PR on this branch.
+
+- **`Space Game/CLAUDE.md`** — Unity bumped to `6000.3.15f1`; new hard rule 9 covers the NGO active-scene-before-Spawn contract and the `IsSpawned` filter; `Tools/Repair Scene Wiring` added under rule 2; Interiors subsection added to Architecture; `FriendSlop.Interiors` + `FriendSlop.Interiors.Blueprints` added to the namespace map; rule 5 asmdef wording updated to current state (Core/Foundation, Runtime, UI, Editor).
+- **`docs/architecture.md`** — D-005 / D-006 / D-007 status updates and added decisions: **D-009** (interior generation as data-driven content), **D-010** (blueprints as authored interior layouts), **D-011** (NGO scene placement contract). Anti-patterns section gained `MoveGameObjectToScene`-after-Spawn, `destroyWithScene:false` defaulting, and unfiltered `FindObjectsByType` over NGO types.
+- **`docs/FeatureIntegrationContracts.md`** — 4 new contracts: "New Networked Spawn," "New Building Type," "New Furniture Definition," "New Blueprint." PR checklist gained `ActiveSceneScope` + `IsSpawned` lines.
+- **New `docs/InteriorSystem.md`** — full pipeline overview, procedural vs. blueprint path, networked-vs-local table, known oversized files.
+- **New `docs/NetworkObjectSceneOwnership.md`** — codifies the active-scene-before-Spawn pattern, the `IsSpawned` filter, despawn-before-unload, and the known stale sites (`MeteorShower`, `AnomalySpawner`) queued in 16b.
+
+### 16b. Code issues surfaced during the review
+
+- **`PlanetLootSpawner.IsCurrentActivePlanet()`** ([line 142-148](Space%20Game/Assets/Scripts/Loot/PlanetLootSpawner.cs)) returns `true` when `planetEnvironment == null`. Should default to `false` — current behavior silently runs as the active spawner when env config is missing/broken.
+- **`MeteorShower`** ([line 121](Space%20Game/Assets/Scripts/Hazards/MeteorShower.cs)) still uses the old `Instantiate → MoveGameObjectToScene → Spawn` anti-pattern. Convert to `ActiveSceneScope`.
+- **`AnomalySpawner.Spawn()`** ([line 71](Space%20Game/Assets/Scripts/Hazards/AnomalySpawner.cs)) defaults `destroyWithScene=false`, leaking anomalies into `DontDestroyOnLoad` across planet transitions. Verify intent; likely should be `true`.
+- **Dead test code**: `AssertConnectedMenuLayoutDoesNotOverlap` at [FriendSlopPrototypeSmokeTests.cs:490](Space%20Game/Assets/Tests/PlayMode/FriendSlopPrototypeSmokeTests.cs) is defined but never called.
+
+### 16c. Tests to add (priority order)
+
+1. **`BlueprintLayoutBuilderTests`** (EditMode) — `BlueprintLayoutBuilder.Build` currently has zero coverage and is the entire authored-layout pipeline. Pure static function, easy to test. Cover: empty/null blueprint returns empty layout, room placement, socket adjacency, edge-state overrides (Wall/Open/Door), variant picking, per-slot overrides.
+2. **`BuildingDefinitionRoomPoolTests`** (EditMode) — defensive against future `FormerlySerializedAs` renames. The recent `roomPool` → `optionalPool` rename silently broke `InteriorLayoutGeneratorTests`. A direct unit test on `BuildingDefinition.RoomPool` (combines `optionalPool` + `requiredRooms.Definition`) would catch the next one before it bites.
+3. **`PlanetLootSpawnerSceneOwnershipTests`** (PlayMode) — verifies the `ActiveSceneScope` fix on the Tier 2+ scene-owned spawner path that's not currently exercised. Load a Tier 2 scene, start host, assert all spawned loot ends up in the planet scene.
+4. **`FurnitureSelectionTests`** (EditMode) — `HasTagOverlap`, `IsCappedOut`, `PickFurnitureForAnchor`, `OverlapsExisting` in `InteriorSceneBootstrapper.Furniture.cs`. Pure static helpers; easy to test.
+5. **`InteriorSceneBootstrapper` PlayMode smoke** — spawn an interior, teleport a player in, assert rooms + doors present. Currently no coverage.
+6. **`InteriorCatalogTests`** (EditMode) — catalog enumeration / lookup; ensure no null entries ship.
+
+### 16d. Baselined oversized files (split before adding to)
+
+Listed in `ArchitectureGuardrailTests.ExistingOversizedRuntimeFiles`. Split order recommended:
+
+- `Assets/Scripts/Interiors/Blueprints/BlueprintEditorController.cs` — 545 lines, editor-only, smallest, safest first split.
+- `Assets/Scripts/Interiors/InteriorSceneBootstrapper.cs` — 832 lines; natural extraction: wall-patching / garage-door geometry, then materials, then door spawning.
+- `Assets/Scripts/Interiors/InteriorSceneBootstrapper.Furniture.cs` — 527 lines; extract pickers (`PickFurnitureForAnchor`, `HasTagOverlap`, etc.) into `.Furniture.Picking.cs`.
+- `Assets/Scripts/Interiors/Blueprints/BlueprintEditorUI.cs` — 1005 lines; per-panel split.
+- `Assets/Scripts/Interiors/InteriorLayoutGenerator.cs` — 1727 lines; biggest. Natural seams: required-room quotas, frontier expansion, downward-connector mirroring, fallback generation.
+
+After each split: drop the file's entry from `ExistingOversizedRuntimeFiles` if the main file lands under 400.
+
+### 16e. Editor migrations the agent can't run
+
+These need a human in the editor; queued for the next playtest pass.
+
+- Run `Tools/Friend Slop/Repair Scene Wiring` once to delete the stale ship root from `FriendSlopPrototype.unity` (the wiring repair was updated to handle this on its next run). After running, re-enable `ValidateBootstrapDoesNotOwnShipInterior` in `PlanetSceneValidator.TryValidate`.
+
+## 17. Vendor quarantine + branch reconciliation (architecture D-012/D-013)
+
+**This is the current top priority** (see `docs/architecture.md` roadmap banner). Vendor packs already on `main` total ~12,200 files (`LowPolyInterior2` 9,006, `LowPolyInterior` 1,714, `Plugins/Microdetail` 874, `HIVEMIND` 471, `YughuesFreeRockMaterials` 162) vs ~360 for our own `Prefabs/`. Three friend branches re-import overlapping copies of these, producing 1M+ line diffs, 13–15-file mutual conflicts, a 978 MB `.git`, and the recurring LFS-cost firefight. Goal: make every contribution reviewable and mergeable again without throwing away the friend's real work.
+
+Staged deliberately. **17a–17c change no history and are safe to do unilaterally. 17d rewrites history and is explicitly a coordinated, gated step. 17e depends on 17c.**
+
+### 17a. Stop the bleeding (no history change — do first)
+
+- Land the D-012/D-013 policy (this commit: `architecture.md`, `CLAUDE.md`, this section).
+- Tell the friend the new flow before they cut another branch: short-lived branch off fresh `main`, code + `.asset` only, vendor packs are separate import-once PRs, rebase before review.
+- Add the quarantine scaffold so the convention exists: `Assets/ThirdParty/.gitkeep` (+ `.meta`) and a one-line `Assets/ThirdParty/README.md` pointing at D-012. No pack moves yet.
+- Audit `.gitattributes` for binary extensions the current packs use that aren't LFS-tracked (e.g. `.exr`, `.hdr`, `.tif`, `.bmp`); extend coverage if any are committed as raw text. (Do **not** retroactively migrate yet — that's 17d.)
+
+**Status 2026-05-15:** Scaffold landed (`Assets/ThirdParty/` + `README.md` pointing at D-012/D-013, with valid Unity `.meta`s). `.gitattributes` audit done and **clean** — no committed binary extension on `main` *or* the friend branches falls outside the existing LFS list (png/jpg/jpeg/tga/psd/fbx/blend/wav/mp3/ogg/mp4/mov). Confirms the bloat is 100% re-imported text (`.meta`/`.prefab`/`.mat`/`.asset` YAML), so the fix is quarantine + import-once (D-012/D-013), not more LFS. No `.gitattributes` change needed. Remaining 17a item: communicate the new flow to the friend before the next branch is cut.
+
+### 17b. Inventory & per-pack decision (no history change)
+
+For each pack — `HIVEMIND`, `LowPolyInterior`, `LowPolyInterior2`, `Plugins/Microdetail`, `YughuesFreeRockMaterials`, `_Recovery`, and the friend-branch-only `LowPolyMegaBundle` — classify **keep / relocate / drop** by evidence, not assumption:
+
+- Extract the pack's asset GUIDs (`*.meta` `guid:`), then grep `Assets/{Scenes,Prefabs,Resources,Scripts}` and our `.asset` files for those GUIDs. Zero references in shipped content ⇒ drop candidate.
+- Near-certain drops to verify first: `_Recovery/` (2 files, `0.unity` — a Unity crash-recovery scene dump, never referenced) and `LowPolyMegaBundle` (friend-branch-only, superseded by the split LowPoly packs). Confirm with the GUID grep before deleting.
+- Output: a table in this section — pack → file count → decision → referencing scenes/prefabs.
+
+### 17c. Relocate kept packs (working-tree move — history preserved)
+
+For each **keep**/**relocate** pack, one PR per pack (or one tight "relocate vendor" PR):
+
+- `git mv "Space Game/Assets/<Pack>" "Space Game/Assets/ThirdParty/<Pack>"`. Asset GUIDs are unchanged by a move, so scene/prefab references survive — only `.asmdef`/`.asmref` paths, `*.rsp`, and any hard-coded `AssetDatabase` path strings in editor scripts need fix-ups.
+- Add `Assets/ThirdParty/<Pack>/ThirdParty.<Pack>.asmdef`. Delete the pack's demo/example/sample-scene folders in the same PR.
+- `dotnet build` the three csproj + run `tools\Run-UnityTests.ps1 -TestPlatform All`. Repo size is unchanged here (history still holds the blobs) but the tree is policy-compliant and future branches stay clean.
+
+### 17d. Optional coordinated history purge (DESTRUCTIVE — gated, not unilateral)
+
+Only to reclaim `.git`/LFS size, and only for packs classified **drop** in 17b. Hard gate, all must hold before running:
+
+1. The friend has **no open feature branch** (coordinate a window).
+2. A full mirror backup exists (`git clone --mirror` pushed somewhere off-box) and the change is announced.
+3. Every collaborator will re-clone fresh afterward (rebasing existing local work onto the rewritten history is not supported).
+
+Then `git filter-repo --path <droppedpath> --invert-paths` (plus the matching LFS objects) on a mirror, validate, force-push, everyone re-clones. This is the only step that rewrites shared history; never do it as a side effect of another task.
+
+### 17e. Salvage the friend's real code onto fresh branches (depends on 17c)
+
+Per D-013, recover the gameplay code from the divergent branches without the vendor noise. Smallest first to prove the pattern:
+
+1. `procedural-world-generation-tier-4-test` — 36 own-code files / 3.8K lines (planet terrain, ice planet, blood VFX hookup, test worlds).
+2. `interior-variety` — 62 files / 8.7K lines (subset of below).
+3. `interiors-changes` — 73 files / 14.3K lines (superset; full Interiors + Blueprints).
+
+For each: branch off fresh `main`, bring over only `Space Game/Assets/Scripts/**` and genuine `.asset` content (not vendor dirs — those are now satisfied by the relocated `Assets/ThirdParty/` packs), resolve against current `main` (Interiors already partly landed via PR #24, so expect overlap), rebase, PR. `merge/all-branches-to-main` (0 conflicts vs `main`, 29 ahead) is the reference for what is already integrated — diff against it to avoid re-doing landed work.
+
+Key files / branches:
+- `origin/merge/all-branches-to-main` — clean integration reference.
+- `origin/procedural-world-generation-tier-4-test`, `origin/interior-variety`, `origin/interiors-changes` — salvage sources.
+- Stale post-merge branches to verify-then-delete: `origin/Interiors` (was PR #23), `origin/test-plane-world-2` (was PR #22).
