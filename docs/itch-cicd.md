@@ -6,7 +6,7 @@ Workflow file: `.github/workflows/build-and-deploy-itch.yml`
 
 ## What It Does
 
-- Builds the Unity project in `Space Game` with Unity `6000.3.4f1`.
+- Builds the Unity project in `Space Game` (project pinned to `6000.3.15f1`; the GameCI build image is `6000.3.14f1` until a `6000.3.15f1` image is published).
 - Runs EditMode tests and a PlayMode scene smoke test before building.
 - Targets `StandaloneWindows64` (Linux/macOS targets were dropped in PR #25 to cut LFS + CI cost).
 - Stamps each CI build as `0.1.<GitHub run number>`, which appears in-game and on itch.io.

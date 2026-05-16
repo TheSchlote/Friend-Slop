@@ -5,7 +5,7 @@ Unity prototype for a small co-op sphere-world salvage run. Players host or join
 ## Project Snapshot
 
 - Unity project folder: `Space Game`
-- Unity version: `6000.3.4f1`
+- Unity version: `6000.3.15f1`
 - Bootstrap scene: `Space Game/Assets/Scenes/FriendSlopPrototype.unity`
 - Ship interior scene: `Space Game/Assets/Scenes/ShipInterior.unity`
 - Per-planet scenes: `Space Game/Assets/Scenes/Planet_*.unity` (each tier-2+ planet now owns its own additively-loaded scene)
@@ -86,7 +86,7 @@ Current authored content reaches prototype tier 4 (Hills and Valleys). Tier 3 ha
 
 ## Running Locally
 
-1. Open `Space Game` in Unity `6000.3.4f1`.
+1. Open `Space Game` in Unity `6000.3.15f1`.
 2. Open `Assets/Scenes/FriendSlopPrototype.unity`.
 3. Press Play.
 4. Use `Host LAN` for quick single-machine or LAN testing.
@@ -134,7 +134,7 @@ The script writes test results and logs to `$env:TEMP\FriendSlopUnityTests` by d
 Unity version drift check:
 
 ```powershell
-.\tools\Assert-UnityVersion.ps1 -ExpectedUnityVersion 6000.3.4f1
+.\tools\Assert-UnityVersion.ps1 -ExpectedUnityVersion 6000.3.15f1
 ```
 
 Unity YAML merge setup for this checkout:

@@ -114,7 +114,7 @@ After any change to a builder, the right validation sequence is:
 git status
 
 # 2. Run Repair (not Rebuild) in batch mode.
-& 'T:\Unity\6000.3.4f1\Editor\Unity.exe' `
+& 'T:\Unity\6000.3.15f1\Editor\Unity.exe' `
    -batchmode -projectPath 'T:\Repos\Friend-Slop\Space Game' `
    -executeMethod FriendSlop.Editor.FriendSlopSceneBuilder.RepairPrototypeSceneBatch `
    -logFile "$env:TEMP\friend-slop-repair.log" -quit
