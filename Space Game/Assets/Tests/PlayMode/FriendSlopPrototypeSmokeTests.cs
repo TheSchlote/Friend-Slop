@@ -487,18 +487,6 @@ namespace FriendSlop.Tests.PlayMode
                 "Submitting all rocket parts and boarding should end the planet round successfully.");
         }
 
-        private static void AssertConnectedMenuLayoutDoesNotOverlap()
-        {
-            var joinCodePanel = FindActiveRect("JoinCodePanel");
-            var copyButton = FindActiveRect("Copy Code");
-            var lobbyQueue = FindActiveRect("LobbyQueue");
-
-            Assert.IsFalse(GetWorldRect(joinCodePanel).Overlaps(GetWorldRect(lobbyQueue)),
-                "The join-code panel should not overlap the lobby queue.");
-            Assert.IsFalse(GetWorldRect(copyButton).Overlaps(GetWorldRect(lobbyQueue)),
-                "The copy-code button should not overlap the lobby queue.");
-        }
-
         // Per-planet launchpad zone is now the source of truth - planet scenes own their
         // launchpad GameObject (e.g. StarterJunk's "Crash Dirt Patch"), so we validate
         // through the PlanetEnvironment contract rather than the legacy bootstrap names
@@ -609,30 +597,6 @@ namespace FriendSlop.Tests.PlayMode
             Assert.IsNotNull(spawn, $"{objectName} should exist in the prototype scene.");
             Assert.Greater(spawn.transform.position.normalized.y, 0.65f,
                 $"{objectName} should spawn near the launchpad hemisphere instead of across the planet.");
-        }
-
-        private static RectTransform FindActiveRect(string objectName)
-        {
-            var target = GameObject.Find(objectName);
-            Assert.IsNotNull(target, $"{objectName} should be active in the connected menu.");
-            var rect = target.GetComponent<RectTransform>();
-            Assert.IsNotNull(rect, $"{objectName} should have a RectTransform.");
-            return rect;
-        }
-
-        private static Rect GetWorldRect(RectTransform rect)
-        {
-            var corners = new Vector3[4];
-            rect.GetWorldCorners(corners);
-            var min = corners[0];
-            var max = corners[0];
-            for (var i = 1; i < corners.Length; i++)
-            {
-                min = Vector3.Min(min, corners[i]);
-                max = Vector3.Max(max, corners[i]);
-            }
-
-            return Rect.MinMaxRect(min.x, min.y, max.x, max.y);
         }
     }
 }

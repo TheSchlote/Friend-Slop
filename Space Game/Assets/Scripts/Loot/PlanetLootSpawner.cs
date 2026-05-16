@@ -154,7 +154,10 @@ namespace FriendSlop.Loot
         private bool IsCurrentActivePlanet()
         {
             CachePlanetEnvironment();
-            if (planetEnvironment == null) return true;
+            // No PlanetEnvironment in our hierarchy means we can't confirm we own the
+            // active planet - stay silent rather than spawning as if we were it, so a
+            // misconfigured/legacy spawner can't double-spawn loot onto another planet.
+            if (planetEnvironment == null) return false;
             var rm = RoundManagerRegistry.Current;
             return rm != null && rm.IsEnvironmentActiveForCurrentPlanet(planetEnvironment);
         }

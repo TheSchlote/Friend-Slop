@@ -4,6 +4,7 @@ using FriendSlop.Player;
 using FriendSlop.Round;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace FriendSlop.Hazards
 {
@@ -67,11 +68,29 @@ namespace FriendSlop.Hazards
             var prefab = anomalyPrefabs[Random.Range(0, anomalyPrefabs.Length)];
             if (prefab == null) return;
 
-            var go = Instantiate(prefab, spawnPos, Quaternion.identity);
-            go.GetComponent<NetworkObject>().Spawn();
-            var orb = go.GetComponent<AnomalyOrb>();
-            orb.ServerInitialize(spawnPos);
-            _activeOrbs.Add(orb);
+            // Spawn into the active planet scene with destroyWithScene:true so anomalies
+            // tear down on planet travel instead of leaking into DontDestroyOnLoad (or a
+            // never-unloaded bootstrap scene). Same active-scene contract as loot and
+            // meteors; see PlanetLootSpawner.TrySpawnNow.
+            var targetScene = ResolveActivePlanetScene();
+            var previousActiveScene = SceneManager.GetActiveScene();
+            var shouldRestoreActiveScene = targetScene.IsValid() && targetScene.isLoaded && targetScene != previousActiveScene;
+            if (shouldRestoreActiveScene)
+                SceneManager.SetActiveScene(targetScene);
+
+            try
+            {
+                var go = Instantiate(prefab, spawnPos, Quaternion.identity);
+                go.GetComponent<NetworkObject>().Spawn(destroyWithScene: true);
+                var orb = go.GetComponent<AnomalyOrb>();
+                orb.ServerInitialize(spawnPos);
+                _activeOrbs.Add(orb);
+            }
+            finally
+            {
+                if (shouldRestoreActiveScene && previousActiveScene.IsValid() && previousActiveScene.isLoaded)
+                    SceneManager.SetActiveScene(previousActiveScene);
+            }
         }
 
         private static SphereWorld GetCurrentPlanet()
@@ -82,6 +101,28 @@ namespace FriendSlop.Hazards
                     return SphereWorld.GetClosest(player.transform.position);
             }
             return SphereWorld.GetClosest(Vector3.zero);
+        }
+
+        private Scene ResolveActivePlanetScene()
+        {
+            var round = RoundManagerRegistry.Current;
+            if (round != null)
+            {
+                var envs = PlanetEnvironment.ActiveEnvironments;
+                for (var i = 0; i < envs.Count; i++)
+                {
+                    var env = envs[i];
+                    if (env != null && round.IsEnvironmentActiveForCurrentPlanet(env))
+                    {
+                        var scene = env.gameObject.scene;
+                        if (scene.IsValid() && scene.isLoaded)
+                            return scene;
+                    }
+                }
+            }
+            // Scene-local spawners (e.g. Ice Planet's IceMine) already live in their
+            // planet scene; the global bootstrap spawner falls back to its own scene.
+            return gameObject.scene;
         }
     }
 }

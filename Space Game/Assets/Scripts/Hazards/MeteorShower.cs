@@ -114,16 +114,29 @@ namespace FriendSlop.Hazards
             var direction = PickSpawnDirection(world);
             var spawnPos = world.GetSurfacePoint(direction, spawnAltitude);
 
-            var meteor = Instantiate(meteorPrefab, spawnPos, Quaternion.identity);
-            // Move into the planet scene so unloading the planet also tears down the meteor.
+            // Swap the active scene around Instantiate + Spawn so the meteor lands in the
+            // planet scene from the start and NetworkObject.Spawn(destroyWithScene:true)
+            // latches its SceneOriginHandle there. MoveGameObjectToScene after Spawn fights
+            // NGO scene management and is unreliable. Mirrors PlanetLootSpawner.TrySpawnNow.
             var targetScene = planetEnvironment != null ? planetEnvironment.gameObject.scene : gameObject.scene;
-            if (targetScene.IsValid() && targetScene.isLoaded && meteor.gameObject.scene != targetScene)
-                SceneManager.MoveGameObjectToScene(meteor.gameObject, targetScene);
+            var previousActiveScene = SceneManager.GetActiveScene();
+            var shouldRestoreActiveScene = targetScene.IsValid() && targetScene.isLoaded && targetScene != previousActiveScene;
+            if (shouldRestoreActiveScene)
+                SceneManager.SetActiveScene(targetScene);
 
-            var netObj = meteor.GetComponent<NetworkObject>();
-            if (netObj == null) { Destroy(meteor.gameObject); return; }
-            netObj.Spawn();
-            meteor.ServerInitialize();
+            try
+            {
+                var meteor = Instantiate(meteorPrefab, spawnPos, Quaternion.identity);
+                var netObj = meteor.GetComponent<NetworkObject>();
+                if (netObj == null) { Destroy(meteor.gameObject); return; }
+                netObj.Spawn(destroyWithScene: true);
+                meteor.ServerInitialize();
+            }
+            finally
+            {
+                if (shouldRestoreActiveScene && previousActiveScene.IsValid() && previousActiveScene.isLoaded)
+                    SceneManager.SetActiveScene(previousActiveScene);
+            }
         }
 
         private Vector3 PickSpawnDirection(SphereWorld world)
