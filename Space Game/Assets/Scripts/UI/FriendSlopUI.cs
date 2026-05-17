@@ -91,6 +91,10 @@ namespace FriendSlop.UI
         {
             if (Keyboard.current == null) return;
             if (_chatInputFocused) return;
+            // Block editor (2D or 3D) gets the keys for itself — suppress the
+            // gameplay menu hotkeys while either is open.
+            if (FriendSlop.Interiors.Blocks.BlockBlueprint3DEditor.IsAnyActive) return;
+            if (FriendSlop.Interiors.Blocks.BlockBlueprint2DEditor.IsAnyActive) return;
 
             var menuTogglePressed = Keyboard.current.tabKey.wasPressedThisFrame ||
                                     Keyboard.current.escapeKey.wasPressedThisFrame;
@@ -157,10 +161,9 @@ namespace FriendSlop.UI
 
         private bool IsBlockingGameplayInput()
         {
-            // Dev tool: F1 blueprint editor freezes gameplay input + cursor in 2D
-            // edit mode. In 3D walk mode the player needs FPS controls so we let
-            // gameplay input through.
-            if (FriendSlop.Interiors.Blueprints.BlueprintEditorController.IsBlockingInput) return true;
+            // Dev tool: F1 block-editor freezes gameplay input + cursor in 2D
+            // edit mode. F3 (3D walk mode) lets gameplay input through.
+            if (FriendSlop.Interiors.Blocks.BlockBlueprint2DEditor.IsAnyActive) return true;
             if (_chatInputFocused) return true;
             if (chatInput != null && chatInput.isFocused) return true;
             if (playerNameInput != null && playerNameInput.isFocused) return true;
@@ -207,9 +210,9 @@ namespace FriendSlop.UI
             if (!gameplayPhase)
                 activeMenuOpen = false;
 
-            // Blueprint editor 2D mode takes precedence — cursor freed regardless of
+            // Block editor 2D mode takes precedence — cursor freed regardless of
             // round phase or menu state. 3D walk mode lets cursor lock normally.
-            bool blueprintEditorActive = FriendSlop.Interiors.Blueprints.BlueprintEditorController.IsBlockingInput;
+            bool blueprintEditorActive = FriendSlop.Interiors.Blocks.BlockBlueprint2DEditor.IsAnyActive;
             var showMenu = !isLoading && (!gameplayPhase || activeMenuOpen || blueprintEditorActive);
 
             if (showMenu && (Cursor.lockState != CursorLockMode.None || !Cursor.visible))

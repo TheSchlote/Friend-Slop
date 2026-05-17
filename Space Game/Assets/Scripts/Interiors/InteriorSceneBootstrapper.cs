@@ -139,23 +139,23 @@ namespace FriendSlop.Interiors
             InteriorEvents.SetLoading(true);
             yield return null;
 
+            // Block-blueprint path (residential, hand-authored). Skips the entire
+            // room-based pipeline — no procedural layout, no doors, no furniture,
+            // no NavMesh yet (v1).
+            if (TrySpawnFromBlockBlueprint())
+            {
+                InteriorEvents.SetLoading(false);
+                TeleportPlayerIn(requestingClientId);
+                yield break;
+            }
+
             if (_definition != null)
             {
-                // Blueprint mode: bypass the procedural generator and materialise the
-                // designer-authored layout instead. Definition is still used for cell
-                // size, theme, etc. Set by BlueprintEntrance before scene load.
-                InteriorLayout layout;
-                var blueprint = InteriorSessionData.Blueprint;
-                if (blueprint != null)
-                {
-                    layout = FriendSlop.Interiors.Blueprints.BlueprintLayoutBuilder.Build(blueprint, _definition);
-                    Debug.Log($"[Interior] Loading from blueprint '{blueprint.DisplayName}': " +
-                              $"{layout.Rooms.Count} rooms, {layout.Connections.Count} connections.");
-                }
-                else
-                {
-                    layout = InteriorLayoutGenerator.Generate(_definition, _seed.Value, SocketDirection.South);
-                }
+                // Room-blueprint authoring is retired (residentials use blocks
+                // now), so the only remaining path here is procedural generation
+                // for office / factory / etc. The block-blueprint dispatch above
+                // already handled the residential case.
+                var layout = InteriorLayoutGenerator.Generate(_definition, _seed.Value, SocketDirection.South);
                 _entryFloor = layout.EntryFloor;
                 _interiorRoot = BuildRooms(layout, _origin.Value);
                 _minimap = InteriorMinimap.Spawn(layout, _definition, _origin.Value);

@@ -39,7 +39,13 @@ namespace FriendSlop.Interiors
         private void Update()
         {
             if (Mathf.Approximately(_currentAngle, _targetAngle)) return;
-            _currentAngle = Mathf.MoveTowards(_currentAngle, _targetAngle, animSpeed * openAngle * Time.deltaTime);
+            // Use unscaled time while the 3D blueprint editor is open — it sets
+            // Time.timeScale = 0 to freeze monsters/loot/AI, but the player still
+            // needs to be able to swing doors to walk between rooms during live
+            // edit. Outside build mode this is identical to Time.deltaTime.
+            float dt = FriendSlop.Interiors.Blocks.BlockBlueprint3DEditor.IsAnyActive
+                ? Time.unscaledDeltaTime : Time.deltaTime;
+            _currentAngle = Mathf.MoveTowards(_currentAngle, _targetAngle, animSpeed * openAngle * dt);
             if (doorPivot != null)
                 doorPivot.localRotation = Quaternion.Euler(0, _currentAngle, 0);
         }

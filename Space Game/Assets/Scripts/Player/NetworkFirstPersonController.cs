@@ -221,7 +221,8 @@ namespace FriendSlop.Player
 
             HandleDiagnosticHotkeys();
 
-            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame && !GameplayInputState.IsBlocked)
+            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame
+                && !GameplayInputState.IsBlocked && !UseUnscaledOwnerTime)
             {
                 Cursor.lockState = CursorLockMode.Locked;
                 Cursor.visible = false;
@@ -240,8 +241,8 @@ namespace FriendSlop.Player
                 return;
             }
 
-            if (_stunTimer > 0f) _stunTimer -= Time.deltaTime;
-            if (_currentTiltAngle > 0.01f) _currentTiltAngle = Mathf.MoveTowards(_currentTiltAngle, 0f, stunTiltRecoverSpeed * Time.deltaTime);
+            if (_stunTimer > 0f) _stunTimer -= OwnerDeltaTime;
+            if (_currentTiltAngle > 0.01f) _currentTiltAngle = Mathf.MoveTowards(_currentTiltAngle, 0f, stunTiltRecoverSpeed * OwnerDeltaTime);
 
             lastBlockedGameplayInput = GameplayInputState.IsBlocked;
             if (lastBlockedGameplayInput)

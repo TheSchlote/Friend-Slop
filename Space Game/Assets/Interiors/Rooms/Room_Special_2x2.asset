@@ -13,8 +13,17 @@ MonoBehaviour:
   m_Name: Room_Special_2x2
   m_EditorClassIdentifier: FriendSlop.Runtime::FriendSlop.Interiors.RoomDefinition
   prefab: {fileID: 5180771399796176927, guid: e048e6d8782f76b41bb2524c0b228a9d, type: 3}
-  gridSize: {x: 2, y: 2}
+  gridSize: {x: 4, y: 4}
   category: 2
+  kind: 0
   sockets: 00000000010000000200000003000000
   isVerticalConnector: 0
   weight: 5
+  maxHorizontalConnections: -1
+  maxCount: 0
+  isEntryCandidate: 0
+  floorRestriction: 0
+  furnitureTags:
+  - shared
+  furnitureCountRange: {x: 2, y: 4}
+  furnitureRules: []

@@ -18,8 +18,9 @@ MonoBehaviour:
   minFloors: 1
   maxFloors: 1
   floorHeightMeters: 4
-  gridCellMeters: 8
-  roomPool:
+  gridCellMeters: 3.4
+  requiredRooms: []
+  optionalPool:
   - {fileID: 11400000, guid: b419e43687285d84cba999d343e41d4b, type: 2}
   - {fileID: 11400000, guid: 82829e8ef54e9f146a245f6006560527, type: 2}
   - {fileID: 11400000, guid: 05747c344b6b83046b401c9b2dfae810, type: 2}
@@ -27,5 +28,69 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 13e294c794d71de42bd77b5686327d21, type: 2}
   - {fileID: 11400000, guid: 264d1f3b08eec92498f1b217ce095240, type: 2}
   - {fileID: 11400000, guid: dcc46ee5a3f76e04d99ab1be853af8e4, type: 2}
+  - {fileID: 11400000, guid: bc4dbc291d7d30f46b2d3f64cc7dc653, type: 2}
+  - {fileID: 11400000, guid: 6270a4585537e1f4e96169ff9039603f, type: 2}
+  - {fileID: 11400000, guid: 102454ed8afe07843889633989c021cb, type: 2}
+  - {fileID: 11400000, guid: 7c43bb5560b7e1145b45dfdd300c7b71, type: 2}
+  - {fileID: 11400000, guid: 4cca45a525aa1ba408dc0cf27e6d9371, type: 2}
+  - {fileID: 11400000, guid: c9b7fca5a2f5e84479feb816d892aee9, type: 2}
+  - {fileID: 11400000, guid: 77d6c2219045171488d031dda7cfef61, type: 2}
+  - {fileID: 11400000, guid: 752b0ac98902a90409c4cb6e009795f9, type: 2}
+  - {fileID: 11400000, guid: a3d51c35140894645bda1f8284e0137c, type: 2}
+  - {fileID: 11400000, guid: 0d23f17200df2b54281072aaff8c2d9f, type: 2}
+  - {fileID: 11400000, guid: c61ff8147fa7ff6449827bddb65dfe54, type: 2}
+  - {fileID: 11400000, guid: 59ce246bec4ebac47b15ade923df74e5, type: 2}
+  - {fileID: 11400000, guid: 91f145cda6dd30b408a6b6d46283f6ff, type: 2}
+  - {fileID: 11400000, guid: 0c01233c625b006409d71960b595264c, type: 2}
+  - {fileID: 11400000, guid: 844439f6da2e54e44b38fc43e4c88cfd, type: 2}
+  - {fileID: 11400000, guid: 77423aa78fdab3249b5dd5518610cc8b, type: 2}
+  - {fileID: 11400000, guid: ad0da52b55dda5044a90f077555ad4a6, type: 2}
+  - {fileID: 11400000, guid: 48b2578118cf2bd49b0591f046773a80, type: 2}
+  - {fileID: 11400000, guid: 0d9e6aba5e649004ebd3ab56bfdf23d2, type: 2}
+  - {fileID: 11400000, guid: 13701aebea41c9e4f8e361ecb6146753, type: 2}
+  - {fileID: 11400000, guid: 7fde62c89d6582540b2402e4768cefe5, type: 2}
+  - {fileID: 11400000, guid: 3c8413203e937654799d645ddf2007a5, type: 2}
+  - {fileID: 11400000, guid: 1f2fde9f5d13b2c4ba5f93ea85c9bc73, type: 2}
+  - {fileID: 11400000, guid: 6135714b351ce3c4ba9336e4361c3d15, type: 2}
+  - {fileID: 11400000, guid: a08910612dc4a7a41a29337a5450c046, type: 2}
+  - {fileID: 11400000, guid: d08473ed0481c60489550494eef18512, type: 2}
+  - {fileID: 11400000, guid: 3d8ee497b9fb42a4abb889a2f2bccfc2, type: 2}
+  - {fileID: 11400000, guid: cfc4cdb4ffa46114c93cbe773eb5cbd9, type: 2}
+  - {fileID: 11400000, guid: c33a9dae2e04a5441829b860f0edee69, type: 2}
+  - {fileID: 11400000, guid: 86271f573316a4048aac821d0d976b5b, type: 2}
+  - {fileID: 11400000, guid: 3d480baa39bb3514081890dcb53dc107, type: 2}
+  - {fileID: 11400000, guid: d5f3ea84a51979b4396e30980cb6ad62, type: 2}
+  - {fileID: 11400000, guid: a8d79f5b05a7ee745bb3b973ae81eccf, type: 2}
+  - {fileID: 11400000, guid: 1922a9db9ded108498a830f35616c154, type: 2}
+  - {fileID: 11400000, guid: 4045026432478884da6ff98c02d80696, type: 2}
+  - {fileID: 11400000, guid: 37e2cc84c4281a9428d27e86c060332d, type: 2}
+  - {fileID: 11400000, guid: cb7d9dc35861659429761e758e9a09b8, type: 2}
+  - {fileID: 11400000, guid: f66599d96b5298a4195fe4ec41e0d9f0, type: 2}
+  - {fileID: 11400000, guid: b2ab0a4f90441ef468f79f8d9bdc19f0, type: 2}
+  - {fileID: 11400000, guid: d19a13970446f984aaebbd0862cc9f1d, type: 2}
+  - {fileID: 11400000, guid: ba68c97f3091e0349b4facd2c39f8a8a, type: 2}
+  - {fileID: 11400000, guid: 5c490a0cfd011bb4cbd61cdcf6dc6467, type: 2}
+  - {fileID: 11400000, guid: 1423135649547cf4899f5ba4469df85a, type: 2}
+  - {fileID: 11400000, guid: 4ea2ea15c7172c1479a7dea5cc7cf1d8, type: 2}
+  - {fileID: 11400000, guid: c9005870edbea8c438592ac29f7d9015, type: 2}
+  - {fileID: 11400000, guid: 1f2625ea7f61baa47ba4a2d8dd925acf, type: 2}
+  - {fileID: 11400000, guid: 3411ef57b37fb464d9e5aec648b268db, type: 2}
+  - {fileID: 11400000, guid: 45bb24425219a744ca1e88811f444366, type: 2}
+  - {fileID: 11400000, guid: 36a0fe64bc6f55347b1d121ef0353598, type: 2}
+  - {fileID: 11400000, guid: c8e60edc24eee2b4780bfd1fd168760f, type: 2}
   minSpecialRooms: 0
   maxSpecialRooms: 1
+  downwardConnectorMirror: {fileID: 0}
+  fillerRoom: {fileID: 0}
+  downConnectorParents: []
+  skipBasementExpansion: 0
+  compactLayout: 1
+  doorsOnlyForPrivateRooms: 0
+  entryAtSouthernEdge: 0
+  restrictUpperFloorOverhang: 0
+  forceRectangularLayout: 0
+  restrictFrontFacade: 0
+  themeColor: {r: 1, g: 1, b: 1, a: 1}
+  lootTable: {fileID: 0}
+  monsterPool: {fileID: 0}
+  objective: {fileID: 0}

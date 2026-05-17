@@ -135,7 +135,7 @@ namespace FriendSlop.Player
 
             if (!_spectating)
             {
-                _deathOverheadTimer -= Time.deltaTime;
+                _deathOverheadTimer -= OwnerDeltaTime;
 
                 var overheadPos = transform.position + up * 8f;
                 playerCamera.transform.position = overheadPos;

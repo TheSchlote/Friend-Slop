@@ -72,6 +72,16 @@ namespace FriendSlop.Interiors
         [Header("Phase 3+ hooks (optional)")]
         [Tooltip("Tint applied to wall/floor materials at runtime so each type reads as visually distinct.")]
         [SerializeField] private Color themeColor = Color.white;
+        [Header("Block-system override (residentials)")]
+        [Tooltip("When set, the bootstrapper materialises this BlockBlueprintAsset instead of " +
+                 "running procedural room generation. Used for hand-authored residential layouts. " +
+                 "Other building types leave this null and stay on the procedural pipeline.")]
+        [SerializeField] private FriendSlop.Interiors.Blocks.BlockBlueprintAsset blockBlueprint;
+
+        [Tooltip("Catalog of low-poly prefabs the block materialiser draws from. Populate via " +
+                 "Tools/Friend Slop/Interiors/Repair Block Catalog.")]
+        [SerializeField] private FriendSlop.Interiors.Blocks.BlockPrefabCatalog blockCatalog;
+
         [Tooltip("Loot table used when populating this building. Wired in a later phase.")]
         [SerializeField] private ScriptableObject lootTable;
         [Tooltip("Monster pool used when populating this building. Wired in a later phase.")]
@@ -94,6 +104,8 @@ namespace FriendSlop.Interiors
         public ScriptableObject LootTable => lootTable;
         public ScriptableObject MonsterPool => monsterPool;
         public ScriptableObject Objective => objective;
+        public FriendSlop.Interiors.Blocks.BlockBlueprintAsset BlockBlueprint => blockBlueprint;
+        public FriendSlop.Interiors.Blocks.BlockPrefabCatalog BlockCatalog => blockCatalog;
         public RoomDefinition DownwardConnectorMirror => downwardConnectorMirror;
         public RoomDefinition FillerRoom => fillerRoom;
         public IReadOnlyList<RoomDefinition> DownConnectorParents => downConnectorParents ?? Array.Empty<RoomDefinition>();

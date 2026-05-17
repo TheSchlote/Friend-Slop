@@ -21,5 +21,10 @@ namespace FriendSlop.Interiors
         // running the procedural generator. Definition is still used for cell size,
         // theme colour, etc. Set by BlueprintEntrance before scene load.
         public static FriendSlop.Interiors.Blueprints.BlueprintAsset Blueprint;
+
+        // Residential block blueprint. When set (and Blueprint is null), the
+        // bootstrapper takes the block path: spawn floor/wall/door prefabs
+        // from BlockPrefabCatalog at the cells the designer placed them.
+        public static FriendSlop.Interiors.Blocks.BlockBlueprintAsset BlockBlueprint;
     }
 }

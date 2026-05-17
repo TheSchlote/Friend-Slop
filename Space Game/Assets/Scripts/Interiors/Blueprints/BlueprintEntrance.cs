@@ -24,10 +24,6 @@ namespace FriendSlop.Interiors.Blueprints
         [SerializeField] private BuildingDefinition definition;
         [SerializeField] private BlueprintAsset blueprint;
         [SerializeField] private string interiorScenePath = "Assets/Scenes/Building_Interior.unity";
-        [Tooltip("If true, picks up the BlueprintEditorController's Current blueprint " +
-                 "at entry time (overriding the serialised 'blueprint' field). Lets " +
-                 "designers iterate live without re-assigning this field.")]
-        [SerializeField] private bool useEditorCurrent = true;
 
         public bool CanInteract(NetworkFirstPersonController player) => true;
         public string GetPrompt(NetworkFirstPersonController player) => "E enter blueprint preview";
@@ -40,18 +36,30 @@ namespace FriendSlop.Interiors.Blueprints
         [Rpc(SendTo.Server)]
         private void RequestEnterRpc(ulong requestingClientId)
         {
-            var resolvedBlueprint = useEditorCurrent && BlueprintEditorController.IsAnyActive
-                ? GetEditorCurrentBlueprint()
-                : blueprint;
-            if (definition == null || resolvedBlueprint == null)
+            // Block-blueprint path takes priority — if the BuildingDefinition
+            // has a BlockBlueprintAsset wired, we use it and ignore the room
+            // BlueprintAsset. Falls back to the room path when no block bp.
+            var blockBp = definition != null ? definition.BlockBlueprint : null;
+            BlueprintAsset resolvedBlueprint = null;
+            if (blockBp == null)
             {
-                Debug.LogWarning("[BlueprintEntrance] Missing definition or blueprint; aborting entry.");
+                resolvedBlueprint = blueprint;
+                if (definition == null || resolvedBlueprint == null)
+                {
+                    Debug.LogWarning("[BlueprintEntrance] Missing definition or blueprint; aborting entry.");
+                    return;
+                }
+            }
+            else if (definition == null)
+            {
+                Debug.LogWarning("[BlueprintEntrance] Missing definition; aborting entry.");
                 return;
             }
 
             InteriorSessionData.Seed              = 0;
             InteriorSessionData.Definition        = definition;
             InteriorSessionData.Blueprint         = resolvedBlueprint;
+            InteriorSessionData.BlockBlueprint    = blockBp;
             InteriorSessionData.ReturnPosition    = transform.TransformPoint(new Vector3(0f, 1f, 5f));
             InteriorSessionData.ReturnRotation    = transform.rotation;
             InteriorSessionData.RequestingClientId = requestingClientId;
@@ -73,12 +81,6 @@ namespace FriendSlop.Interiors.Blueprints
             {
                 service.ServerLoadScenePath(interiorScenePath, LoadSceneMode.Additive);
             }
-        }
-
-        private static BlueprintAsset GetEditorCurrentBlueprint()
-        {
-            var editor = Object.FindFirstObjectByType<BlueprintEditorController>(FindObjectsInactive.Include);
-            return editor != null ? editor.Current : null;
         }
 
         private static bool IsSceneLoaded(string normalizedPath)

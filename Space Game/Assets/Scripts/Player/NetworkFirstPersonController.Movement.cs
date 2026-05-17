@@ -34,7 +34,7 @@ namespace FriendSlop.Player
             var targetHeight = wantsCrouch ? crouchHeight : standHeight;
             if (!Mathf.Approximately(_currentBodyHeight, targetHeight))
             {
-                _currentBodyHeight = Mathf.MoveTowards(_currentBodyHeight, targetHeight, crouchTransitionSpeed * Time.deltaTime);
+                _currentBodyHeight = Mathf.MoveTowards(_currentBodyHeight, targetHeight, crouchTransitionSpeed * OwnerDeltaTime);
                 characterController.height = _currentBodyHeight;
                 characterController.center = Vector3.up * (_currentBodyHeight * 0.5f);
 
@@ -78,12 +78,12 @@ namespace FriendSlop.Player
             var up = world != null ? world.GetUp(transform.position) : FlatGravityVolume.GetGravityUp(transform.position);
             var isGrounded = IsGroundedOnSphere(world);
 
-            knockbackVelocity = Vector3.MoveTowards(knockbackVelocity, Vector3.zero, knockbackDamping * Time.deltaTime);
+            knockbackVelocity = Vector3.MoveTowards(knockbackVelocity, Vector3.zero, knockbackDamping * OwnerDeltaTime);
 
             if (_stunTimer > 0f)
             {
-                radialSpeed = isGrounded ? 0f : Mathf.Max(radialSpeed - gravity * Time.deltaTime, -terminalFallSpeed);
-                characterController.Move((up * radialSpeed + knockbackVelocity) * Time.deltaTime);
+                radialSpeed = isGrounded ? 0f : Mathf.Max(radialSpeed - gravity * OwnerDeltaTime, -terminalFallSpeed);
+                characterController.Move((up * radialSpeed + knockbackVelocity) * OwnerDeltaTime);
                 SnapToSphereSurface(world);
                 return;
             }
@@ -110,7 +110,7 @@ namespace FriendSlop.Player
             var isSprinting = wantsSprintInput && isMoving && !staminaExhausted && currentStamina > 0f;
             UpdateStamina(isSprinting);
             IsSprinting = isSprinting;
-            TickIceSlow(Time.deltaTime);
+            TickIceSlow(OwnerDeltaTime);
             var speed = (isSprinting ? sprintSpeed : walkSpeed) * carryingMultiplier * crouchMultiplier * IceSlowSpeedMultiplier;
             lastMoveInput = input;
             lastSphereGrounded = isGrounded;
@@ -131,7 +131,7 @@ namespace FriendSlop.Player
             }
             else
             {
-                radialSpeed = Mathf.Max(radialSpeed - gravity * Time.deltaTime, -terminalFallSpeed);
+                radialSpeed = Mathf.Max(radialSpeed - gravity * OwnerDeltaTime, -terminalFallSpeed);
             }
 
             var slideDecel = world != null ? world.SurfaceSlideDecel : 0f;
@@ -146,12 +146,12 @@ namespace FriendSlop.Player
             }
             else if (_slipCoastVelocity.sqrMagnitude > 0.0001f)
             {
-                _slipCoastVelocity = Vector3.MoveTowards(_slipCoastVelocity, Vector3.zero, slideDecel * Time.deltaTime);
+                _slipCoastVelocity = Vector3.MoveTowards(_slipCoastVelocity, Vector3.zero, slideDecel * OwnerDeltaTime);
                 _slipCoastVelocity = Vector3.ProjectOnPlane(_slipCoastVelocity, up);
                 move = _slipCoastVelocity;
             }
 
-            characterController.Move((move + up * radialSpeed + knockbackVelocity) * Time.deltaTime);
+            characterController.Move((move + up * radialSpeed + knockbackVelocity) * OwnerDeltaTime);
             SnapToSphereSurface(world);
         }
 
@@ -159,7 +159,7 @@ namespace FriendSlop.Player
         {
             if (isSprinting)
             {
-                currentStamina = Mathf.Max(0f, currentStamina - sprintStaminaDrainPerSecond * Time.deltaTime);
+                currentStamina = Mathf.Max(0f, currentStamina - sprintStaminaDrainPerSecond * OwnerDeltaTime);
                 staminaRegenCooldown = staminaRegenDelay;
                 if (currentStamina <= 0f)
                 {
@@ -170,11 +170,11 @@ namespace FriendSlop.Player
 
             if (staminaRegenCooldown > 0f)
             {
-                staminaRegenCooldown -= Time.deltaTime;
+                staminaRegenCooldown -= OwnerDeltaTime;
                 return;
             }
 
-            currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRegenPerSecond * Time.deltaTime);
+            currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRegenPerSecond * OwnerDeltaTime);
             if (staminaExhausted && currentStamina >= minStaminaToStartSprint)
             {
                 staminaExhausted = false;
@@ -187,7 +187,7 @@ namespace FriendSlop.Player
             var targetRotation = Quaternion.FromToRotation(transform.up, up) * transform.rotation;
             if (_currentTiltAngle > 0.01f)
                 targetRotation = Quaternion.AngleAxis(_currentTiltAngle, _tiltAxis) * targetRotation;
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, surfaceAlignSpeed * Time.deltaTime);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, surfaceAlignSpeed * OwnerDeltaTime);
         }
 
         private bool IsGroundedOnSphere(SphereWorld world)
@@ -218,7 +218,7 @@ namespace FriendSlop.Player
             characterController.enabled = false;
             transform.position = surfaceDistance < -0.05f
                 ? targetPosition
-                : Vector3.MoveTowards(transform.position, targetPosition, 18f * Time.deltaTime);
+                : Vector3.MoveTowards(transform.position, targetPosition, 18f * OwnerDeltaTime);
             characterController.enabled = true;
         }
 
