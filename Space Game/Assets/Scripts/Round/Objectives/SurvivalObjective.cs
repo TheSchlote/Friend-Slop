@@ -53,6 +53,15 @@ namespace FriendSlop.Round
             return $"Survive: {RoundManager.FormatTime(round.TimeRemaining.Value)}";
         }
 
+        public override bool IsExtractionReady(RoundManager round)
+        {
+            if (round == null || !round.IsExtractionWindow.Value) return false;
+            return !AllPlayersBoarded(round);
+        }
+
+        public override string BuildExtractionBanner(RoundManager round)
+            => "EXTRACTION WINDOW - REACH THE LAUNCHPAD NOW";
+
         public override string BuildSuccessText(RoundManager round)
         {
             var suffix = requireBoardingOnSurvive ? "Crew survived and boarded." : "Crew survived the timer.";

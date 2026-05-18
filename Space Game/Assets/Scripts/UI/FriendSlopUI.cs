@@ -85,6 +85,7 @@ namespace FriendSlop.UI
 
             RefreshUiIfNeeded();
             UpdateFade();
+            UpdateObjectiveBanner();
         }
 
         private void HandleMenuHotkeys()
