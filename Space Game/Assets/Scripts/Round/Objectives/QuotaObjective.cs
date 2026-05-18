@@ -53,6 +53,18 @@ namespace FriendSlop.Round
             return $"{prefix}  |  {boarding}";
         }
 
+        public override bool IsExtractionReady(RoundManager round)
+        {
+            if (round == null) return false;
+            if (round.CollectedValue.Value < ResolveTarget(round)) return false;
+            // No boarding step means quota-met resolves immediately — no banner beat.
+            if (!requireBoarding) return false;
+            return !AllConnectedBoarded(round);
+        }
+
+        public override string BuildExtractionBanner(RoundManager round)
+            => "QUOTA MET - BOARD THE LAUNCHPAD TO EXTRACT";
+
         public override string BuildSuccessText(RoundManager round)
         {
             if (round == null) return "QUOTA MET.";

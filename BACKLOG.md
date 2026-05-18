@@ -102,18 +102,21 @@ Recommendation: treat the ship as a hub, not a UI replacement. Each station shou
 
 ## 5. Objective UX
 
-Objectives work mechanically, but player-facing feedback is thin and success copy still assumes rocket assembly. Make objective titles, instructions, progress, success, and failure text objective-specific.
+The original problem statement here ("feedback is thin, success copy still assumes rocket assembly") is **stale** — most of it shipped before this section was last groomed.
+
+Status 2026-05-18 — audited against `main`, mostly done:
+- **Persistent primary-objective HUD line: shipped.** `BuildObjectiveHudText` → `objective.BuildHudStatus(round)` (with `Title`/parts fallbacks), wired top-left, refreshed per-frame. All three objectives emit specific live copy.
+- **Per-objective success/failure copy: shipped.** `BuildSuccessResultText`/`BuildFailureResultText` delegate to `RoundObjective.BuildSuccessText`/`BuildFailureText`; the rocket-assembly hardcode is gone. Final-tier "expedition complete" + next-planet rolling already present. Covered by `RoundObjectiveTextTests`, `SurvivalObjectiveExtractionTests`.
+- **Extraction-ready banner: shipped this change.** New `RoundObjective.IsExtractionReady`/`BuildExtractionBanner` virtuals (overridden per objective: quota-met & boarding pending / rocket assembled & boarding pending / survival extraction window), a centred transient fading+pulsing banner (`FriendSlopUI.ObjectiveBanner.cs`, driven per-frame from `Update()` off server-replicated state, no authority change), and `RoundObjectiveExtractionReadyTests`. Banner visuals (placement/timing/legibility) still need a human playtest.
+
+**Deferred (decision, not a TODO): success/failure text as `RoundObjective` `.asset` `successText`/`failureText` fields.** The computed strings interpolate live values (`$450 / $500`, per-part status); static asset strings cannot without adding a token-templating layer. That is real complexity for low value in a two-person, agent-coded project where humans do not author copy in the inspector. Revisit only if non-engineer copy authoring becomes a real need.
 
 Key files:
 - `Space Game/Assets/Scripts/Round/Objectives/*.cs`
-- `Space Game/Assets/Scripts/UI/FriendSlopUI.Menu.cs`
-- `Space Game/Assets/Scripts/UI/FriendSlopUI.Hud.cs`
+- `Space Game/Assets/Scripts/UI/FriendSlopUI.ObjectiveBanner.cs`, `FriendSlopUI.Menu.cs`
 
-Grooming questions:
-- What should the HUD say at round start, mid-objective, extraction-ready, success, and failure?
-- Should objective state have dedicated UI instead of one compact HUD line?
-
-Recommendation: per-objective `BuildHudStatus()` already exists on `RoundObjective` — that's the right seam. Add one persistent HUD widget for the primary objective (top-left, replacing current `timerText` content); add a toast/banner for extraction-ready ("Launchpad active! Board to extract"); move success/failure copy into the `RoundObjective` asset itself as `successText`/`failureText` fields.
+Remaining grooming question (open, low priority):
+- Should objective state get richer dedicated UI instead of the one compact top-left line + transient banner? (Pairs with §11 prefab move; defer until a screen actually feels cramped in playtest.)
 
 ## 6. Teleporter flow
 

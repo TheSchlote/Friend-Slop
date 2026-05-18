@@ -22,6 +22,14 @@ namespace FriendSlop.Round
         // hides the line.
         public virtual string BuildHudStatus(RoundManager round) => string.Empty;
 
+        // True while the primary win condition is satisfied but the crew still
+        // has to board/extract. Drives the on-screen extraction banner. Read-only
+        // over server-replicated state; never mutates round authority.
+        public virtual bool IsExtractionReady(RoundManager round) => false;
+
+        // Loud call-to-action shown the moment IsExtractionReady flips true.
+        public virtual string BuildExtractionBanner(RoundManager round) => "LAUNCHPAD ACTIVE - BOARD TO EXTRACT";
+
         public abstract string BuildSuccessText(RoundManager round);
         public abstract string BuildFailureText(RoundManager round);
 
@@ -29,6 +37,13 @@ namespace FriendSlop.Round
         {
             var planet = round != null ? round.CurrentPlanet : null;
             return planet != null ? $"{planet.DisplayName} (Tier {planet.Tier})" : "Unknown planet";
+        }
+
+        protected static bool AllConnectedBoarded(RoundManager round)
+        {
+            if (round == null) return false;
+            var connected = round.NetworkManager != null ? round.NetworkManager.ConnectedClientsIds.Count : 0;
+            return connected > 0 && round.PlayersBoarded.Value >= connected;
         }
     }
 }

@@ -31,6 +31,15 @@ namespace FriendSlop.Round
             return $"Parts: {Format(round.HasCockpit.Value, "Cockpit")} | {Format(round.HasWings.Value, "Wings")} | {Format(round.HasEngine.Value, "Engine")}";
         }
 
+        public override bool IsExtractionReady(RoundManager round)
+        {
+            if (round == null || !round.RocketAssembled.Value) return false;
+            return !AllConnectedBoarded(round);
+        }
+
+        public override string BuildExtractionBanner(RoundManager round)
+            => "ROCKET ASSEMBLED - BOARD TO LAUNCH";
+
         public override string BuildSuccessText(RoundManager round)
         {
             return round != null

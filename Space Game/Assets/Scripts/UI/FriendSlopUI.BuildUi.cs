@@ -69,6 +69,14 @@ namespace FriendSlop.UI
             timerText = CreateText("Timer", hudRoot.transform, "Parts: Cockpit missing | Wings missing | Engine missing", 20, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(0f, 1f), Vector2.zero, new Vector2(760f, 32f));
             resultText = CreateText("Result", hudRoot.transform, string.Empty, 22, TextAnchor.UpperLeft, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, -78f), new Vector2(720f, 42f));
 
+            _objectiveBannerText = CreateText("ObjectiveBanner", canvasObject.transform, string.Empty, 30,
+                TextAnchor.UpperCenter, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(0f, -120f), new Vector2(900f, 48f));
+            var objectiveBannerOutline = _objectiveBannerText.gameObject.AddComponent<Outline>();
+            objectiveBannerOutline.effectColor = Color.black;
+            objectiveBannerOutline.effectDistance = new Vector2(2f, -2f);
+            _objectiveBannerText.gameObject.SetActive(false);
+
             promptText = CreateText("Prompt", canvasObject.transform, string.Empty, 24, TextAnchor.LowerCenter, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 72f), new Vector2(760f, 42f));
             CreateText("Reticle", canvasObject.transform, "+", 24, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(40f, 40f));
 

@@ -65,6 +65,12 @@ namespace FriendSlop.UI
         private const float TeleporterFlashHoldSeconds = 0.05f;
         private const float TeleporterFlashReleaseSeconds = 0.32f;
 
+        private Text _objectiveBannerText;
+        private float _objectiveBannerAlpha;
+        private bool _objectiveBannerLatched;
+        private const float ObjectiveBannerFadeSpeed = 3.2f;
+        private const float ObjectiveBannerPulseSpeed = 3.4f;
+
         private RectTransform chargePanelRect;
         private RectTransform chargeFillRect;
         private Image chargeFillImage;
