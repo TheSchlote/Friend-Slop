@@ -72,5 +72,26 @@ namespace FriendSlop.Tests.EditMode
             Assert.AreEqual(expectedExpectedToLoad, result.ExpectedToLoad);
             Assert.AreEqual(expectedReadyCount, result.ReadyCount);
         }
+
+        [TestCase(true, false, 0, 1, true)]
+        [TestCase(true, false, 7, 8, true)]
+        [TestCase(true, true, 3, 3, true)]
+        [TestCase(false, false, 2, 2, false)]
+        [TestCase(false, true, 5, 5, true)]
+        public void RecordFinalTierSuccess_CountsEachFinalTierClearExactlyOnce(
+            bool hasReachedFinalTier,
+            bool finalTierSuccessRecorded,
+            int expeditionsCompleted,
+            int expectedExpeditionsCompleted,
+            bool expectedRecorded)
+        {
+            var result = RoundStateUtility.RecordFinalTierSuccess(
+                hasReachedFinalTier,
+                finalTierSuccessRecorded,
+                expeditionsCompleted);
+
+            Assert.AreEqual(expectedExpeditionsCompleted, result.ExpeditionsCompleted);
+            Assert.AreEqual(expectedRecorded, result.FinalTierSuccessRecorded);
+        }
     }
 }

@@ -374,11 +374,12 @@ namespace FriendSlop.Round
             // in sync with whichever subset was rolled.
             if (phase == RoundPhase.Success)
             {
-                if (HasReachedFinalTier && !finalTierSuccessRecorded)
-                {
-                    ExpeditionsCompleted.Value++;
-                    finalTierSuccessRecorded = true;
-                }
+                var finalTierLatch = RoundStateUtility.RecordFinalTierSuccess(
+                    HasReachedFinalTier,
+                    finalTierSuccessRecorded,
+                    ExpeditionsCompleted.Value);
+                ExpeditionsCompleted.Value = finalTierLatch.ExpeditionsCompleted;
+                finalTierSuccessRecorded = finalTierLatch.FinalTierSuccessRecorded;
 
                 ServerRollNextPlanetChoices();
                 // Pre-select the first offered planet so the Travel button has a sensible
