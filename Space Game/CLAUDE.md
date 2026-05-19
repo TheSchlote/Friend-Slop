@@ -80,6 +80,7 @@ FriendSlop.Core  <-  FriendSlop.Runtime  <-  FriendSlop.UI  <-  FriendSlop.Edito
 - `FriendSlop.Runtime` (`Scripts/`) — everything else runtime: networking, gameplay, scene management, hazards, interiors. The remaining D-006 split (carving Networking and Gameplay out of Runtime) is queued.
 - `FriendSlop.UI` (`Scripts/UI/`) — may read from `Runtime` but never the reverse.
 - `FriendSlop.Editor` (`Scripts/Editor/`) — editor-only builders, validators, repair tools. Never referenced by a runtime assembly.
+- `ThirdParty.*` (`Assets/ThirdParty/<Pack>/`) — vendor packs, each in its own `autoReferenced:false` asmdef: `ThirdParty.HIVEMIND`, `ThirdParty.Microdetail` (+ nested `ThirdParty.Microdetail.Editor` and `ThirdParty.Microdetail.SetupWizard` editor asmdefs), `ThirdParty.YughuesFreeRockMaterials`. No `FriendSlop.*` assembly references these — vendor is wired by asset/prefab GUID, not code (D-012).
 
 If you need a reference that crosses an arrow the wrong direction, the design is wrong; raise it instead of forcing it. `ArchitectureGuardrailTests` enforces no wrong-way UI/Editor references at CI.
 
@@ -120,7 +121,7 @@ The repo's scalability bottleneck is vendor-pack churn, not the game code. Hold 
 
 - **New Asset Store / third-party pack → `Assets/ThirdParty/<Pack>/`** (or an embedded `Packages/` package), with its own `ThirdParty.<Pack>` asmdef, in a **dedicated import-only PR**. Never `Assets/<Pack>/`. Never bundle a pack import with feature code. Never re-import or re-export an existing pack on a feature branch. Strip demo/example/sample-scene folders on import; add LFS coverage to `.gitattributes` for any new binary extension in that same PR.
 - **Feature branches are short-lived and rebased on `main`; one feature per branch.** If a feature needs a new pack, the pack PR lands first; the feature branch then only references it.
-- Packs currently mislocated on `main` (`HIVEMIND`, `LowPolyInterior`, `LowPolyInterior2`, `Plugins/Microdetail`, `YughuesFreeRockMaterials`, `_Recovery`) are being relocated per **BACKLOG §17** — do not add to them or re-import them meanwhile.
+- The §17 relocation is **done** (2026-05-18): kept packs live under `Assets/ThirdParty/<Pack>/` with `ThirdParty.<Pack>` asmdefs; unreferenced packs (`LowPolyInterior`, `LowPolyInterior2`, `_Recovery`) were dropped. Only the optional destructive `.git`/LFS history purge (BACKLOG §17d) remains. Do not re-import, relocate, or re-export these packs again.
 
 Full rationale: [docs/architecture.md](../docs/architecture.md) D-012 / D-013.
 

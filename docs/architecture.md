@@ -169,7 +169,7 @@ Each entry stays in the baseline until the main file lands under 400; drop the e
 
 **Cost.** A one-time relocation of the packs already on `main` (staged in BACKLOG §17) and the discipline of the dedicated import PR. asmdef-wrapping a pack occasionally needs a few reference / `.asmref` fix-ups. One-time pain, permanent payoff.
 
-**Status (2026-05-15).** Policy set this commit. Mislocated on `main`: `HIVEMIND`, `LowPolyInterior`, `LowPolyInterior2`, `Plugins/Microdetail`, `YughuesFreeRockMaterials`, the junk `_Recovery/` crash dump, plus the friend-branch-only `LowPolyMegaBundle`. Relocation/purge is staged in BACKLOG §17. Until it lands: do not add new packs under `Assets/<root>` and do not re-import existing ones on a feature branch.
+**Status (2026-05-18).** Policy in force and **executed**. `LowPolyInterior`, `LowPolyInterior2`, `_Recovery` dropped (zero references); `HIVEMIND`, `Plugins/Microdetail`, `YughuesFreeRockMaterials` relocated to `Assets/ThirdParty/<Pack>/`, each wrapped in its own `autoReferenced:false` `ThirdParty.<Pack>` asmdef (Microdetail also has two nested editor asmdefs), all headless-validated (EditMode 137/137, zero regression). No `FriendSlop.*` → vendor asmdef edge exists — vendor is GUID/asset-wired, not code-wired. Remaining: only the optional `.git`/LFS history purge (BACKLOG §17d, destructive + separately gated). The rule stands: never add a new pack under `Assets/<root>`; never re-import an existing one on a feature branch.
 
 ### D-013: Short-lived branches, rebased, vendor imports isolated
 
@@ -245,7 +245,7 @@ The following are explicitly out of scope for this project. If you find yourself
 
 ## Roadmap (current)
 
-> **Top priority (2026-05-15): vendor quarantine + branch workflow (D-012/D-013), executed via BACKLOG §17.** The numbered roadmap below is paused behind it — divergent, vendor-laden branches are actively blocking the friend's contributions, which is the highest-leverage thing to fix for scalability.
+> **§17 vendor quarantine substantially complete (2026-05-18).** Unreferenced packs dropped and kept packs relocated under `Assets/ThirdParty/` with their own `ThirdParty.*` asmdefs (`HIVEMIND`, `Microdetail` + 2 nested editor asmdefs, `YughuesFreeRockMaterials`), all headless-validated (EditMode 137/137, zero regression). **The numbered roadmap below is active again.** Only the *optional, destructive, separately-gated* `.git`/LFS history purge (BACKLOG §17d) and the friend-branch reconciliation (handled via the collaborator merge workflow when the friend is ready — not an agent-initiated roadmap item) remain; neither blocks the roadmap.
 
 1. Guardrail docs and CLAUDE.md update. **Done.**
 2. Asmdef split (D-006). **In progress** — `FriendSlop.Core` foundation exists; remaining `Networking`/`Gameplay`/`UI` split pending.
