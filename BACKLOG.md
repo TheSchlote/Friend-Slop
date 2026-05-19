@@ -18,7 +18,7 @@ Key files:
 - `Space Game/Assets/Scripts/Round/RoundManager.cs`
 - `Space Game/Assets/Scripts/Round/RoundManagerRegistry.cs`
 - `Space Game/Assets/Scripts/Player/LocalPlayerRegistry.cs`
-- `Space Game/Assets/Scripts/Networking/PrototypeNetworkBootstrapper.cs`
+- `Space Game/Assets/Scripts/Session/PrototypeNetworkBootstrapper.cs`
 - `Space Game/Assets/Scripts/Round/PlanetEnvironment.cs`
 - `Space Game/Assets/Scripts/Ship/ShipEnvironment.cs`
 

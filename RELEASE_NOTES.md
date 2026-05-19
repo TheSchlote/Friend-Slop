@@ -12,6 +12,7 @@
 - Final-tier expedition completion that records a completed run and returns the session to the tier-1 ship lobby instead of replaying the final planet.
 - Smash-and-grab tier 2 quota variant and hold-the-pad tier 3 survival variant.
 - Day/night cycle that survives planet swaps via a scene-aware registry.
+- **Extraction-ready banner**: a transient pulsing on-screen banner now fires when a planet's objective is met and the crew should head to the launchpad (quota met / rocket assembled / survival extraction window), per objective type.
 
 ### Fixed and hardened
 
