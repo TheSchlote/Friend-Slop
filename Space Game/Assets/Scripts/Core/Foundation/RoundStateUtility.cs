@@ -35,6 +35,23 @@ namespace FriendSlop.Round
             return (expectedToLoad, readyCount);
         }
 
+        // Final-tier success is counted exactly once per cleared run: Evaluate polls every
+        // server frame and Success can be re-entered, so the recorded latch guards against
+        // double-counting ExpeditionsCompleted. The round lifecycle clears the latch on
+        // restart/return-to-lobby; this only decides whether *this* clear should count.
+        public static (int ExpeditionsCompleted, bool FinalTierSuccessRecorded) RecordFinalTierSuccess(
+            bool hasReachedFinalTier,
+            bool finalTierSuccessRecorded,
+            int expeditionsCompleted)
+        {
+            if (hasReachedFinalTier && !finalTierSuccessRecorded)
+            {
+                return (expeditionsCompleted + 1, true);
+            }
+
+            return (expeditionsCompleted, finalTierSuccessRecorded);
+        }
+
         public static bool IsLaunchReady(bool rocketAssembled, int boardedPlayerCount, int connectedPlayerCount)
         {
             if (!rocketAssembled || connectedPlayerCount <= 0)
