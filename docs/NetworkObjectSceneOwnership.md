@@ -61,12 +61,9 @@ When a planet or interior unloads, despawn its `NetworkObject`s explicitly on th
 
 When a query genuinely needs to be scoped to a single scene (loot in the active planet, doors in the current interior), check `gameObject.scene` after the find. Don't infer location from scene name — see SpaceshipSceneManagement.md rule "never infer location from current scene name".
 
-## Known stale sites
+## Compliance status
 
-These don't follow the contract yet and are queued in [BACKLOG.md](../BACKLOG.md) section 16b:
-
-- `MeteorShower.SpawnMeteor` ([Hazards/MeteorShower.cs:121](../Space%20Game/Assets/Scripts/Hazards/MeteorShower.cs)) — still uses `Instantiate` → `MoveGameObjectToScene` → `Spawn`. Convert to the active-scene swap.
-- `AnomalySpawner.Spawn` ([Hazards/AnomalySpawner.cs:71](../Space%20Game/Assets/Scripts/Hazards/AnomalySpawner.cs)) — defaults `destroyWithScene = false`, leaking anomalies into `DontDestroyOnLoad`.
+As of 2026-05-15 every networked spawn site in the runtime follows this contract. The previously stale sites (`MeteorShower.TrySpawnMeteor`, `AnomalySpawner.TrySpawnOrb`) were brought into compliance in [PR #33](https://github.com/TheSchlote/Friend-Slop/pull/33). Add new offenders here if any appear in review.
 
 ## Related
 
