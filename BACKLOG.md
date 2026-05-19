@@ -310,16 +310,18 @@ The whole Interiors system was invisible to `CLAUDE.md` and `docs/architecture.m
 - **New `docs/InteriorSystem.md`** — full pipeline overview, procedural vs. blueprint path, networked-vs-local table, known oversized files.
 - **New `docs/NetworkObjectSceneOwnership.md`** — codifies the active-scene-before-Spawn pattern, the `IsSpawned` filter, despawn-before-unload, and the known stale sites (`MeteorShower`, `AnomalySpawner`) queued in 16b.
 
-### 16b. Code issues surfaced during the review
+### 16b. Code issues surfaced during the review — **Done 2026-05-15 (PR #33)**
 
-- **`PlanetLootSpawner.IsCurrentActivePlanet()`** ([line 142-148](Space%20Game/Assets/Scripts/Loot/PlanetLootSpawner.cs)) returns `true` when `planetEnvironment == null`. Should default to `false` — current behavior silently runs as the active spawner when env config is missing/broken.
-- **`MeteorShower`** ([line 121](Space%20Game/Assets/Scripts/Hazards/MeteorShower.cs)) still uses the old `Instantiate → MoveGameObjectToScene → Spawn` anti-pattern. Convert to `ActiveSceneScope`.
-- **`AnomalySpawner.Spawn()`** ([line 71](Space%20Game/Assets/Scripts/Hazards/AnomalySpawner.cs)) defaults `destroyWithScene=false`, leaking anomalies into `DontDestroyOnLoad` across planet transitions. Verify intent; likely should be `true`.
-- **Dead test code**: `AssertConnectedMenuLayoutDoesNotOverlap` at [FriendSlopPrototypeSmokeTests.cs:490](Space%20Game/Assets/Tests/PlayMode/FriendSlopPrototypeSmokeTests.cs) is defined but never called.
+All four items landed in [PR #33](https://github.com/TheSchlote/Friend-Slop/pull/33):
+
+- `PlanetLootSpawner.IsCurrentActivePlanet()` now returns `false` when no `PlanetEnvironment` is in the hierarchy (was `true`).
+- `MeteorShower.TrySpawnMeteor` swapped to the active-scene-swap-around-`Instantiate`+`Spawn(destroyWithScene:true)` pattern (matches `PlanetLootSpawner.TrySpawnNow`).
+- `AnomalySpawner.TrySpawnOrb` resolves the active planet scene, swaps active scene, and spawns with `destroyWithScene:true` — anomalies tear down on planet travel instead of leaking into `DontDestroyOnLoad`.
+- Dead test helper `AssertConnectedMenuLayoutDoesNotOverlap` (plus its orphaned `FindActiveRect`/`GetWorldRect` helpers) removed from `FriendSlopPrototypeSmokeTests`.
 
 ### 16c. Tests to add (priority order)
 
-1. **`BlueprintLayoutBuilderTests`** (EditMode) — `BlueprintLayoutBuilder.Build` currently has zero coverage and is the entire authored-layout pipeline. Pure static function, easy to test. Cover: empty/null blueprint returns empty layout, room placement, socket adjacency, edge-state overrides (Wall/Open/Door), variant picking, per-slot overrides.
+1. **`BlueprintLayoutBuilderTests`** (EditMode) — **Done 2026-05-19.** 16 EditMode tests covering empty/null inputs, placement + grid bookkeeping, floor-extent derivation, socket-adjacency connections, edge-state overrides (Wall/Open/Door + default), variant picking (across seeds + fallback), per-slot furniture-count override (with clone), and exit-room selection. Headless-validated EditMode 163/163. Pinned one current asymmetry: `Build(null, ...)` returns `FloorCount=0` (int default) while `Build(emptyBlueprint, ...)` returns `FloorCount=1` — callers must tolerate 0 from the null path.
 2. **`BuildingDefinitionRoomPoolTests`** (EditMode) — defensive against future `FormerlySerializedAs` renames. The recent `roomPool` → `optionalPool` rename silently broke `InteriorLayoutGeneratorTests`. A direct unit test on `BuildingDefinition.RoomPool` (combines `optionalPool` + `requiredRooms.Definition`) would catch the next one before it bites.
 3. **`PlanetLootSpawnerSceneOwnershipTests`** (PlayMode) — verifies the `ActiveSceneScope` fix on the Tier 2+ scene-owned spawner path that's not currently exercised. Load a Tier 2 scene, start host, assert all spawned loot ends up in the planet scene.
 4. **`FurnitureSelectionTests`** (EditMode) — `HasTagOverlap`, `IsCappedOut`, `PickFurnitureForAnchor`, `OverlapsExisting` in `InteriorSceneBootstrapper.Furniture.cs`. Pure static helpers; easy to test.
