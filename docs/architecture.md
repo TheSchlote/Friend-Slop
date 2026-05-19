@@ -81,27 +81,27 @@ Original gating criteria for "complete":
 3. A multi-client PlayMode test exercises ship → planet → ship transitions and asserts player/round state at each step. — **Pending** (host-side smoke shipped 2026-05-08; multi-client variant still pending).
 4. Late-join is tested for each phase (lobby, ship-only, ship+planet active). — **Pending.**
 
-### D-006: Asmdef boundaries (planned)
+### D-006: Asmdef boundaries
 
 **Decision.** Split runtime code into asmdefs that enforce the dependency graph:
 
 ```
-FriendSlop.Core         <-  FriendSlop.Networking  <-  FriendSlop.Gameplay  <-  FriendSlop.UI
-                                                                                        ^
-                                                                                        |
-                                                                              FriendSlop.Bootstrap
-                                                                                  (Editor only)
+FriendSlop.Core  <-  { FriendSlop.Networking, FriendSlop.SceneManagement }  <-  FriendSlop.Gameplay  <-  FriendSlop.UI  <-  FriendSlop.Editor (editor-only)
 ```
 
-`Core` holds pure data and utilities (`SphereWorld`, `RoundStateUtility`, `JoinCodeUtility`, `CarrySyncUtility`, `RoundPhase`, `ShipPartType`). It should have minimal Unity dependency where feasible.
+`Core` holds pure data and utilities (`SphereWorld`, `RoundStateUtility`, `JoinCodeUtility`, `CarrySyncUtility`, `RoundPhase`, `ShipPartType`) and has minimal Unity dependency. `Networking` holds the NGO session/Relay/Lobby/Auth/transport layer. `SceneManagement` holds the NGO additive-scene transition service. `Gameplay` holds every NetworkBehaviour (round, player, loot, hazards, ship, interiors, effects, interaction). `UI` may read `Networking`/`Gameplay` but never the reverse. `Editor` is editor-only and depends on everything (it generates the scene).
 
-`Gameplay` holds NetworkBehaviours. `UI` may read `Gameplay` state but never the reverse. `Bootstrap` is editor-only and depends on everything (it generates the scene).
+**Deviation from the original single-"Networking" box (accepted).** This decision originally drew one infra assembly between Core and Gameplay. In practice `Scripts/SceneManagement/` is independently clean — no `using FriendSlop.*` outbound, no inbound from session/transport code — so it ships as its own assembly `FriendSlop.SceneManagement` parallel to `FriendSlop.Networking`. The two infra leaves have no mutual edge, both depend only on Core, and splitting is strictly safer/clearer than fusing.
 
-**Why.** asmdefs are the only mechanism in Unity that physically prevent a wrong-direction dependency. Once enforced, AI agents can't accidentally couple UI logic into gameplay or vice versa.
+**Bootstrapper placement (composition root).** `PrototypeNetworkBootstrapper.{cs,Spawning.cs}` lives at `Scripts/Session/` in the `FriendSlop.Gameplay` assembly even though its `namespace` is `FriendSlop.Networking`. It holds typed serialized references to gameplay prefabs (`RoundManager`, `NetworkLootItem[]`, `RoamingMonster`) and reads gameplay state (`PlanetEnvironment.Registered`, `ShipEnvironment.Registered`, `NetworkFirstPersonController.ActivePlayers`, `RoundManagerRegistry`); placing it in the Networking assembly would create a Networking→Gameplay edge and break the layered direction. The folder/namespace/assembly mismatch is the deliberate price of keeping Networking clean; Unity resolves the type by script GUID + assembly graph regardless of namespace, so consumers `using FriendSlop.Networking;` still compile. An optional follow-up to rename the namespace to `FriendSlop.Session` is tracked as out-of-scope cosmetic cleanup.
+
+**Steam-readiness.** `FriendSlop.Networking` is the **swap surface** for the eventual Steamworks migration (Steam Lobby/Friends/Relay/SteamNetworkingSockets replacing UGS Relay/Lobby/Auth and UTP). Nothing outside this assembly references `Unity.Services.*` types, so the eventual swap is a self-contained change to one assembly's implementation + UPM packages, with `Gameplay`/`UI`/`Editor` untouched. Discipline going forward: keep `FriendSlop.Networking`'s public API backend-neutral — no UGS types (e.g. `Unity.Services.Lobbies.Models.Lobby`) in method signatures or `NetworkVariable<T>` payloads crossing the boundary. If `NetworkSessionManager` currently exposes UGS types to Gameplay (e.g. via the event subscription in `Scripts/Round/FlatTestWorldEnvironment.cs`), neutralizing those public surfaces is a known Steam-swap follow-up — handle in the Steam migration PR, not piecemeal.
+
+**Why.** asmdefs are the only mechanism in Unity that physically prevent a wrong-direction dependency. Once enforced, AI agents can't accidentally couple UI logic into gameplay or vice versa, and the Steam swap stays contained to one assembly. `ArchitectureGuardrailTests.AsmdefReferencesEnforceLayeredDirection` enforces the full graph at CI.
 
 **Cost.** A handful of `.asmdef` files and some namespace cleanup. One-time pain, permanent payoff.
 
-**Status (2026-05-13).** First slice landed: `FriendSlop.Core` (under `Scripts/Core/Foundation/`) owns the D-006 utility types and has no Netcode dependency. The full runtime is still in a single `FriendSlop.Runtime` assembly; carving Networking and Gameplay out of it is the next D-006 step. `FriendSlop.UI` and `FriendSlop.Editor` are already separate.
+**Status (2026-05-19).** Complete. `FriendSlop.Runtime` was renamed to `FriendSlop.Gameplay` (preserving the asmdef `.meta` GUID `8489b6e9b3258b4419528517c0c0048b` so by-GUID refs survive); `FriendSlop.Networking` and `FriendSlop.SceneManagement` were carved out as independent infra assemblies; the bootstrapper was relocated to `Scripts/Session/`; UI/Editor/EditModeTests/PlayModeTests asmdef refs were rewritten to the new graph; the guardrail test was rewritten to enforce the full direction. Headless-validated (EditMode 147/147, PlayMode green).
 
 ### D-007: File-size and singleton limits
 
@@ -153,7 +153,7 @@ Each entry stays in the baseline until the main file lands under 400; drop the e
 
 ### D-011: NGO scene placement contract
 
-**Decision.** When spawning a `NetworkObject` into a scene other than the caller's, set the active scene to the target *before* `Instantiate` + `NetworkObject.Spawn(destroyWithScene: true)`. The canonical pattern is an active-scene swap around the whole spawn batch — see `ActiveSceneScope` in [`PrototypeNetworkBootstrapper.Spawning.cs`](../Space%20Game/Assets/Scripts/Networking/PrototypeNetworkBootstrapper.Spawning.cs) and the inlined equivalent in [`PlanetLootSpawner.TrySpawnNow`](../Space%20Game/Assets/Scripts/Loot/PlanetLootSpawner.cs). Do **not** rely on `SceneManager.MoveGameObjectToScene` after `Spawn`. When calling `Object.FindObjectsByType<T>(FindObjectsInactive.Include, …)` against an NGO type, filter by `NetworkObject.IsSpawned` if you care about live runtime state.
+**Decision.** When spawning a `NetworkObject` into a scene other than the caller's, set the active scene to the target *before* `Instantiate` + `NetworkObject.Spawn(destroyWithScene: true)`. The canonical pattern is an active-scene swap around the whole spawn batch — see `ActiveSceneScope` in [`PrototypeNetworkBootstrapper.Spawning.cs`](../Space%20Game/Assets/Scripts/Session/PrototypeNetworkBootstrapper.Spawning.cs) and the inlined equivalent in [`PlanetLootSpawner.TrySpawnNow`](../Space%20Game/Assets/Scripts/Loot/PlanetLootSpawner.cs). Do **not** rely on `SceneManager.MoveGameObjectToScene` after `Spawn`. When calling `Object.FindObjectsByType<T>(FindObjectsInactive.Include, …)` against an NGO type, filter by `NetworkObject.IsSpawned` if you care about live runtime state.
 
 **Why.** `NetworkObject.Spawn(destroyWithScene: true)` latches `SceneOriginHandle` to the GameObject's scene at the moment of spawn. With `EnableSceneManagement = true`, post-Spawn `MoveGameObjectToScene` calls fight NGO scene management and silently fail to stick (cost ~2 hours of debug time during PR #24). Separately, NGO parks `NetworkPrefabsList` templates as inactive instances in the Bootstrap scene; unfiltered `FindObjectsByType` returns them alongside real spawns, so unfiltered counts are non-zero before any real spawn fires.
 
@@ -248,7 +248,7 @@ The following are explicitly out of scope for this project. If you find yourself
 > **§17 vendor quarantine substantially complete (2026-05-18).** Unreferenced packs dropped and kept packs relocated under `Assets/ThirdParty/` with their own `ThirdParty.*` asmdefs (`HIVEMIND`, `Microdetail` + 2 nested editor asmdefs, `YughuesFreeRockMaterials`), all headless-validated (EditMode 137/137, zero regression). **The numbered roadmap below is active again.** Only the *optional, destructive, separately-gated* `.git`/LFS history purge (BACKLOG §17d) and the friend-branch reconciliation (handled via the collaborator merge workflow when the friend is ready — not an agent-initiated roadmap item) remain; neither blocks the roadmap.
 
 1. Guardrail docs and CLAUDE.md update. **Done.**
-2. Asmdef split (D-006). **In progress** — `FriendSlop.Core` foundation exists; remaining `Networking`/`Gameplay`/`UI` split pending.
+2. Asmdef split (D-006). **Done** — `FriendSlop.Runtime` carved into `FriendSlop.Gameplay` + `FriendSlop.Networking` + `FriendSlop.SceneManagement`; bootstrapper relocated to `Scripts/Session/` to keep the Networking assembly clean; full graph enforced by `ArchitectureGuardrailTests.AsmdefReferencesEnforceLayeredDirection`. `FriendSlop.Networking` is the documented Steam-swap surface.
 3. Make every `BuildXPrefab` load-or-create (see [builder-audit.md](builder-audit.md) recommendations 1–2). **Done.** Then carve `FriendSlopSceneBuilder` into per-system builders; same outputs, smaller files. *In progress.*
 4. `NetworkFirstPersonController` and `FriendSlopUI` split by responsibility. **Done** — both now under the 400-line cap.
 5. Bug fixes from the initial review (`OnDestroy` override in `NetworkFirstPersonController`, server-side impulse clamps on pickup/drop/throw RPCs, `LaunchpadZone` boarded-set staleness across phase changes, duplicate Start/Restart RPC, `RoundManager.Awake` setting `Instance` before spawn, narrow the `HostOnline` exception filter). **Done.**

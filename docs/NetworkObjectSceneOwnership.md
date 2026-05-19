@@ -22,7 +22,7 @@ using (new ActiveSceneScope(activeEnv.gameObject.scene))
 }
 ```
 
-`ActiveSceneScope` is a private nested `ref struct` in [`PrototypeNetworkBootstrapper.Spawning.cs`](../Space%20Game/Assets/Scripts/Networking/PrototypeNetworkBootstrapper.Spawning.cs). The same pattern is inlined in [`PlanetLootSpawner.TrySpawnNow`](../Space%20Game/Assets/Scripts/Loot/PlanetLootSpawner.cs) as a `try`/`finally` (it would be reasonable to hoist `ActiveSceneScope` into a shared utility once a third call site appears — don't promote it for a single duplication).
+`ActiveSceneScope` is a private nested `ref struct` in [`PrototypeNetworkBootstrapper.Spawning.cs`](../Space%20Game/Assets/Scripts/Session/PrototypeNetworkBootstrapper.Spawning.cs) (in the `FriendSlop.Gameplay` assembly, not Networking — the bootstrapper is the gameplay composition root; see D-006). The same pattern is inlined in [`PlanetLootSpawner.TrySpawnNow`](../Space%20Game/Assets/Scripts/Loot/PlanetLootSpawner.cs) as a `try`/`finally` (it would be reasonable to hoist `ActiveSceneScope` into a shared utility once a third call site appears — don't promote it for a single duplication).
 
 Pass `destroyWithScene: true` unless the object genuinely needs to outlive its owning scene. The default of `false` sends the object to `DontDestroyOnLoad`, which is almost never the right answer for planet/interior content and leaks across planet transitions.
 

@@ -122,18 +122,42 @@ namespace FriendSlop.Tests.EditMode
         }
 
         [Test]
-        public void AsmdefReferencesKeepRuntimeAndUiDirectionClean()
+        public void AsmdefReferencesEnforceLayeredDirection()
         {
+            // Target graph (D-006):
+            //   Core <- {Networking, SceneManagement} <- Gameplay <- UI <- Editor
+            // Networking and SceneManagement are two independently-clean infra leaves above
+            // Core with no mutual edge. Both must remain free of Gameplay/UI/Editor refs so
+            // the boundary stays the swap surface for the eventual Steamworks migration.
+
             var coreRefs = ReadAsmdefReferences("Assets/Scripts/Core/Foundation/FriendSlop.Core.asmdef");
-            Assert.IsFalse(coreRefs.Contains("FriendSlop.Runtime"), "Core assembly must not reference Runtime.");
+            Assert.IsFalse(coreRefs.Contains("FriendSlop.Networking"), "Core assembly must not reference Networking.");
+            Assert.IsFalse(coreRefs.Contains("FriendSlop.SceneManagement"), "Core assembly must not reference SceneManagement.");
+            Assert.IsFalse(coreRefs.Contains("FriendSlop.Gameplay"), "Core assembly must not reference Gameplay.");
             Assert.IsFalse(coreRefs.Contains("FriendSlop.UI"), "Core assembly must not reference UI.");
             Assert.IsFalse(coreRefs.Contains("FriendSlop.Editor"), "Core assembly must not reference Editor.");
             Assert.IsFalse(coreRefs.Contains("Unity.Netcode.Runtime"), "Core assembly must not reference Netcode.");
 
-            var runtimeRefs = ReadAsmdefReferences("Assets/Scripts/FriendSlop.Runtime.asmdef");
-            Assert.IsTrue(runtimeRefs.Contains("FriendSlop.Core"), "Runtime assembly should depend on Core utilities.");
-            Assert.IsFalse(runtimeRefs.Contains("FriendSlop.UI"), "Runtime assembly must not reference UI.");
-            Assert.IsFalse(runtimeRefs.Contains("FriendSlop.Editor"), "Runtime assembly must not reference Editor.");
+            var sceneManagementRefs = ReadAsmdefReferences("Assets/Scripts/SceneManagement/FriendSlop.SceneManagement.asmdef");
+            Assert.IsTrue(sceneManagementRefs.Contains("FriendSlop.Core"), "SceneManagement assembly should depend on Core.");
+            Assert.IsFalse(sceneManagementRefs.Contains("FriendSlop.Networking"), "SceneManagement assembly must not reference Networking (no mutual infra edge).");
+            Assert.IsFalse(sceneManagementRefs.Contains("FriendSlop.Gameplay"), "SceneManagement assembly must not reference Gameplay.");
+            Assert.IsFalse(sceneManagementRefs.Contains("FriendSlop.UI"), "SceneManagement assembly must not reference UI.");
+            Assert.IsFalse(sceneManagementRefs.Contains("FriendSlop.Editor"), "SceneManagement assembly must not reference Editor.");
+
+            var networkingRefs = ReadAsmdefReferences("Assets/Scripts/Networking/FriendSlop.Networking.asmdef");
+            Assert.IsTrue(networkingRefs.Contains("FriendSlop.Core"), "Networking assembly should depend on Core.");
+            Assert.IsFalse(networkingRefs.Contains("FriendSlop.SceneManagement"), "Networking assembly must not reference SceneManagement (no mutual infra edge).");
+            Assert.IsFalse(networkingRefs.Contains("FriendSlop.Gameplay"), "Networking assembly must not reference Gameplay (this is the Steam swap surface).");
+            Assert.IsFalse(networkingRefs.Contains("FriendSlop.UI"), "Networking assembly must not reference UI.");
+            Assert.IsFalse(networkingRefs.Contains("FriendSlop.Editor"), "Networking assembly must not reference Editor.");
+
+            var gameplayRefs = ReadAsmdefReferences("Assets/Scripts/FriendSlop.Gameplay.asmdef");
+            Assert.IsTrue(gameplayRefs.Contains("FriendSlop.Core"), "Gameplay assembly should depend on Core utilities.");
+            Assert.IsTrue(gameplayRefs.Contains("FriendSlop.Networking"), "Gameplay assembly should depend on Networking infra.");
+            Assert.IsTrue(gameplayRefs.Contains("FriendSlop.SceneManagement"), "Gameplay assembly should depend on SceneManagement infra.");
+            Assert.IsFalse(gameplayRefs.Contains("FriendSlop.UI"), "Gameplay assembly must not reference UI.");
+            Assert.IsFalse(gameplayRefs.Contains("FriendSlop.Editor"), "Gameplay assembly must not reference Editor.");
 
             var uiRefs = ReadAsmdefReferences("Assets/Scripts/UI/FriendSlop.UI.asmdef");
             Assert.IsTrue(uiRefs.Contains("FriendSlop.Core"), "UI assembly should reference Core directly for utility types.");

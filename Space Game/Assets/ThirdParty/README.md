@@ -17,11 +17,17 @@ agent summary: [`Space Game/CLAUDE.md`](../../CLAUDE.md) hard rule 10):
 4. **Binaries via LFS.** If the pack adds a new binary extension, extend
    `.gitattributes` LFS coverage in the same import PR.
 
-Migration of the packs that were mislocated on `main` is staged in **BACKLOG §17**.
-Per the §17b inventory (GUID-reference analysis):
+Migration of the packs that were mislocated on `main` is **complete** (BACKLOG §17a–c,
+landed 2026-05-18). Per the §17b inventory (GUID-reference analysis):
 
 - **Dropped** (zero references anywhere in shipped content): `LowPolyInterior`,
   `LowPolyInterior2`, `_Recovery`.
-- **Relocate here** (genuinely referenced, keep + quarantine): `HIVEMIND`
-  (blood VFX), `Plugins/Microdetail` (tier-4 terrain), `YughuesFreeRockMaterials`
-  (rock material).
+- **Relocated here** (genuinely referenced, kept + quarantined, each with its own
+  `ThirdParty.<Pack>` asmdef): `HIVEMIND` (blood VFX),
+  `Plugins/Microdetail` (tier-4 terrain — plus nested `ThirdParty.Microdetail.Editor`
+  and `ThirdParty.Microdetail.SetupWizard` editor asmdefs),
+  `YughuesFreeRockMaterials` (rock material).
+
+Only the optional destructive `.git`/LFS history purge (§17d, separately gated)
+remains outstanding; no `FriendSlop.*` assembly references any vendor pack
+(vendor is GUID/asset-wired, not code-wired).

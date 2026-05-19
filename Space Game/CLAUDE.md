@@ -17,9 +17,13 @@ Stack: Netcode for GameObjects, Unity Transport, Unity Relay/Lobbies/Auth, Unive
 - **Engine**: Unity 6000.3.15f1 (the workflow `validate-unity-version` job enforces this).
 - **Local C# compile checks** (no editor required):
   ```powershell
-  dotnet build 'Space Game\FriendSlop.Runtime.csproj'        /p:GenerateMSBuildEditorConfigFile=false
-  dotnet build 'Space Game\FriendSlop.EditModeTests.csproj'  /p:GenerateMSBuildEditorConfigFile=false
-  dotnet build 'Space Game\FriendSlop.PlayModeTests.csproj'  /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.Core.csproj'             /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.SceneManagement.csproj'  /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.Networking.csproj'       /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.Gameplay.csproj'         /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.UI.csproj'               /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.EditModeTests.csproj'    /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.PlayModeTests.csproj'    /p:GenerateMSBuildEditorConfigFile=false
   ```
 - **Local test run** (requires Unity install):
   ```powershell
@@ -73,16 +77,18 @@ All gameplay state lives on the server.
 Current runtime assemblies, in dependency order:
 
 ```
-FriendSlop.Core  <-  FriendSlop.Runtime  <-  FriendSlop.UI  <-  FriendSlop.Editor (editor-only)
+FriendSlop.Core  <-  { FriendSlop.Networking, FriendSlop.SceneManagement }  <-  FriendSlop.Gameplay  <-  FriendSlop.UI  <-  FriendSlop.Editor (editor-only)
 ```
 
-- `FriendSlop.Core` (`Scripts/Core/Foundation/`) — pure data + utilities, no Netcode dependency. The D-006 foundation slice.
-- `FriendSlop.Runtime` (`Scripts/`) — everything else runtime: networking, gameplay, scene management, hazards, interiors. The remaining D-006 split (carving Networking and Gameplay out of Runtime) is queued.
-- `FriendSlop.UI` (`Scripts/UI/`) — may read from `Runtime` but never the reverse.
+- `FriendSlop.Core` (`Scripts/Core/Foundation/`) — pure data + utilities, no Netcode dependency.
+- `FriendSlop.Networking` (`Scripts/Networking/`) — NGO session, Relay/Lobby/Auth, transport. **This is the swap surface for the future Steamworks migration** — every `Unity.Services.*` dependency lives in here. Keep the assembly's public API backend-neutral (no UGS types crossing the boundary) so the Steam swap stays self-contained.
+- `FriendSlop.SceneManagement` (`Scripts/SceneManagement/`) — NGO additive-scene transition service. Independent of Networking (no mutual edge); both are clean infra leaves above Core.
+- `FriendSlop.Gameplay` (`Scripts/`) — every gameplay NetworkBehaviour: round, player, loot, hazards, ship, interiors, effects, interaction. Includes `Scripts/Session/PrototypeNetworkBootstrapper.{cs,Spawning.cs}`: it lives in the Gameplay assembly (not Networking) because it spawns typed gameplay prefabs and reads gameplay state — keeping it here is what lets the Networking assembly stay clean.
+- `FriendSlop.UI` (`Scripts/UI/`) — may read from `Networking` and `Gameplay` but never the reverse.
 - `FriendSlop.Editor` (`Scripts/Editor/`) — editor-only builders, validators, repair tools. Never referenced by a runtime assembly.
 - `ThirdParty.*` (`Assets/ThirdParty/<Pack>/`) — vendor packs, each in its own `autoReferenced:false` asmdef: `ThirdParty.HIVEMIND`, `ThirdParty.Microdetail` (+ nested `ThirdParty.Microdetail.Editor` and `ThirdParty.Microdetail.SetupWizard` editor asmdefs), `ThirdParty.YughuesFreeRockMaterials`. No `FriendSlop.*` assembly references these — vendor is wired by asset/prefab GUID, not code (D-012).
 
-If you need a reference that crosses an arrow the wrong direction, the design is wrong; raise it instead of forcing it. `ArchitectureGuardrailTests` enforces no wrong-way UI/Editor references at CI.
+If you need a reference that crosses an arrow the wrong direction, the design is wrong; raise it instead of forcing it. `ArchitectureGuardrailTests.AsmdefReferencesEnforceLayeredDirection` enforces the full graph at CI.
 
 ### 6. Size and complexity ceilings
 
@@ -110,7 +116,7 @@ When in doubt, content is data, not code. Adding a new planet, new loot variant,
 
 Friend Slop runs with `NetworkConfig.EnableSceneManagement = true` and loads `ShipInterior` + `Planet_*` scenes additively. Two gotchas are load-bearing and have already cost real debugging time:
 
-- **Spawn placement.** `NetworkObject.Spawn(destroyWithScene: true)` latches `SceneOriginHandle` to the GameObject's scene at the moment of spawn. **Set the active scene before `Instantiate` + `Spawn`** so the clone lands in the target scene from the start. Do **not** rely on `SceneManager.MoveGameObjectToScene` after `Spawn` — NGO scene management fights post-Spawn moves and they silently fail to stick. The canonical pattern is an active-scene swap around the whole spawn batch; see [`PrototypeNetworkBootstrapper.Spawning.cs`](Assets/Scripts/Networking/PrototypeNetworkBootstrapper.Spawning.cs) (`ActiveSceneScope`) and [`PlanetLootSpawner.TrySpawnNow`](Assets/Scripts/Loot/PlanetLootSpawner.cs) for reference implementations. Always pass `destroyWithScene: true` unless the object genuinely should outlive its scene (the default `false` sends it to `DontDestroyOnLoad`, which is almost never what you want).
+- **Spawn placement.** `NetworkObject.Spawn(destroyWithScene: true)` latches `SceneOriginHandle` to the GameObject's scene at the moment of spawn. **Set the active scene before `Instantiate` + `Spawn`** so the clone lands in the target scene from the start. Do **not** rely on `SceneManager.MoveGameObjectToScene` after `Spawn` — NGO scene management fights post-Spawn moves and they silently fail to stick. The canonical pattern is an active-scene swap around the whole spawn batch; see [`PrototypeNetworkBootstrapper.Spawning.cs`](Assets/Scripts/Session/PrototypeNetworkBootstrapper.Spawning.cs) (`ActiveSceneScope`) and [`PlanetLootSpawner.TrySpawnNow`](Assets/Scripts/Loot/PlanetLootSpawner.cs) for reference implementations. Always pass `destroyWithScene: true` unless the object genuinely should outlive its scene (the default `false` sends it to `DontDestroyOnLoad`, which is almost never what you want).
 - **`FindObjectsByType` filter.** With NGO scene management on, the `NetworkPrefabsList` parks prefab *templates* in the Bootstrap scene as inactive `NetworkObject` instances. `Object.FindObjectsByType<T>(FindObjectsInactive.Include, ...)` returns them alongside live runtime clones. Filter on `NetworkObject.IsSpawned` (or `GetComponent<NetworkObject>()?.IsSpawned == true`) when the test or runtime code cares about live game state. Reference: `CountSpawned<T>` in [`FriendSlopPrototypeSmokeTests.cs`](Assets/Tests/PlayMode/FriendSlopPrototypeSmokeTests.cs).
 
 Full rationale and additional pitfalls: [docs/NetworkObjectSceneOwnership.md](../docs/NetworkObjectSceneOwnership.md).
@@ -194,8 +200,8 @@ When adding interior content, prefer a new `.asset` (Building/Room/Furniture/Blu
 | Namespace | Location |
 |---|---|
 | `FriendSlop.Core` | `Scripts/Core/Foundation/` (its own asmdef) |
-| `FriendSlop.Networking` | `Scripts/Networking/` |
-| `FriendSlop.SceneManagement` | `Scripts/SceneManagement/` |
+| `FriendSlop.Networking` | `Scripts/Networking/` (own asmdef) — except `PrototypeNetworkBootstrapper.{cs,Spawning.cs}` which lives at `Scripts/Session/` in the `FriendSlop.Gameplay` assembly (the composition root needs gameplay refs; folder/namespace split keeps `FriendSlop.Networking` clean) |
+| `FriendSlop.SceneManagement` | `Scripts/SceneManagement/` (own asmdef) |
 | `FriendSlop.Player` | `Scripts/Player/` |
 | `FriendSlop.Loot` | `Scripts/Loot/` |
 | `FriendSlop.Round` | `Scripts/Round/` (objectives in `Scripts/Round/Objectives/`) |

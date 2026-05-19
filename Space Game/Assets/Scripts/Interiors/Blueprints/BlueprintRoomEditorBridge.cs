@@ -2,7 +2,7 @@ using System;
 
 namespace FriendSlop.Interiors.Blueprints
 {
-    // Cross-asmdef bridge. The runtime BlueprintEditor (FriendSlop.Runtime) needs to
+    // Cross-asmdef bridge. The runtime BlueprintEditor (FriendSlop.Gameplay) needs to
     // ask the editor builder (FriendSlop.Editor) to regenerate a room's prefab after
     // the user edits its RoomDefinition. Asmdef isolation prevents the runtime asmdef
     // from referencing editor code directly, so we expose a static delegate that the
