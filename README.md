@@ -110,7 +110,11 @@ Use these from the Unity editor when generated scene references or network prefa
 Local C# compile checks:
 
 ```powershell
-dotnet build '.\Space Game\FriendSlop.Runtime.csproj' /p:GenerateMSBuildEditorConfigFile=false
+dotnet build '.\Space Game\FriendSlop.Core.csproj' /p:GenerateMSBuildEditorConfigFile=false
+dotnet build '.\Space Game\FriendSlop.SceneManagement.csproj' /p:GenerateMSBuildEditorConfigFile=false
+dotnet build '.\Space Game\FriendSlop.Networking.csproj' /p:GenerateMSBuildEditorConfigFile=false
+dotnet build '.\Space Game\FriendSlop.Gameplay.csproj' /p:GenerateMSBuildEditorConfigFile=false
+dotnet build '.\Space Game\FriendSlop.UI.csproj' /p:GenerateMSBuildEditorConfigFile=false
 dotnet build '.\Space Game\FriendSlop.EditModeTests.csproj' /p:GenerateMSBuildEditorConfigFile=false
 dotnet build '.\Space Game\FriendSlop.PlayModeTests.csproj' /p:GenerateMSBuildEditorConfigFile=false
 ```

@@ -280,11 +280,9 @@ Tracked engineering work surfaced in the 2026-05-03 audit. Each is its own focus
 
 Done and removed from this list: file-size splits (`NetworkLootItem`, `PlayerInteractor`, `FriendSlopUI.BuildUi`, `NetworkFirstPersonController`, `NetworkSessionManager`, `RoundManager`) all under 400 lines as of 2026-05-08; `RoundManager.Instance` and `NetworkFirstPersonController.LocalPlayer` migration to registries (see [architecture.md](docs/architecture.md) §D-014).
 
-### 15c. Asmdef split — D-006
+### 15c. Asmdef split — D-006 — **Done 2026-05-19**
 
-Per [docs/architecture.md](docs/architecture.md) decision D-006: split `FriendSlop.Runtime` into `Core ← Networking ← Gameplay ← UI`. The architecture doc explicitly calls this a "single focused PR." Cheapest first step: carve `FriendSlop.Core` out (pure data: `SphereWorld`, `RoundStateUtility`, `JoinCodeUtility`, `CarrySyncUtility`, `RoundPhase`, `ShipPartType`) so tests can reference Core without pulling Netcode.
-
-Status 2026-05-06: the first `FriendSlop.Core` foundation assembly exists and owns the D-006 utility types. Remaining work: split the rest of `FriendSlop.Runtime` into Networking and Gameplay assemblies, then tighten assembly references around the final dependency graph.
+Per [docs/architecture.md](docs/architecture.md) decision D-006: `FriendSlop.Runtime` was split into the layered graph **`Core ← { Networking, SceneManagement } ← Gameplay ← UI ← Editor`**. `FriendSlop.Runtime` renamed to `FriendSlop.Gameplay` (preserving the asmdef `.meta` GUID so any GUID-form refs survive). Two infra leaves above Core — `FriendSlop.Networking` (NGO session, Relay/Lobby/Auth, transport — the Steam swap surface) and `FriendSlop.SceneManagement` (NGO additive-scene transition service) — independently clean with no mutual edge. `PrototypeNetworkBootstrapper.{cs,Spawning.cs}` relocated to `Scripts/Session/` (Gameplay asmdef) because it's the gameplay composition root; keeping it in Networking would have created a wrong-direction edge. `ArchitectureGuardrailTests.AsmdefReferencesEnforceLayeredDirection` enforces the full graph at CI. Headless-validated (EditMode 147/147, PlayMode green); see D-006 in [architecture.md](docs/architecture.md) for the full rationale including the Steam-readiness contract.
 
 ### 15e. `FriendSlopUI` polling rewrite (remaining widgets)
 

@@ -17,9 +17,13 @@ Stack: Netcode for GameObjects, Unity Transport, Unity Relay/Lobbies/Auth, Unive
 - **Engine**: Unity 6000.3.15f1 (the workflow `validate-unity-version` job enforces this).
 - **Local C# compile checks** (no editor required):
   ```powershell
-  dotnet build 'Space Game\FriendSlop.Runtime.csproj'        /p:GenerateMSBuildEditorConfigFile=false
-  dotnet build 'Space Game\FriendSlop.EditModeTests.csproj'  /p:GenerateMSBuildEditorConfigFile=false
-  dotnet build 'Space Game\FriendSlop.PlayModeTests.csproj'  /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.Core.csproj'             /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.SceneManagement.csproj'  /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.Networking.csproj'       /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.Gameplay.csproj'         /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.UI.csproj'               /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.EditModeTests.csproj'    /p:GenerateMSBuildEditorConfigFile=false
+  dotnet build 'Space Game\FriendSlop.PlayModeTests.csproj'    /p:GenerateMSBuildEditorConfigFile=false
   ```
 - **Local test run** (requires Unity install):
   ```powershell
@@ -73,16 +77,18 @@ All gameplay state lives on the server.
 Current runtime assemblies, in dependency order:
 
 ```
-FriendSlop.Core  <-  FriendSlop.Runtime  <-  FriendSlop.UI  <-  FriendSlop.Editor (editor-only)
+FriendSlop.Core  <-  { FriendSlop.Networking, FriendSlop.SceneManagement }  <-  FriendSlop.Gameplay  <-  FriendSlop.UI  <-  FriendSlop.Editor (editor-only)
 ```
 
-- `FriendSlop.Core` (`Scripts/Core/Foundation/`) — pure data + utilities, no Netcode dependency. The D-006 foundation slice.
-- `FriendSlop.Runtime` (`Scripts/`) — everything else runtime: networking, gameplay, scene management, hazards, interiors. The remaining D-006 split (carving Networking and Gameplay out of Runtime) is queued.
-- `FriendSlop.UI` (`Scripts/UI/`) — may read from `Runtime` but never the reverse.
+- `FriendSlop.Core` (`Scripts/Core/Foundation/`) — pure data + utilities, no Netcode dependency.
+- `FriendSlop.Networking` (`Scripts/Networking/`) — NGO session, Relay/Lobby/Auth, transport. **This is the swap surface for the future Steamworks migration** — every `Unity.Services.*` dependency lives in here. Keep the assembly's public API backend-neutral (no UGS types crossing the boundary) so the Steam swap stays self-contained.
+- `FriendSlop.SceneManagement` (`Scripts/SceneManagement/`) — NGO additive-scene transition service. Independent of Networking (no mutual edge); both are clean infra leaves above Core.
+- `FriendSlop.Gameplay` (`Scripts/`) — every gameplay NetworkBehaviour: round, player, loot, hazards, ship, interiors, effects, interaction. Includes `Scripts/Session/PrototypeNetworkBootstrapper.{cs,Spawning.cs}`: it lives in the Gameplay assembly (not Networking) because it spawns typed gameplay prefabs and reads gameplay state — keeping it here is what lets the Networking assembly stay clean.
+- `FriendSlop.UI` (`Scripts/UI/`) — may read from `Networking` and `Gameplay` but never the reverse.
 - `FriendSlop.Editor` (`Scripts/Editor/`) — editor-only builders, validators, repair tools. Never referenced by a runtime assembly.
 - `ThirdParty.*` (`Assets/ThirdParty/<Pack>/`) — vendor packs, each in its own `autoReferenced:false` asmdef: `ThirdParty.HIVEMIND`, `ThirdParty.Microdetail` (+ nested `ThirdParty.Microdetail.Editor` and `ThirdParty.Microdetail.SetupWizard` editor asmdefs), `ThirdParty.YughuesFreeRockMaterials`. No `FriendSlop.*` assembly references these — vendor is wired by asset/prefab GUID, not code (D-012).
 
-If you need a reference that crosses an arrow the wrong direction, the design is wrong; raise it instead of forcing it. `ArchitectureGuardrailTests` enforces no wrong-way UI/Editor references at CI.
+If you need a reference that crosses an arrow the wrong direction, the design is wrong; raise it instead of forcing it. `ArchitectureGuardrailTests.AsmdefReferencesEnforceLayeredDirection` enforces the full graph at CI.
 
 ### 6. Size and complexity ceilings
 
@@ -194,8 +200,8 @@ When adding interior content, prefer a new `.asset` (Building/Room/Furniture/Blu
 | Namespace | Location |
 |---|---|
 | `FriendSlop.Core` | `Scripts/Core/Foundation/` (its own asmdef) |
-| `FriendSlop.Networking` | `Scripts/Networking/` |
-| `FriendSlop.SceneManagement` | `Scripts/SceneManagement/` |
+| `FriendSlop.Networking` | `Scripts/Networking/` (own asmdef) — except `PrototypeNetworkBootstrapper.{cs,Spawning.cs}` which lives at `Scripts/Session/` in the `FriendSlop.Gameplay` assembly (the composition root needs gameplay refs; folder/namespace split keeps `FriendSlop.Networking` clean) |
+| `FriendSlop.SceneManagement` | `Scripts/SceneManagement/` (own asmdef) |
 | `FriendSlop.Player` | `Scripts/Player/` |
 | `FriendSlop.Loot` | `Scripts/Loot/` |
 | `FriendSlop.Round` | `Scripts/Round/` (objectives in `Scripts/Round/Objectives/`) |

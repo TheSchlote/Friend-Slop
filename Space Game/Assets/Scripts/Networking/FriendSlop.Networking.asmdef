@@ -1,13 +1,14 @@
 {
-    "name": "FriendSlop.UI",
-    "rootNamespace": "FriendSlop.UI",
+    "name": "FriendSlop.Networking",
+    "rootNamespace": "FriendSlop.Networking",
     "references": [
         "FriendSlop.Core",
-        "FriendSlop.Networking",
-        "FriendSlop.Gameplay",
         "Unity.Netcode.Runtime",
-        "Unity.InputSystem",
-        "UnityEngine.UI"
+        "Unity.Networking.Transport",
+        "Unity.Services.Authentication",
+        "Unity.Services.Core",
+        "Unity.Services.Multiplayer",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
