@@ -189,6 +189,8 @@ Grooming questions:
 
 Recommendation: introduce a **`PlanetHazardSet.asset`** ScriptableObject referenced from `PlanetDefinition` declaring spawn rates, eligible hazards, and a ramp curve. Keeps hazard tuning data-driven (matches the SO-first rule). Per-planet flavor unlocks naturally — e.g. "Wraith Halo has anomaly orbs but no monsters; Cobalt Trench has slow monsters but flooding."
 
+**Status 2026-05-19: eligibility slice shipped.** `PlanetHazardSet` SO + `PlanetDefinition.hazardSet` field landed. `AnomalySpawner.TrySpawnOrb` now resolves its prefab pool through `PlanetHazardSet.ResolveAnomalyPrefabs(planet, globalDefault)`: `SuppressAnomalies` → empty (unchanged); `HazardSet` present → that SO's `AnomalyPrefabs` (replaces, not appends, the global); no `HazardSet` → existing global list. Monster prefab array is declared on the SO for data-shape completeness but not yet consumed — monster wiring + spawn-rate + ramp-curve are queued follow-ups. EditMode-validated via `PlanetHazardSetTests`. **Open follow-up: author per-planet `HazardSet` assets** (Wraith Halo = orbs only, Cobalt Trench = no anomalies, etc.) — all `.asset` edits, no code.
+
 ## 10. Dead-player loop
 
 Dead-player carrying is implemented for body recovery, but the surrounding loop is not defined. Decide whether recovered bodies enable revive, count for extraction, provide score, or only avoid leaving players stranded.
