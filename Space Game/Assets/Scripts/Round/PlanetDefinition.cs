@@ -14,6 +14,13 @@ namespace FriendSlop.Round
         [SerializeField] private int quotaOverride;
         [SerializeField] private float roundLengthOverride;
 
+        [Header("Loot Budget (0 = legacy spawn-points × rolls)")]
+        [Tooltip("Target loot value for this planet. When > 0, PlanetLootSpawner ignores " +
+                 "rollsPerSpawnPoint and instead rolls until cumulative item value hits " +
+                 "1.2× this budget (guaranteed minimum); individual rolls that would push " +
+                 "past 2.0× (ceiling) are skipped. See BACKLOG §7.")]
+        [SerializeField, Min(0)] private int lootValueBudget;
+
         [Header("Objective (optional - falls back to RoundManager default)")]
         [SerializeField] private RoundObjective objective;
 
@@ -55,6 +62,7 @@ namespace FriendSlop.Round
         public int Tier => Mathf.Clamp(tier, 1, PlanetCatalog.MaxTier);
         public int QuotaOverride => quotaOverride;
         public float RoundLengthOverride => roundLengthOverride;
+        public int LootValueBudget => Mathf.Max(0, lootValueBudget);
         public Color SkyTint => skyTint;
         public Sprite PreviewIcon => previewIcon;
         public RoundObjective Objective => objective;

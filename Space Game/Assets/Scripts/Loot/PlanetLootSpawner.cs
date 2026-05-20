@@ -109,32 +109,80 @@ namespace FriendSlop.Loot
 
             try
             {
-                for (var i = 0; i < spawnPoints.Length; i++)
-                {
-                    var spawn = spawnPoints[i];
-                    if (spawn == null) continue;
-
-                    for (var roll = 0; roll < rollsPerSpawnPoint; roll++)
-                    {
-                        var prefab = lootPool.Roll();
-                        if (prefab == null) continue;
-
-                        var pos = spawn.position + spawn.up * spawnSurfaceLift;
-                        var rot = spawn.rotation;
-                        var loot = Instantiate(prefab, pos, rot);
-                        loot.ServerSetSpawnPose(pos, rot);
-                        if (loot.NetworkObject != null)
-                        {
-                            loot.NetworkObject.Spawn(destroyWithScene: true);
-                            spawnedObjects.Add(loot.NetworkObject);
-                        }
-                    }
-                }
+                var budget = ResolveLootValueBudget();
+                if (budget > 0)
+                    SpawnByBudget(budget);
+                else
+                    SpawnLegacyPerPoint();
             }
             finally
             {
                 if (shouldRestoreActiveScene && previousActiveScene.IsValid() && previousActiveScene.isLoaded)
                     SceneManager.SetActiveScene(previousActiveScene);
+            }
+        }
+
+        private int ResolveLootValueBudget()
+        {
+            CachePlanetEnvironment();
+            return planetEnvironment != null && planetEnvironment.Planet != null
+                ? planetEnvironment.Planet.LootValueBudget
+                : 0;
+        }
+
+        private void SpawnLegacyPerPoint()
+        {
+            for (var i = 0; i < spawnPoints.Length; i++)
+            {
+                var spawn = spawnPoints[i];
+                if (spawn == null) continue;
+
+                for (var roll = 0; roll < rollsPerSpawnPoint; roll++)
+                {
+                    var prefab = lootPool.Roll();
+                    if (prefab == null) continue;
+                    SpawnLootAt(prefab, spawn);
+                }
+            }
+        }
+
+        private void SpawnByBudget(int budget)
+        {
+            // Walk the spawn points in order, cycling, until the budget loop
+            // signals it's done. Designers control density by adding more
+            // points (or duplicating a point) rather than by tuning rolls.
+            var validPoints = new List<Transform>(spawnPoints.Length);
+            for (var i = 0; i < spawnPoints.Length; i++)
+                if (spawnPoints[i] != null) validPoints.Add(spawnPoints[i]);
+            if (validPoints.Count == 0) return;
+
+            var pointIndex = 0;
+            var spawnedValue = 0;
+            for (var attempt = 0; attempt < LootBudget.MaxRollsSafetyCap; attempt++)
+            {
+                if (LootBudget.BudgetReached(spawnedValue, budget)) break;
+
+                var prefab = lootPool.Roll();
+                if (prefab == null) continue;
+                if (!LootBudget.ShouldAccept(prefab.Value, spawnedValue, budget)) continue;
+
+                var spawn = validPoints[pointIndex];
+                pointIndex = (pointIndex + 1) % validPoints.Count;
+                SpawnLootAt(prefab, spawn);
+                spawnedValue += Mathf.Max(0, prefab.Value);
+            }
+        }
+
+        private void SpawnLootAt(NetworkLootItem prefab, Transform spawn)
+        {
+            var pos = spawn.position + spawn.up * spawnSurfaceLift;
+            var rot = spawn.rotation;
+            var loot = Instantiate(prefab, pos, rot);
+            loot.ServerSetSpawnPose(pos, rot);
+            if (loot.NetworkObject != null)
+            {
+                loot.NetworkObject.Spawn(destroyWithScene: true);
+                spawnedObjects.Add(loot.NetworkObject);
             }
         }
 
