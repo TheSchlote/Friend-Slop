@@ -4,6 +4,51 @@ This is the current gameplay and implementation backlog, ordered by the work tha
 
 Each open-design section lists the concrete options on the table and a recommended choice. When a decision lands, replace the recommendation with the chosen approach + rationale, and update [docs/architecture.md](docs/architecture.md) if the decision changes architecture. See the **Decision dependencies** appendix at the bottom for which decisions unblock the most downstream work.
 
+## Status overview (2026-05-19)
+
+Section numbers are stable for git-blame continuity; this overview is the "you are here" snapshot. When you change a section's state, update this overview too.
+
+### Active — agent-doable now
+
+- **§7 Loot economy** — `lootValueBudget` per-mission budget model decided; implement (`PlanetDefinition`, `PlanetLootSpawner`).
+- **§9 Enemy/hazard design** — `PlanetHazardSet.asset` decided; implement (new SO + per-planet wiring on existing spawners).
+- **§15e UI polling rewrite** — HUD widget (health/stamina) event-driven slice remains; pairs with §11.
+- **§15f Test backfill** — weapons (`LaserGun`/`BoxingGloves`) lowest-hanging.
+- **§16c Interior tests** — #1 shipped (PR #41). Remaining: #2 `BuildingDefinitionRoomPoolTests` (next), #3 `PlanetLootSpawnerSceneOwnershipTests` (PlayMode), #4 `FurnitureSelectionTests`, #5 `InteriorSceneBootstrapper` PlayMode smoke, #6 `InteriorCatalogTests`.
+- **§16d Oversized-file splits** — `BlueprintEditorController.cs` (545 lines, editor-only) is the safest first split.
+
+### Decisions pending — block downstream work
+
+- **§1** Carried-loot rules across travel — recommendation **C** (deposited persists, carried → cash).
+- **§2** Tier 2 identity — recommendation **C** (hybrid: two marquee unique scenes, rest as named contracts).
+- **§4** Ship-station behaviors (pilot/board/bench/vending) — per-station recommendations listed; needs sign-off.
+- **§6** Teleporter trigger model — recommendation **B** (press-to-teleport planet-side, auto ship-side).
+- **§8** Combat rules — recommendation: partial friendly fire + loot-only weapon distribution.
+- **§10** Dead-player loop — recommendation **C** (revive on extraction, partial spectator interaction).
+- **§14** Scene validation tooling — open grooming questions on scope + merge-blocking rules.
+
+### Gated — coordinated only
+
+- **§17d** Destructive history purge — needs friend's no-open-branch window + mirror backup + re-clone announcement.
+- **§17e** Friend-branch reconciliation — waiting on friend's "done" signal (sanctioned future agent work).
+
+### Deferred — intentionally not now
+
+- **§3** Progression ending — **A (run-based) SHIPPED**; section retained for future endless/score-attack follow-up.
+- **§5** Objective UX — **substantially done**; only banner human playtest remaining.
+- **§11** UI prefab move — paired follow-up with §15e; defer until a screen feels cramped in playtest.
+- **§12** Lobby/matchmaking polish — defer until the game is invite-strangers fun.
+- **§13** Chat polish — blocked on §12 moderation needs.
+- **§16e** Editor migrations the agent can't run — next human playtest pass.
+
+### Done — retained for context
+
+- **§15c** Asmdef split D-006 (Core ← Networking/SceneManagement ← Gameplay ← UI ← Editor) — 2026-05-19, PR #40.
+- **§16a** Interiors doc gaps — 2026-05-13.
+- **§16b** Interiors code fixes (4) — 2026-05-15, PR #33.
+- **§16c #1** `BlueprintLayoutBuilderTests` — 2026-05-19, PR #41.
+- **§17a/b/c** Vendor quarantine + `Assets/ThirdParty/` relocate — 2026-05-18.
+
 ## 1. Planet lifecycle and scene ownership
 
 Authored planets have moved into additively loaded planet scenes, but lifecycle ownership still needs hardening around bootstrap/ship responsibilities, travel cleanup, and future planet variants. Keep the transition moving so each playable planet owns its scene, environment, launchpad, teleporters, spawns, loot budget, hazards, and cleanup rules.
