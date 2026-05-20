@@ -83,7 +83,8 @@ Don't mix the two in a single building. Pick one entry component.
 - `Space Game/Assets/Scripts/Interiors/` — runtime data, entrance, exit, bootstrapper, generator, doors, minimap, events.
 - `Space Game/Assets/Scripts/Interiors/Blueprints/` — blueprint asset, builder, entrance variant, editor controller/UI, room variant helpers.
 - `Space Game/Assets/Scripts/Editor/Builders/FriendSlopSceneBuilder.Interiors*.cs` — editor-time prefab/scene generation for interior content.
-- `Space Game/Assets/Tests/EditMode/Editor/InteriorLayoutGeneratorTests.cs` — current EditMode coverage. More tests queued in [BACKLOG.md](../BACKLOG.md) section 16c (`BlueprintLayoutBuilderTests`, `BuildingDefinitionRoomPoolTests`, `FurnitureSelectionTests`, `InteriorCatalogTests`, plus a PlayMode smoke).
+- `Space Game/Assets/Tests/EditMode/Editor/InteriorLayoutGeneratorTests.cs` — procedural-pipeline EditMode coverage.
+- `Space Game/Assets/Tests/EditMode/Editor/BlueprintLayoutBuilderTests.cs` — authored-layout (blueprint) EditMode coverage; landed 2026-05-19, 16 tests. More tests queued in [BACKLOG.md](../BACKLOG.md) section 16c (`BuildingDefinitionRoomPoolTests`, `FurnitureSelectionTests`, `InteriorCatalogTests`, plus a PlayMode smoke).
 
 ## Known oversized files
 

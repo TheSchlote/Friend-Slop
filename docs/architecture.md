@@ -139,7 +139,7 @@ Each entry stays in the baseline until the main file lands under 400; drop the e
 
 **Cost.** Every line of generation code is on the path of the determinism contract. Any `Random` source, time stamp, or `FindObjectsByType` order dependence in generation is a correctness bug, not a style nit. Tests have to cover the pipeline both for output shape (rooms placed, constraints satisfied) and for stability under future renames — see the `FormerlySerializedAs` hazards in section 16c of the backlog.
 
-**Status (2026-05-13).** Pipeline is live: `InteriorEntrance` → `InteriorSessionData` → `InteriorSceneBootstrapper` → `InteriorLayoutGenerator` → spawned doors + local furniture. `InteriorLayoutGeneratorTests` covers a subset of the generator; `BlueprintLayoutBuilderTests`, `FurnitureSelectionTests`, `BuildingDefinitionRoomPoolTests`, and an `InteriorSceneBootstrapper` PlayMode smoke are queued in BACKLOG section 16c.
+**Status (2026-05-19).** Pipeline is live: `InteriorEntrance` → `InteriorSessionData` → `InteriorSceneBootstrapper` → `InteriorLayoutGenerator` → spawned doors + local furniture. `InteriorLayoutGeneratorTests` covers a subset of the generator and `BlueprintLayoutBuilderTests` (landed 2026-05-19, 16 EditMode tests, BACKLOG 16c #1) covers the authored-layout builder. `FurnitureSelectionTests`, `BuildingDefinitionRoomPoolTests`, `InteriorCatalogTests`, and an `InteriorSceneBootstrapper` PlayMode smoke remain queued in BACKLOG section 16c.
 
 ### D-010: Blueprints as authored interior layouts
 
@@ -147,7 +147,7 @@ Each entry stays in the baseline until the main file lands under 400; drop the e
 
 **Why.** Procedural is great for "generic dungeon"; it's wrong for places the design wants to be recognisable (the residential building, the friend's homebase). Going through the same `InteriorLayout` shape means the bootstrapper, door spawner, and furniture pipeline don't have to fork.
 
-**Cost.** A second code path with its own builder, editor (`BlueprintEditorController` / `BlueprintEditorUI`), and runtime entrance variant (`BlueprintEntrance`). `BlueprintLayoutBuilder` had zero coverage at the time this decision was recorded — see BACKLOG 16c for the queued `BlueprintLayoutBuilderTests`.
+**Cost.** A second code path with its own builder, editor (`BlueprintEditorController` / `BlueprintEditorUI`), and runtime entrance variant (`BlueprintEntrance`). `BlueprintLayoutBuilder` had zero coverage at the time this decision was recorded; coverage landed 2026-05-19 as 16 EditMode tests in `BlueprintLayoutBuilderTests` (BACKLOG 16c #1).
 
 **Status (2026-05-13).** Live. Used by the residential test building. Editor flow is in `Scripts/Interiors/Blueprints/` and is editor-only; the runtime builder is small (~80 lines) and pure.
 
@@ -159,7 +159,7 @@ Each entry stays in the baseline until the main file lands under 400; drop the e
 
 **Cost.** Every new spawn site has to use the pattern; tests that assert spawn counts have to filter. Codified as hard rule 9 in [`Space Game/CLAUDE.md`](../Space%20Game/CLAUDE.md) and detailed in [NetworkObjectSceneOwnership.md](NetworkObjectSceneOwnership.md).
 
-**Status (2026-05-13).** Codified. Known stale sites: `MeteorShower.SpawnMeteor` (still uses post-Spawn move; queued in BACKLOG 16b) and `AnomalySpawner.Spawn` (still defaults `destroyWithScene = false`; queued in BACKLOG 16b).
+**Status (2026-05-15).** Codified and clean. Previously stale sites `MeteorShower.TrySpawnMeteor` and `AnomalySpawner.TrySpawnOrb` were brought into compliance in [PR #33](https://github.com/TheSchlote/Friend-Slop/pull/33) — both now swap the active scene around `Instantiate` + `Spawn(destroyWithScene:true)` per the contract.
 
 ### D-012: Third-party assets are quarantined and import-once
 
