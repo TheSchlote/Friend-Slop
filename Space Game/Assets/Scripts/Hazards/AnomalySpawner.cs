@@ -43,16 +43,18 @@ namespace FriendSlop.Hazards
 
         private void TrySpawnOrb()
         {
-            if (anomalyPrefabs.Length == 0) return;
-
-            // Per-planet opt-out: PlanetDefinition.SuppressAnomalies is the data-driven
-            // gate for "no anomalies on this planet" - test sandboxes and any future
-            // cozy/cinematic planets flip it on and the global spawner skips them. Per-
-            // scene AnomalySpawner instances (Ice Planet's IceMine spawner, etc.) are
-            // separate components and ignore this check.
+            // Resolve the eligible anomaly pool through PlanetHazardSet so per-planet
+            // SO-driven configuration wins over the global anomalyPrefabs list:
+            //   - PlanetDefinition.SuppressAnomalies      → empty pool (hard suppression).
+            //   - PlanetDefinition.HazardSet present      → that SO's AnomalyPrefabs.
+            //   - otherwise                               → our serialized anomalyPrefabs[].
+            // Per-scene AnomalySpawner instances (Ice Planet's IceMine, etc.) still go
+            // through the same resolver — empty pool means they too stay silent on
+            // suppressed planets, which is the existing semantic.
             var round = RoundManagerRegistry.Current;
             var activePlanet = round != null ? round.CurrentPlanet : null;
-            if (activePlanet != null && activePlanet.SuppressAnomalies) return;
+            var pool = PlanetHazardSet.ResolveAnomalyPrefabs(activePlanet, anomalyPrefabs);
+            if (pool.Count == 0) return;
 
             var liveCount = 0;
             foreach (var active in _activeOrbs)
@@ -65,7 +67,7 @@ namespace FriendSlop.Hazards
             if (world == null) return;
 
             var spawnPos = world.GetSurfacePoint(Random.onUnitSphere, 2f);
-            var prefab = anomalyPrefabs[Random.Range(0, anomalyPrefabs.Length)];
+            var prefab = pool[Random.Range(0, pool.Count)];
             if (prefab == null) return;
 
             // Spawn into the active planet scene with destroyWithScene:true so anomalies

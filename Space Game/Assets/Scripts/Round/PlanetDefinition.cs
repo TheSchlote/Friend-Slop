@@ -1,3 +1,4 @@
+using FriendSlop.Hazards;
 using FriendSlop.SceneManagement;
 using UnityEngine;
 
@@ -41,6 +42,10 @@ namespace FriendSlop.Round
         // to iterate on procgen without orbs underfoot.
         [Header("Hazards")]
         [SerializeField] private bool suppressAnomalies;
+        [Tooltip("Optional per-planet hazard configuration. When set, the global " +
+                 "AnomalySpawner uses this list's anomalyPrefabs instead of its own. " +
+                 "SuppressAnomalies always wins. See BACKLOG §9.")]
+        [SerializeField] private PlanetHazardSet hazardSet;
 
         // When true, this planet is hidden from the normal tier-progression menus and is
         // only reachable via the host's Test Mode picker. Pair with flatTestWorld for the
@@ -71,6 +76,7 @@ namespace FriendSlop.Round
         // FlatTestWorld implies TestModeOnly; the explicit flag covers test-only planets
         // that aren't the procedural flat world.
         public bool SuppressAnomalies => suppressAnomalies;
+        public PlanetHazardSet HazardSet => hazardSet;
         public bool IsTestModeOnly => testModeOnly || flatTestWorld;
         public bool IsFlatTestWorld => flatTestWorld;
         public TestWorldDisplaySet DisplaySet => displaySet;
