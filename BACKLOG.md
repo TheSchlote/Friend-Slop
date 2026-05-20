@@ -200,6 +200,8 @@ Grooming questions:
 
 Recommendation: a **per-mission budget model** with a 120% guaranteed minimum and 200% potential ceiling. Each `PlanetDefinition` declares `quotaTarget` (already exists) plus a new `lootValueBudget`; the spawner rolls until total spawned value is in `[1.2 × quotaTarget, 2.0 × quotaTarget]`. Within budget, items come from a `LootPool.asset` rolled by rarity weights. Do not scale by crew size for v1 — too easy to game by ghost-joining.
 
+**Status 2026-05-19: code-side shipped.** `PlanetDefinition.lootValueBudget` (int, default 0) and a pure `LootBudget` helper (Min=1.2×, Max=2.0×, safety cap = 256 rolls) wire `PlanetLootSpawner` into a budget-driven loop: it cycles through `spawnPoints[]`, rolls until cumulative item value reaches the 1.2× floor, and skips individual rolls that would push past the 2.0× ceiling. `lootValueBudget == 0` keeps the legacy `spawnPoints × rollsPerSpawnPoint` behavior intact for every existing planet asset. EditMode-validated via `LootBudgetTests`. **Open follow-up: author `lootValueBudget` per-planet** (Starter Junk, Rusty Moon, Violet Giant, tier 3+) so the budget loop actually activates — currently every shipped `.asset` is at 0 (legacy).
+
 ## 8. Combat and item rules
 
 Laser gun and boxing gloves are implemented, but their role in co-op play needs rules. Friendly fire, stun duration, ammo refill, rarity, and grief potential should be decided before adding more weapons.
