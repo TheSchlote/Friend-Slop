@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2814efd855c23e4eb81760ccd89f0aa, type: 3}
+  m_Name: HazardSet_Haunted
+  m_EditorClassIdentifier: FriendSlop.Gameplay::FriendSlop.Hazards.PlanetHazardSet
+  # Wandering + Hostile only — spectral threats. Used for Wraith Halo's
+  # "haunted ring world" framing where the survival objective is about
+  # dodging eerie presences rather than fighting/avoiding the full bestiary.
+  anomalyPrefabs:
+  - {fileID: 9876543298765432, guid: ff6677889900aa11bb22cc33dd44ee55, type: 3}
+  - {fileID: 1111111199999999, guid: dd44ee55ff6677889900aa11bb22cc33, type: 3}
+  monsterPrefabs: []
