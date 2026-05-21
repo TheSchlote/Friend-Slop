@@ -111,7 +111,7 @@ namespace FriendSlop.Hazards
             var world = sphereWorld != null ? sphereWorld : SphereWorld.GetClosest(transform.position);
             if (world == null) return;
 
-            var direction = PickSpawnDirection(world);
+            var direction = PickSpawnDirection(world, out var wasTargeted);
             var spawnPos = world.GetSurfacePoint(direction, spawnAltitude);
 
             // Swap the active scene around Instantiate + Spawn so the meteor lands in the
@@ -133,16 +133,22 @@ namespace FriendSlop.Hazards
                 meteor.ServerInitialize();
 
                 // Incoming-meteor whistle at the surface impact point so the
-                // sound radiates from where the rock will land, giving players
-                // a directional warning before the visual arrives. The cue
-                // sweep itself takes ~850ms, which is roughly the time-to-
-                // ground at spawnAltitude=38m under normal sphere gravity.
+                // sound radiates from where the rock will land. We only emit
+                // the cue on PLAYER-TARGETED meteors (~30% of spawns by
+                // default) — playtest feedback was that whistling every
+                // random meteor was exhausting and trained players to
+                // ignore the cue entirely. Targeting it to "this one's
+                // aimed at someone" makes the whistle a meaningful
+                // directional warning instead of ambient noise.
                 //
                 // Routed through RoundManager (a NetworkBehaviour) because
                 // MeteorShower is a MonoBehaviour and can't host its own
                 // [ClientRpc] — see RoundManager.AudioCues.cs.
-                var landingPos = world.GetSurfacePoint(direction, 0f);
-                round.ServerBroadcastAudioCue(FriendSlop.Effects.AudioCueId.MeteorWarning, landingPos);
+                if (wasTargeted)
+                {
+                    var landingPos = world.GetSurfacePoint(direction, 0f);
+                    round.ServerBroadcastAudioCue(FriendSlop.Effects.AudioCueId.MeteorWarning, landingPos);
+                }
             }
             finally
             {
@@ -151,15 +157,23 @@ namespace FriendSlop.Hazards
             }
         }
 
-        private Vector3 PickSpawnDirection(SphereWorld world)
+        private Vector3 PickSpawnDirection(SphereWorld world, out bool wasTargeted)
         {
             // Weighted choice: half the time aim at (or near) a random active player; the
             // rest of the time pick a uniformly random surface direction.
+            // wasTargeted is true only when a player-aimed direction was
+            // successfully picked — random/fallback directions report false
+            // so the warning whistle (which is per-spawn) doesn't fire on
+            // them. See TrySpawnMeteor for why this matters for UX.
             if (Random.value < playerTargetingChance)
             {
                 if (TryPickPlayerTargetDirection(world, out var targeted))
+                {
+                    wasTargeted = true;
                     return targeted;
+                }
             }
+            wasTargeted = false;
             return RandomUnitDirection();
         }
 

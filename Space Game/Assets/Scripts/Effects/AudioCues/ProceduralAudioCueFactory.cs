@@ -47,7 +47,9 @@ namespace FriendSlop.Effects
             {
                 case AudioCueId.LootPickup:    return 0.7f;
                 case AudioCueId.MonsterDetect: return 0.85f;
-                case AudioCueId.MeteorWarning: return 0.9f;
+                // Meteor whistle is per-spawn ambient; keep it under 0.5 so
+                // a barrage doesn't drown other cues.
+                case AudioCueId.MeteorWarning: return 0.45f;
                 case AudioCueId.LaunchIgnition:return 0.95f;
                 case AudioCueId.DamageTaken:   return 0.75f;
                 default:                       return 0.7f;
@@ -107,22 +109,27 @@ namespace FriendSlop.Effects
             return Build("AudioCue_MonsterDetect", samples, n);
         }
 
-        // Descending whistle — gives players a moment to look up.
+        // Descending whistle — gives players a moment to look up. Tuned
+        // intentionally subtle since this fires once per player-targeted
+        // meteor (~30% of spawns), and the previous version was loud +
+        // piercing + 850ms long which was exhausting after 30s on a planet.
+        // Now: 450ms, lower frequency band (1100Hz → 250Hz), gentler
+        // tremolo, faster decay.
         private static AudioClip GenerateMeteorWarning()
         {
-            const float duration = 0.85f;
+            const float duration = 0.45f;
             var samples = AllocSamples(duration, out var n);
             for (var i = 0; i < n; i++)
             {
                 var t = i / (float)SampleRate;
                 var progress = t / duration;
-                // 2200Hz down to 400Hz — classic falling-projectile arc.
-                var sweep = Mathf.Lerp(2200f, 400f, progress);
+                // 1100Hz down to 250Hz — softer falling-projectile arc.
+                var sweep = Mathf.Lerp(1100f, 250f, progress);
                 // Slight tremolo from a 6Hz LFO so it sounds like wind, not a sine.
-                var lfo = 1f + Mathf.Sin(2f * Mathf.PI * 6f * t) * 0.08f;
-                var attack = Mathf.Min(progress * 6f, 1f);
-                var decay = Mathf.Exp(-progress * 0.6f);
-                samples[i] = Mathf.Sin(2f * Mathf.PI * sweep * lfo * t) * attack * decay * 0.55f;
+                var lfo = 1f + Mathf.Sin(2f * Mathf.PI * 6f * t) * 0.03f;
+                var attack = Mathf.Min(progress * 8f, 1f);
+                var decay = Mathf.Exp(-progress * 1.4f);
+                samples[i] = Mathf.Sin(2f * Mathf.PI * sweep * lfo * t) * attack * decay * 0.4f;
             }
             return Build("AudioCue_MeteorWarning", samples, n);
         }
