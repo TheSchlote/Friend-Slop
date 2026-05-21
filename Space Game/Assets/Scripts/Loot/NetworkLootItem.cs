@@ -128,6 +128,13 @@ namespace FriendSlop.Loot
                 _cachedCarrier.ActiveInventorySlot.OnValueChanged += OnCarrierActiveSlotChanged;
             }
 
+            // Fires on every client because CarrierClientId is a server-written
+            // NetworkVariable, so the pickup chirp plays for everyone watching.
+            // Guarded by previousCarrier==NoCarrier so the cue isn't replayed on
+            // hand-offs (carrier swap, dropped-and-picked, etc.).
+            if (previousCarrier == NoCarrier && currentCarrier != NoCarrier)
+                FriendSlop.Effects.AudioCue.Play(FriendSlop.Effects.AudioCueId.LootPickup, transform.position);
+
             ApplyVisibilityState();
         }
 
