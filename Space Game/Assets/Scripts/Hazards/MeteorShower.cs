@@ -131,6 +131,18 @@ namespace FriendSlop.Hazards
                 if (netObj == null) { Destroy(meteor.gameObject); return; }
                 netObj.Spawn(destroyWithScene: true);
                 meteor.ServerInitialize();
+
+                // Incoming-meteor whistle at the surface impact point so the
+                // sound radiates from where the rock will land, giving players
+                // a directional warning before the visual arrives. The cue
+                // sweep itself takes ~850ms, which is roughly the time-to-
+                // ground at spawnAltitude=38m under normal sphere gravity.
+                //
+                // Routed through RoundManager (a NetworkBehaviour) because
+                // MeteorShower is a MonoBehaviour and can't host its own
+                // [ClientRpc] — see RoundManager.AudioCues.cs.
+                var landingPos = world.GetSurfacePoint(direction, 0f);
+                round.ServerBroadcastAudioCue(FriendSlop.Effects.AudioCueId.MeteorWarning, landingPos);
             }
             finally
             {

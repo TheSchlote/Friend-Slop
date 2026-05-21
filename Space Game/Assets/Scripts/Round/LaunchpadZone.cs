@@ -56,6 +56,12 @@ namespace FriendSlop.Round
         {
             if (current == RoundPhase.Loading)
                 playersInsideSubmitArea.Clear();
+
+            // Launch ignition cue. Phase is a server-written NetworkVariable so
+            // OnValueChanged fires on every client; we don't need an RPC.
+            // Active → Success is the canonical "you escaped" moment.
+            if (previous == RoundPhase.Active && current == RoundPhase.Success)
+                FriendSlop.Effects.AudioCue.Play(FriendSlop.Effects.AudioCueId.LaunchIgnition, transform.position);
         }
 
 #if UNITY_EDITOR

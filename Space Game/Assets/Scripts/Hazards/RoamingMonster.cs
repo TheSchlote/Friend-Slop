@@ -144,6 +144,13 @@ namespace FriendSlop.Hazards
                         _chaseTarget = nearest;
                         _state = State.Chasing;
                         _spottedPauseTimer = Random.Range(spottedPauseMin, spottedPauseMax);
+                        // "I see you" cue. Server-side state machine; the cue
+                        // plays at the monster's position so the sound is
+                        // directional for nearby players. AudioSource.PlayClipAtPoint
+                        // is non-networked but the state transition is server-
+                        // authoritative and only fires once per detection.
+                        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+                            NotifyMonsterDetectClientRpc(transform.position);
                         break;
                     }
                     if (_roamPauseTimer > 0f)
@@ -257,6 +264,15 @@ namespace FriendSlop.Hazards
             var world = SphereWorld.GetClosest(transform.position);
             AlignToSurface(world, transform.forward, 1f);
             PickRoamTarget(world);
+        }
+
+        // Server-side state machine called this when Roaming → Chasing fired.
+        // ClientRpc fans the cue out to every client so all nearby players get
+        // the directional growl, not just the host.
+        [ClientRpc]
+        private void NotifyMonsterDetectClientRpc(Vector3 monsterPos)
+        {
+            FriendSlop.Effects.AudioCue.Play(FriendSlop.Effects.AudioCueId.MonsterDetect, monsterPos);
         }
 
     }

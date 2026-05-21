@@ -39,7 +39,15 @@ namespace FriendSlop.Player
         private void OnHealthChanged(int previous, int current)
         {
             if (current < previous && current > 0)
+            {
                 LocalPlayerRegistry.NotifyDamaged();
+                // Damage thud + noise burst. Plays for every client at the
+                // damaged player's position; on the owner this is also the
+                // hit-flash cue, on bystanders it's directional "ow that's
+                // them not me" feedback. The owner's HUD damage flash stays
+                // wired via LocalPlayerRegistry.NotifyDamaged above.
+                FriendSlop.Effects.AudioCue.Play(FriendSlop.Effects.AudioCueId.DamageTaken, transform.position);
+            }
         }
 
         public void ServerHeal(int amount)
