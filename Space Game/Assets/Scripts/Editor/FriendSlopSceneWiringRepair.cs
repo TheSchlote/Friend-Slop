@@ -14,7 +14,7 @@ using UnityEngine.SceneManagement;
 
 namespace FriendSlop.Editor
 {
-    public static class FriendSlopSceneWiringRepair
+    public static partial class FriendSlopSceneWiringRepair
     {
         private const string PrototypeScenePath = "Assets/Scenes/FriendSlopPrototype.unity";
         private const string ShipInteriorScenePath = "Assets/Scenes/ShipInterior.unity";
@@ -161,6 +161,11 @@ namespace FriendSlop.Editor
                     changed = true;
                 }
             }
+
+            // Add behavior siblings to every ShipStation in the scene.
+            // Implemented in FriendSlopSceneWiringRepair.ShipStationBehaviors.cs
+            // (this file is over the 400-line cap; new code goes into a partial).
+            changed |= EnsureStationBehaviorSiblings(scene);
 
             if (changed)
                 EditorSceneManager.SaveScene(scene);

@@ -26,9 +26,28 @@ namespace FriendSlop.Ship
 
         public NetworkVariable<ulong> OccupantClientId = new(NoOccupant);
 
+        // Sibling-component behavior. When present it owns all interact
+        // semantics; when null the legacy enum-branch fallback below runs so
+        // existing prefabs with no behavior sibling stay working. The cache
+        // is populated in OnNetworkSpawn — see ShipStationBehavior for the
+        // contract.
+        private ShipStationBehavior _behavior;
+
         public ShipStationRole Role => role;
         public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
         public bool IsOccupied => OccupantClientId.Value != NoOccupant;
+        public bool RequiresShipPhase => requiresShipPhase;
+
+        public override void OnNetworkSpawn()
+        {
+            _behavior = GetComponent<ShipStationBehavior>();
+            _behavior?.OnHostNetworkSpawn(this);
+        }
+
+        public override void OnNetworkDespawn()
+        {
+            _behavior?.OnHostNetworkDespawn(this);
+        }
 
         public bool CanInteract(NetworkFirstPersonController player)
         {
@@ -43,11 +62,21 @@ namespace FriendSlop.Ship
                 return false;
             }
 
+            if (_behavior != null)
+            {
+                return _behavior.AllowsInteract(player, this);
+            }
+
             return !IsOccupied || OccupantClientId.Value == player.OwnerClientId;
         }
 
         public string GetPrompt(NetworkFirstPersonController player)
         {
+            if (_behavior != null)
+            {
+                return _behavior.BuildPrompt(player, this) ?? string.Empty;
+            }
+
             if (CanStartRoundFromStation())
             {
                 return $"E start round from {DisplayName}";
@@ -89,6 +118,12 @@ namespace FriendSlop.Ship
             if (requiresShipPhase && !RoundStateUtility.IsShipPhase(
                     RoundManagerRegistry.CurrentPhaseOrDefault()))
             {
+                return;
+            }
+
+            if (_behavior != null)
+            {
+                _behavior.HandleInteractServer(requestedClientId, this);
                 return;
             }
 
