@@ -4,17 +4,16 @@ This is the current gameplay and implementation backlog, ordered by the work tha
 
 Each open-design section lists the concrete options on the table and a recommended choice. When a decision lands, replace the recommendation with the chosen approach + rationale, and update [docs/architecture.md](docs/architecture.md) if the decision changes architecture. See the **Decision dependencies** appendix at the bottom for which decisions unblock the most downstream work.
 
-## Status overview (2026-05-19)
+## Status overview (2026-05-21)
 
 Section numbers are stable for git-blame continuity; this overview is the "you are here" snapshot. When you change a section's state, update this overview too.
 
 ### Active — agent-doable now
 
-- **§7 Loot economy** — `lootValueBudget` per-mission budget model decided; implement (`PlanetDefinition`, `PlanetLootSpawner`).
-- **§9 Enemy/hazard design** — `PlanetHazardSet.asset` decided; implement (new SO + per-planet wiring on existing spawners).
+- **§9 Enemy/hazard design** — eligibility slice + per-planet `HazardSet.asset` data shipped. Remaining: monster prefab array on `PlanetHazardSet` is declared but not consumed — monster wiring + spawn-rate + ramp-curve queued.
 - **§15e UI polling rewrite** — HUD widget (health/stamina) event-driven slice remains; pairs with §11.
 - **§15f Test backfill** — weapons (`LaserGun`/`BoxingGloves`) lowest-hanging.
-- **§16c Interior tests** — #1 shipped (PR #41). Remaining: #2 `BuildingDefinitionRoomPoolTests` (next), #3 `PlanetLootSpawnerSceneOwnershipTests` (PlayMode), #4 `FurnitureSelectionTests`, #5 `InteriorSceneBootstrapper` PlayMode smoke, #6 `InteriorCatalogTests`.
+- **§16c Interior tests** — #1 shipped (PR #41), #2 shipped (PR #43). Remaining: #3 `PlanetLootSpawnerSceneOwnershipTests` (PlayMode), #4 `FurnitureSelectionTests`, #5 `InteriorSceneBootstrapper` PlayMode smoke, #6 `InteriorCatalogTests`.
 - **§16d Oversized-file splits** — `BlueprintEditorController.cs` (545 lines, editor-only) is the safest first split.
 
 ### Decisions pending — block downstream work
@@ -43,10 +42,13 @@ Section numbers are stable for git-blame continuity; this overview is the "you a
 
 ### Done — retained for context
 
+- **§7** Loot economy — `lootValueBudget` model (PR #44) + per-planet authoring — 2026-05-21.
+- **§9 (partial)** Hazard eligibility slice (PR #45) + per-planet `HazardSet.asset` authoring — 2026-05-21. Monster wiring still queued (see Active).
 - **§15c** Asmdef split D-006 (Core ← Networking/SceneManagement ← Gameplay ← UI ← Editor) — 2026-05-19, PR #40.
 - **§16a** Interiors doc gaps — 2026-05-13.
 - **§16b** Interiors code fixes (4) — 2026-05-15, PR #33.
 - **§16c #1** `BlueprintLayoutBuilderTests` — 2026-05-19, PR #41.
+- **§16c #2** `BuildingDefinitionRoomPoolTests` — 2026-05-19, PR #43.
 - **§17a/b/c** Vendor quarantine + `Assets/ThirdParty/` relocate — 2026-05-18.
 
 ## 1. Planet lifecycle and scene ownership
@@ -200,7 +202,9 @@ Grooming questions:
 
 Recommendation: a **per-mission budget model** with a 120% guaranteed minimum and 200% potential ceiling. Each `PlanetDefinition` declares `quotaTarget` (already exists) plus a new `lootValueBudget`; the spawner rolls until total spawned value is in `[1.2 × quotaTarget, 2.0 × quotaTarget]`. Within budget, items come from a `LootPool.asset` rolled by rarity weights. Do not scale by crew size for v1 — too easy to game by ghost-joining.
 
-**Status 2026-05-19: code-side shipped.** `PlanetDefinition.lootValueBudget` (int, default 0) and a pure `LootBudget` helper (Min=1.2×, Max=2.0×, safety cap = 256 rolls) wire `PlanetLootSpawner` into a budget-driven loop: it cycles through `spawnPoints[]`, rolls until cumulative item value reaches the 1.2× floor, and skips individual rolls that would push past the 2.0× ceiling. `lootValueBudget == 0` keeps the legacy `spawnPoints × rollsPerSpawnPoint` behavior intact for every existing planet asset. EditMode-validated via `LootBudgetTests`. **Open follow-up: author `lootValueBudget` per-planet** (Starter Junk, Rusty Moon, Violet Giant, tier 3+) so the budget loop actually activates — currently every shipped `.asset` is at 0 (legacy).
+**Status 2026-05-19: code-side shipped.** `PlanetDefinition.lootValueBudget` (int, default 0) and a pure `LootBudget` helper (Min=1.2×, Max=2.0×, safety cap = 256 rolls) wire `PlanetLootSpawner` into a budget-driven loop: it cycles through `spawnPoints[]`, rolls until cumulative item value reaches the 1.2× floor, and skips individual rolls that would push past the 2.0× ceiling. `lootValueBudget == 0` keeps the legacy `spawnPoints × rollsPerSpawnPoint` behavior intact for every existing planet asset. EditMode-validated via `LootBudgetTests`.
+
+**Status 2026-05-21: §7 CLOSED — per-planet budgets authored.** All seven shipped planet definitions now declare a `lootValueBudget` matched to their objective/pacing: Starter Junk 400 (intro slack above the 500 default quota), Rusty Moon 300 (matches Smash-and-Grab's 250 quota with headroom), Cobalt Trench 500 (long shift / big payday), Volt Foundry 300 (tight cycle), Wraith Halo 200 (survival objective de-emphasises loot), Violet Giant 250, Ice Planet 350. `Tier4_HillsAndValleys` and `TestWorld_Flat` intentionally left at 0 (legacy mode — they're test-mode sandboxes). The budget loop is now live for every catalog planet a player reaches through normal tier progression.
 
 ## 8. Combat and item rules
 
@@ -236,7 +240,9 @@ Grooming questions:
 
 Recommendation: introduce a **`PlanetHazardSet.asset`** ScriptableObject referenced from `PlanetDefinition` declaring spawn rates, eligible hazards, and a ramp curve. Keeps hazard tuning data-driven (matches the SO-first rule). Per-planet flavor unlocks naturally — e.g. "Wraith Halo has anomaly orbs but no monsters; Cobalt Trench has slow monsters but flooding."
 
-**Status 2026-05-19: eligibility slice shipped.** `PlanetHazardSet` SO + `PlanetDefinition.hazardSet` field landed. `AnomalySpawner.TrySpawnOrb` now resolves its prefab pool through `PlanetHazardSet.ResolveAnomalyPrefabs(planet, globalDefault)`: `SuppressAnomalies` → empty (unchanged); `HazardSet` present → that SO's `AnomalyPrefabs` (replaces, not appends, the global); no `HazardSet` → existing global list. Monster prefab array is declared on the SO for data-shape completeness but not yet consumed — monster wiring + spawn-rate + ramp-curve are queued follow-ups. EditMode-validated via `PlanetHazardSetTests`. **Open follow-up: author per-planet `HazardSet` assets** (Wraith Halo = orbs only, Cobalt Trench = no anomalies, etc.) — all `.asset` edits, no code.
+**Status 2026-05-19: eligibility slice shipped.** `PlanetHazardSet` SO + `PlanetDefinition.hazardSet` field landed. `AnomalySpawner.TrySpawnOrb` now resolves its prefab pool through `PlanetHazardSet.ResolveAnomalyPrefabs(planet, globalDefault)`: `SuppressAnomalies` → empty (unchanged); `HazardSet` present → that SO's `AnomalyPrefabs` (replaces, not appends, the global); no `HazardSet` → existing global list. Monster prefab array is declared on the SO for data-shape completeness but not yet consumed — monster wiring + spawn-rate + ramp-curve are queued follow-ups. EditMode-validated via `PlanetHazardSetTests`.
+
+**Status 2026-05-21: per-planet `HazardSet.asset`s authored under `Assets/Hazards/HazardSets/`.** Six SOs ship: `HazardSet_VanillaOrbs` (all 5 generic orbs — Starter Junk, Rusty Moon), `HazardSet_NoAnomalies` (empty pool — Cobalt Trench's "loot scarcity + time pressure" framing), `HazardSet_Industrial` (Electric only — Volt Foundry thematic), `HazardSet_Haunted` (Wandering + Hostile — Wraith Halo's eerie survival), `HazardSet_Tier3Escalation` (Hostile + Electric — Violet Giant's aggression mix), `HazardSet_Ice` (IceMine + Electric — preserves the scene-local IceMine spawn since `ResolveAnomalyPrefabs` consolidates all spawners on a planet through one resolver). Tier 4 sandbox and Flat Test World left unmodified (already `SuppressAnomalies:1` / `flatTestWorld:1`). **Remaining §9 work: monster prefab array on `PlanetHazardSet` declared but not yet consumed** — `RoamingMonster` spawning still uses the bootstrapper's per-session list, not the SO. Spawn-rate + ramp-curve are also still queued (today every planet uses the same global `minSpawnInterval`/`maxSpawnInterval` on `AnomalySpawner`).
 
 ## 10. Dead-player loop
 
